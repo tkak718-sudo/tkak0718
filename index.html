@@ -1816,7 +1816,9 @@ async function aiJudge(apiKey, company){
     });
     if(!res.ok){
       const t = await res.text();
-      throw new Error('API ' + res.status + '：' + t.slice(0, 300));
+      const err = new Error('API ' + res.status + '：' + t.slice(0, 300));
+      err.status = res.status;
+      throw err;
     }
     const data = await res.json();
     // Web検索の途中で一時停止した場合は、その内容を積んで続行
@@ -1882,6 +1884,16 @@ async function runAiJudge(){
       log(`  → ${changed.length ? changed.join(' / ') : '判定情報なし'}`);
     }catch(err){
       log(`  エラー: ${err.message}`);
+      // 認証エラー（キーが無効）は繰り返しても直らないので即中止
+      if(err.status === 401 || /invalid[\s_]*x-api-key|authentication_error/i.test(err.message)){
+        log('▲ APIキーが無効です。判定を中止しました。');
+        log('  console.anthropic.com で有効なキー（sk-ant- で始まる）を確認し、');
+        log('  「このキーをこの端末に保存する」のチェックを一度外して入力し直してください。');
+        aiRunning = false;
+        runBtn.disabled = false;
+        toast('APIキーが無効です。入力し直してください');
+        return;
+      }
     }
     done++;
     log(`進捗 ${done}/${ids.length}`);
