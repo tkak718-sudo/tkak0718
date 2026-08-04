@@ -895,6 +895,7 @@
             <option value="name-asc">担当者名(A→Z)</option>
           </select>
           <button class="btn btn-sm" onclick="openAiRank('contacts')" title="事業内容などからAIがS/A/B/Cを判定します">AIでランク判定</button>
+          <button class="btn btn-sm" onclick="openAiEvent('contacts')" title="Web検索で主催者・イベント規模・LINE公式を判定します">AIでイベント判定</button>
           <span class="clear-filters" onclick="clearFilters('contacts')">フィルターをクリア</span>
         </div>
 
@@ -914,7 +915,7 @@
           <table>
             <thead><tr>
               <th class="col-check"><input type="checkbox" id="check-all-contacts" onclick="toggleSelectAll('contacts', this.checked)"></th>
-              <th>会社名</th><th>電話</th><th>メール</th><th>フォーム</th><th>業種</th><th>売上規模</th><th>上場</th><th>担当者</th><th>ステータス</th><th></th>
+              <th>会社名</th><th>フォーム</th><th>業種</th><th>イベント規模</th><th>主催者</th><th>LINE公式</th><th>担当者</th><th>ステータス</th><th></th>
             </tr></thead>
             <tbody id="contacts-tbody"></tbody>
           </table>
@@ -965,6 +966,7 @@
             <option value="name-asc">担当者名(A→Z)</option>
           </select>
           <button class="btn btn-sm" onclick="openAiRank('clients')" title="事業内容などからAIがS/A/B/Cを判定します">AIでランク判定</button>
+          <button class="btn btn-sm" onclick="openAiEvent('clients')" title="Web検索で主催者・イベント規模・LINE公式を判定します">AIでイベント判定</button>
           <span class="clear-filters" onclick="clearFilters('clients')">フィルターをクリア</span>
         </div>
 
@@ -982,7 +984,7 @@
           <table>
             <thead><tr>
               <th class="col-check"><input type="checkbox" id="check-all-clients" onclick="toggleSelectAll('clients', this.checked)"></th>
-              <th>会社名</th><th>電話</th><th>メール</th><th>フォーム</th><th>業種</th><th>売上規模</th><th>上場</th><th>担当者</th><th>ステータス</th><th></th>
+              <th>会社名</th><th>フォーム</th><th>業種</th><th>イベント規模</th><th>主催者</th><th>LINE公式</th><th>担当者</th><th>ステータス</th><th></th>
             </tr></thead>
             <tbody id="clients-tbody"></tbody>
           </table>
@@ -1161,6 +1163,25 @@
     <div class="modal-foot">
       <button class="btn" onclick="closeModal('ai-rank-modal')">閉じる</button>
       <button class="btn btn-primary" id="ai-rank-run" onclick="runAiRank()">判定を開始</button>
+    </div>
+  </div>
+</div>
+
+<!-- AIイベント判定 Modal -->
+<div class="modal-overlay" id="ai-event-modal">
+  <div class="modal">
+    <div class="modal-head"><h3>AIでイベント判定</h3><span class="modal-close" onclick="closeModal('ai-event-modal')">&times;</span></div>
+    <div class="modal-body">
+      <p class="ai-desc" style="font-size:12px; color:var(--text-secondary); line-height:1.7;">Claude が <b>Web検索で各社の公式サイト・イベントページ・LINE等を実際に調べ</b>、<b>イベント規模（小/中/大）・主催者（〇/×）・LINE公式アカウント（〇/×）</b>を判定して各社に反映し、根拠をメモに残します。1件ずつ調査するため件数が多いと時間がかかります。<br>APIキーはこの端末にのみ保存され、サーバー（Firestore）には送られません。</p>
+      <div class="field"><label>Anthropic APIキー</label><input type="password" id="ai-event-key" placeholder="sk-ant-..."></div>
+      <label class="opt-line"><input type="checkbox" id="ai-event-save-key" checked> このキーをこの端末に保存する</label>
+      <div class="field" style="margin-top:8px;"><label>対象</label><div class="detail-sub" id="ai-event-target"></div></div>
+      <div class="detail-section-label">進捗</div>
+      <div class="log-box" id="ai-event-log" style="max-height:220px; overflow:auto; white-space:pre-wrap; font-size:12px; font-family:monospace;"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" onclick="closeModal('ai-event-modal')">閉じる</button>
+      <button class="btn btn-primary" id="ai-event-run" onclick="runAiEvent()">判定を開始</button>
     </div>
   </div>
 </div>
@@ -1376,6 +1397,7 @@
         <div class="field"><label>イベント規模</label><select id="cd-eventscale"></select></div>
       </div>
       <div class="field"><label>LINE公式アカウント</label><select id="cd-line"></select></div>
+      <div class="field"><label>LINE公式アカウント情報（URL / アカウント名 / LINE ID）</label><input type="text" id="cd-lineinfo" placeholder="例：https://lin.ee/xxxx ／ @sample ／ 公式サイト掲載あり"></div>
       <div class="field-row">
         <div class="field"><label>担当者</label>
           <select id="cd-owner"><option value="">未割当て</option></select>
@@ -1459,6 +1481,7 @@
         <div class="field"><label>イベント規模</label><select id="kd-eventscale"></select></div>
       </div>
       <div class="field"><label>LINE公式アカウント</label><select id="kd-line"></select></div>
+      <div class="field"><label>LINE公式アカウント情報（URL / アカウント名 / LINE ID）</label><input type="text" id="kd-lineinfo" placeholder="例：https://lin.ee/xxxx ／ @sample ／ 公式サイト掲載あり"></div>
 
       <div class="detail-section-label">メール送信</div>
       <label class="opt-line"><input type="checkbox" id="kd-optout"> メールの配信を停止する（配信リストから除外されます）</label>
@@ -1708,17 +1731,31 @@ const STATUS_MIGRATION = {
 /* 上場の区分 */
 const LISTING_OPTIONS = ['', '上場', '非上場', '不明'];
 
-/* 主催者であるか */
-const ORGANIZER_OPTIONS = ['', 'はい', 'いいえ'];
-/* イベント規模（小: 〜500名 / 中: 500〜5,000名 / 大: 5,000名〜） */
-const EVENT_SCALE_OPTIONS = ['', '小（～500名）', '中（500～5,000名）', '大（5,000名～）'];
-/* LINE公式アカウントの有無 */
-const LINE_OPTIONS = ['', '有', '無'];
+/* 主催者であるか（〇 or ×） */
+const ORGANIZER_OPTIONS = ['', '〇', '×'];
+/* イベント規模（年間のおおよその動員数で分類：小=～499人 / 中=500～10,000人 / 大=10,000人以上） */
+const EVENT_SCALE_OPTIONS = ['', '小（～499人）', '中（500～10,000人）', '大（10,000人以上）'];
+/* LINE公式アカウントの有無（〇 or ×） */
+const LINE_OPTIONS = ['', '〇', '×'];
 
 /* クライアントのランク（優先度）。上から高い順 */
 const RANK_OPTIONS = ['SS', 'S', 'A', 'B', 'C'];
 function rankBadge(rank){
   return RANK_OPTIONS.includes(rank) ? `<span class="rank-badge rank-${rank}">${rank}</span>` : '';
+}
+
+/* イベント規模の一覧セル（小/中/大 のバッジ。ツールチップに詳細） */
+function scaleCell(v){
+  if(!v) return '<span class="unassigned">—</span>';
+  const k = v.charAt(0);
+  const bg = k==='大' ? '#2563eb' : k==='中' ? '#0891b2' : '#64748b';
+  return `<span title="${escapeHtml(v)}" style="display:inline-block;min-width:20px;text-align:center;padding:2px 7px;border-radius:6px;font-size:11px;font-weight:700;color:#fff;background:${bg};">${k}</span>`;
+}
+/* 主催者・LINE公式の一覧セル（〇 or ×） */
+function markCell(v){
+  if(v==='〇') return '<span style="color:#16a34a;font-weight:700;font-size:14px;">〇</span>';
+  if(v==='×') return '<span style="color:#94a3b8;font-weight:700;font-size:14px;">×</span>';
+  return '<span class="unassigned">—</span>';
 }
 
 /* ========== AIによるランク自動判定（Claude API） ========== */
@@ -1841,6 +1878,144 @@ async function runAiRank(){
   runBtn.disabled = false;
   log(`完了：${ok}件にランクを付けました。`);
   toast(`AI判定完了：${ok}件`);
+}
+
+/* ========== AIによるイベント属性の自動判定（Web検索つき・Claude API） ========== */
+/* Web検索で各社の公式サイト/イベントページ/LINEを実地調査するため精度重視の Sonnet */
+const EVENT_MODEL = 'claude-sonnet-5';
+
+const EVENT_RUBRIC = `あなたは企業リサーチのアシスタントです。web_search ツールを使って各企業の公式サイト・イベントページ・SNS等を実際に調べ、以下の3項目を判定してください。推測ではなく、確認できた事実に基づいて答え、確認できない項目は空文字 "" にしてください。
+
+【イベント規模】年間のおおよその動員数で分類（次の3つの文字列のいずれか、または不明なら ""）：
+- 「小（～499人）」：年間動員 おおよそ499人以下
+- 「中（500～10,000人）」：年間動員 おおよそ500～10,000人
+- 「大（10,000人以上）」：年間動員 おおよそ10,000人以上
+
+【主催者】次のいずれかに当てはまれば「〇」、そうでなければ「×」：
+- 自社でイベントを企画・主催・制作・運営している企業。チケット販売の手配をしている企業。
+- チケット販売は自社に限らず、チケットぴあ／イープラス／ローソンチケット／楽天チケット等のプレイガイドへ委託している企業も「〇」に含める。
+- ただし、単なるチケット販売会社・販売システム会社・会場運営会社は「×」（除外）。
+- 公式サイトまたはイベントページで主催・企画・運営実績を確認できる企業に限定して「〇」とすること。
+
+【LINE公式アカウント】企業または主催イベントが LINE公式アカウントを保有・運用していれば「〇」、していなければ「×」、確認できなければ ""。
+- 「〇」の場合は lineInfo に「LINE公式アカウントのURL・アカウント名・LINE ID・公式サイト上の掲載有無」を分かる範囲で記録すること。`;
+
+let aiEventSection = null;
+
+/* 対象ID：選択があればそれ、無ければ「表示中でイベント規模が未設定の行」 */
+function aiEventTargetIds(section){
+  const arr = dataOf(section);
+  if(selection[section].size > 0) return [...selection[section]];
+  return visibleIds[section].filter(id=>{
+    const c = arr.find(x=>x.id===id) || {};
+    return !c.eventScale && !c.isOrganizer && !c.lineOfficial;
+  });
+}
+
+function openAiEvent(section){
+  aiEventSection = section;
+  const ids = aiEventTargetIds(section);
+  const basis = selection[section].size > 0 ? '選択中の行' : '表示中で未判定の行';
+  document.getElementById('ai-event-target').textContent = `${SECTION_LABEL[section]}：${ids.length}件（${basis}）`;
+  document.getElementById('ai-event-log').textContent = '';
+  document.getElementById('ai-event-key').value = localStorage.getItem('anthropicApiKey') || '';
+  document.getElementById('ai-event-run').disabled = ids.length === 0;
+  openModal('ai-event-modal');
+}
+
+/* Web検索つきで1社を調査し {id,eventScale,isOrganizer,lineOfficial,lineInfo,reason} を得る */
+async function aiEventClassify(apiKey, company){
+  const sys = EVENT_RUBRIC + '\n\n出力は JSON オブジェクトのみ（単一オブジェクト、配列不可）。形式は {"id":数値,"eventScale":"小（～499人）"|"中（500～10,000人）"|"大（10,000人以上）"|"","isOrganizer":"〇"|"×"|"","lineOfficial":"〇"|"×"|"","lineInfo":"文字列","reason":"70字以内の日本語の根拠（参照した情報源を簡潔に）"}。説明文やコードブロック記号を付けず、オブジェクトだけを最後に返すこと。';
+  let messages = [{ role: 'user', content: '次の企業を調べて判定してください:\n' + JSON.stringify(company) }];
+  let guard = 0;
+  while(true){
+    guard++;
+    if(guard > 8) break;
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true',
+      },
+      body: JSON.stringify({
+        model: EVENT_MODEL,
+        max_tokens: 4096,
+        system: sys,
+        tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 5 }],
+        messages,
+      }),
+    });
+    if(!res.ok){
+      const t = await res.text();
+      throw new Error('API ' + res.status + '：' + t.slice(0, 200));
+    }
+    const data = await res.json();
+    // Web検索の途中で一時停止した場合は、その内容を積んで続行
+    if(data.stop_reason === 'pause_turn'){
+      messages.push({ role: 'assistant', content: data.content });
+      continue;
+    }
+    const text = (data.content || []).filter(b=>b.type==='text').map(b=>b.text).join('');
+    let t = text.trim().replace(/^```(?:json)?/i, '').replace(/```$/,'').trim();
+    const s = t.indexOf('{'), e = t.lastIndexOf('}');
+    if(s >= 0 && e > s) t = t.slice(s, e + 1);
+    return JSON.parse(t);
+  }
+  throw new Error('応答が完了しませんでした');
+}
+
+async function runAiEvent(){
+  const section = aiEventSection;
+  const key = document.getElementById('ai-event-key').value.trim();
+  if(!key){ toast('APIキーを入力してください'); return; }
+  if(document.getElementById('ai-event-save-key').checked) localStorage.setItem('anthropicApiKey', key);
+  else localStorage.removeItem('anthropicApiKey');
+
+  const arr = dataOf(section);
+  const ids = aiEventTargetIds(section);
+  if(!ids.length){ toast('対象がありません'); return; }
+
+  const runBtn = document.getElementById('ai-event-run');
+  runBtn.disabled = true;
+  const logEl = document.getElementById('ai-event-log');
+  const log = m => { logEl.textContent += m + '\n'; logEl.scrollTop = logEl.scrollHeight; };
+  log(`対象 ${ids.length}件をWeb検索で判定します（1件ずつ・時間がかかります）…`);
+
+  let done = 0, ok = 0;
+  for(const id of ids){
+    const c = arr.find(x=>x.id===id);
+    if(!c){ done++; continue; }
+    log(`○ ${c.name} を調査中…`);
+    const company = {
+      id: c.id, 会社名: c.name, 事業内容: c.business || '', 業種: c.industry || '',
+      公式サイト: c.inquiryForm || '', メモ: (c.notes || []).map(n=>n.text).join(' / '),
+    };
+    try{
+      const r = await aiEventClassify(key, company);
+      let changed = [];
+      if(EVENT_SCALE_OPTIONS.includes(r.eventScale) && r.eventScale){ c.eventScale = r.eventScale; changed.push('規模:' + r.eventScale.charAt(0)); }
+      if(r.isOrganizer === '〇' || r.isOrganizer === '×'){ c.isOrganizer = r.isOrganizer; changed.push('主催:' + r.isOrganizer); }
+      if(r.lineOfficial === '〇' || r.lineOfficial === '×'){ c.lineOfficial = r.lineOfficial; changed.push('LINE:' + r.lineOfficial); }
+      if(r.lineInfo){ c.lineInfo = r.lineInfo; }
+      if(!c.notes) c.notes = [];
+      c.notes.push({
+        text: `【AIイベント判定】規模:${r.eventScale||'—'} / 主催:${r.isOrganizer||'—'} / LINE:${r.lineOfficial||'—'}${r.lineInfo ? '（' + r.lineInfo + '）' : ''}｜${r.reason || ''}`,
+        time: nowDateTimeStr(), author: 'AI判定',
+      });
+      ok++;
+      log(`  → ${changed.length ? changed.join(' / ') : '判定情報なし'}`);
+    }catch(err){
+      log(`  エラー: ${err.message}`);
+    }
+    done++;
+    log(`進捗 ${done}/${ids.length}`);
+    rerender(section);
+  }
+  runBtn.disabled = false;
+  log(`完了：${ok}件を判定しました。`);
+  toast(`AIイベント判定完了：${ok}件`);
 }
 
 let currentUser = SALES_REPS[0].id;
@@ -2813,16 +2988,11 @@ function renderContacts(){
     tr.innerHTML = `
       <td class="col-check"><input type="checkbox" ${selection.contacts.has(c.id)?'checked':''} onclick="toggleSelect('contacts', ${c.id}, this.checked)"></td>
       <td><div class="cell-name linkable" onclick="openContactDetail(${c.id})">${rankBadge(c.rank)}${escapeHtml(c.name)}</div></td>
-      <td>${copyIcon(c.phone, 'phone')}</td>
-      <td>
-        ${copyIcon(c.email, 'email')}
-        ${c.emailOptOut ? '<div class="optout-badge">配信停止</div>' : ''}
-        ${c.lastMailedAt ? `<div class="mail-meta">送信 ${escapeHtml(c.lastMailedAt)}</div>` : ''}
-      </td>
       <td>${c.inquiryForm ? `<a href="${escapeHtml(c.inquiryForm)}" target="_blank" rel="noopener" style="color:var(--primary-deep); text-decoration:none; font-size:12px;">フォーム ↗</a>` : '<span class="unassigned">—</span>'}</td>
       <td>${c.business ? escapeHtml(c.business) : '<span class="unassigned">—</span>'}</td>
-      <td>${c.revenue ? escapeHtml(c.revenue) : '<span class="unassigned">—</span>'}</td>
-      <td>${c.listing ? escapeHtml(c.listing) : '<span class="unassigned">—</span>'}</td>
+      <td>${scaleCell(c.eventScale)}</td>
+      <td>${markCell(c.isOrganizer)}</td>
+      <td>${markCell(c.lineOfficial)}</td>
       <td>${ownerCell(c.owner)}</td>
       <td>${statusCell(c.status, c.statusUpdated)}</td>
       <td>
@@ -2880,12 +3050,11 @@ function renderClients(){
     tr.innerHTML = `
       <td class="col-check"><input type="checkbox" ${selection.clients.has(c.id)?'checked':''} onclick="toggleSelect('clients', ${c.id}, this.checked)"></td>
       <td><div class="cell-name linkable" onclick="openClientDetail(${c.id})">${rankBadge(c.rank)}${escapeHtml(c.name)}</div></td>
-      <td>${copyIcon(c.phone, 'phone')}</td>
-      <td>${copyIcon(c.email, 'email')}</td>
       <td>${c.inquiryForm ? `<a href="${escapeHtml(c.inquiryForm)}" target="_blank" rel="noopener" style="color:var(--primary-deep); text-decoration:none; font-size:12px;">フォーム ↗</a>` : '<span class="unassigned">—</span>'}</td>
       <td>${c.industry ? escapeHtml(c.industry) : '<span class="unassigned">—</span>'}</td>
-      <td>${c.revenue ? escapeHtml(c.revenue) : '<span class="unassigned">—</span>'}</td>
-      <td>${c.listing ? escapeHtml(c.listing) : '<span class="unassigned">—</span>'}</td>
+      <td>${scaleCell(c.eventScale)}</td>
+      <td>${markCell(c.isOrganizer)}</td>
+      <td>${markCell(c.lineOfficial)}</td>
       <td>${ownerCell(c.owner)}</td>
       <td>${statusCell(c.status, c.statusUpdated)}</td>
       <td>
@@ -3870,6 +4039,7 @@ function openClientDetail(clientId){
   document.getElementById('cd-organizer').value = c.isOrganizer || '';
   document.getElementById('cd-eventscale').value = c.eventScale || '';
   document.getElementById('cd-line').value = c.lineOfficial || '';
+  document.getElementById('cd-lineinfo').value = c.lineInfo || '';
   document.getElementById('cd-rank').value = c.rank || '';
   document.getElementById('cd-owner').value = c.owner || '';
   document.getElementById('cd-status').value = c.status;
@@ -3927,6 +4097,7 @@ function saveClientDetail(){
   c.isOrganizer = document.getElementById('cd-organizer').value;
   c.eventScale = document.getElementById('cd-eventscale').value;
   c.lineOfficial = document.getElementById('cd-line').value;
+  c.lineInfo = document.getElementById('cd-lineinfo').value.trim();
   c.rank = document.getElementById('cd-rank').value;
   const newStatus = document.getElementById('cd-status').value;
   changeStatus(c, newStatus, 'record');
@@ -3961,6 +4132,7 @@ function openContactDetail(contactId){
   document.getElementById('kd-organizer').value = c.isOrganizer || '';
   document.getElementById('kd-eventscale').value = c.eventScale || '';
   document.getElementById('kd-line').value = c.lineOfficial || '';
+  document.getElementById('kd-lineinfo').value = c.lineInfo || '';
   document.getElementById('kd-rank').value = c.rank || '';
   document.getElementById('kd-optout').checked = !!c.emailOptOut;
   document.getElementById('kd-mail-meta').textContent = c.lastMailedAt
@@ -4006,6 +4178,7 @@ function saveContactDetail(){
   c.isOrganizer = document.getElementById('kd-organizer').value;
   c.eventScale = document.getElementById('kd-eventscale').value;
   c.lineOfficial = document.getElementById('kd-line').value;
+  c.lineInfo = document.getElementById('kd-lineinfo').value.trim();
   c.rank = document.getElementById('kd-rank').value;
   c.mailTag = document.getElementById('kd-mailtag').value.trim();
   c.emailOptOut = document.getElementById('kd-optout').checked;
