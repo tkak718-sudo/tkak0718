@@ -1,0 +1,4325 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>crowdbasket CRM — 営業・マーケティング管理システム</title>
+<!-- タブのアイコン。ロゴと同じ緑グラデ＋「cb」。画像ファイル不要でHTMLに直接埋め込み -->
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%2306C755'/%3E%3Cstop offset='1' stop-color='%2304A947'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='16' fill='url(%23g)'/%3E%3Ctext x='32' y='33' font-family='Arial,sans-serif' font-size='30' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3Ecb%3C/text%3E%3C/svg%3E">
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%2306C755'/%3E%3Cstop offset='1' stop-color='%2304A947'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='16' fill='url(%23g)'/%3E%3Ctext x='32' y='33' font-family='Arial,sans-serif' font-size='30' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3Ecb%3C/text%3E%3C/svg%3E">
+<style>
+  :root{
+    /* ground: white-dominant, neutrals biased green so they read chosen, not default */
+    --bg: #F2F7F3;
+    --surface: #FFFFFF;
+    --surface-alt: #F6FAF7;
+    --border: #E2EBE4;
+    --border-strong: #C7D6CB;
+    --text: #1A241D;
+    --text-secondary: #5B6A60;
+    --text-faint: #93A398;
+    /* LINE green: --primary is the brand fill, --primary-deep carries text on white */
+    --primary: #06C755;
+    --primary-hover: #05B34C;
+    --primary-deep: #05803A;
+    --primary-soft: #E4F8EC;
+    --primary-soft-strong: #D2F2DF;
+    --accent: #05803A;
+    --accent-soft: #E4F8EC;
+    --warn: #B8862B;
+    --warn-soft: #FBF3E1;
+    --danger: #D8453B;
+    --danger-soft: #FCEBE9;
+    --info: #2E86A8;
+    --info-soft: #E4F2F7;
+    --radius: 6px;
+    --shadow-sm: 0 1px 2px rgba(16,40,25,0.05);
+    --shadow-md: 0 4px 14px rgba(16,40,25,0.10);
+    --sidebar-w: 232px;
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;}
+  body{
+    margin:0;
+    font-family:"Zen Kaku Gothic New","Hiragino Sans","Noto Sans JP",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+    background:var(--bg);
+    color:var(--text);
+    font-size:14px;
+    -webkit-font-smoothing:antialiased;
+  }
+  .num{font-family:"JetBrains Mono","SF Mono",Consolas,monospace; font-variant-numeric:tabular-nums;}
+
+  /* ---------- Layout ---------- */
+  #app{display:flex; min-height:100vh;}
+  .sidebar{
+    width:var(--sidebar-w);
+    background:var(--surface);
+    color:var(--text);
+    border-right:1px solid var(--border);
+    display:flex;
+    flex-direction:column;
+    flex-shrink:0;
+    position:sticky; top:0; height:100vh;
+  }
+  .sidebar-brand{
+    display:flex; align-items:center; gap:10px;
+    padding:20px 20px 16px 20px;
+    border-bottom:1px solid var(--border);
+  }
+  .brand-mark{
+    width:30px;height:30px;border-radius:9px;
+    background:linear-gradient(135deg,#06C755,#04A947);
+    display:flex;align-items:center;justify-content:center;
+    font-weight:700; font-size:12px; letter-spacing:-0.02em; color:#fff; flex-shrink:0;
+  }
+  .brand-text{font-weight:700; font-size:15.5px; letter-spacing:0.02em;}
+  .brand-sub{font-size:10.5px; color:var(--text-faint); margin-top:1px; letter-spacing:0.03em;}
+
+  .nav{padding:14px 10px; flex:1;}
+  .nav-item{
+    display:flex; align-items:center; gap:11px;
+    padding:10px 12px; margin-bottom:2px;
+    border-radius:6px; color:var(--text-secondary);
+    cursor:pointer; font-size:13.5px; font-weight:500;
+    border-left:3px solid transparent;
+    transition:background .12s ease, color .12s ease;
+    user-select:none;
+  }
+  .nav-item svg{width:17px; height:17px; flex-shrink:0; opacity:0.8;}
+  .nav-item:hover{background:var(--surface-alt); color:var(--text);}
+  .nav-item.active{
+    background:var(--primary-soft);
+    color:var(--primary-deep);
+    font-weight:700;
+    border-left-color:var(--primary);
+  }
+  .nav-item.active svg{opacity:1;}
+  .nav-count{
+    margin-left:auto; font-size:11px; background:var(--surface-alt);
+    color:var(--text-faint);
+    padding:1px 7px; border-radius:20px; font-family:"JetBrains Mono",monospace;
+  }
+  .nav-item.active .nav-count{background:var(--primary-soft-strong); color:var(--primary-deep);}
+  .nav-section-label{
+    font-size:10.5px; text-transform:uppercase; letter-spacing:0.08em;
+    color:var(--text-faint); padding:14px 12px 6px 12px; font-weight:600;
+  }
+  .sidebar-footer{
+    padding:12px 14px; border-top:1px solid var(--border);
+    font-size:11.5px; color:var(--text-faint);
+  }
+  .save-state{
+    display:flex; align-items:center; gap:6px; font-size:11px; font-weight:600;
+    color:var(--primary-deep); margin-bottom:8px; line-height:1.5;
+  }
+  .save-state::before{
+    content:""; width:6px; height:6px; border-radius:50%;
+    background:var(--primary); flex-shrink:0;
+  }
+  .save-state.warn{color:var(--danger);}
+  .save-state.warn::before{background:var(--danger);}
+  .data-actions{display:flex; gap:5px; margin-bottom:8px;}
+  .data-actions button{
+    flex:1; border:1px solid var(--border-strong); background:var(--surface);
+    color:var(--text-secondary); font-family:inherit; font-size:10.5px; font-weight:600;
+    padding:5px 2px; border-radius:5px; cursor:pointer; white-space:nowrap;
+  }
+  .data-actions button:hover{background:var(--surface-alt); color:var(--text);}
+  .data-actions button.danger:hover{background:var(--danger-soft); border-color:var(--danger); color:var(--danger);}
+  .footer-ver{font-size:10.5px; color:var(--text-faint);}
+
+  .main{flex:1; display:flex; flex-direction:column; min-width:0;}
+
+  .topbar{
+    height:60px; background:var(--surface); border-bottom:1px solid var(--border);
+    display:flex; align-items:center; padding:0 24px; gap:16px;
+    position:sticky; top:0; z-index:10;
+  }
+  .topbar-title{font-size:17px; font-weight:700; margin-right:auto;}
+  .user-switch{
+    display:flex; align-items:center; gap:8px;
+    background:var(--surface-alt); border:1px solid var(--border);
+    padding:5px 10px 5px 6px; border-radius:20px; cursor:pointer;
+  }
+  .user-switch label{font-size:11px; color:var(--text-faint); margin-right:2px;}
+  .user-switch select{
+    border:none; background:transparent; font-size:13px; font-weight:600;
+    color:var(--text); cursor:pointer; font-family:inherit;
+  }
+  .avatar{
+    width:26px;height:26px;border-radius:50%;
+    background:var(--primary-deep); color:#fff; font-size:11px; font-weight:700;
+    display:flex;align-items:center;justify-content:center; flex-shrink:0;
+  }
+  .btn{
+    border:1px solid var(--border-strong); background:var(--surface);
+    padding:8px 14px; border-radius:6px; font-size:13px; font-weight:600;
+    cursor:pointer; color:var(--text); font-family:inherit;
+    display:inline-flex; align-items:center; gap:6px;
+    transition:all .12s ease;
+  }
+  .btn:hover{background:var(--surface-alt); border-color:var(--text-faint);}
+  .btn-primary{background:var(--primary); border-color:var(--primary); color:#fff;}
+  .btn-primary:hover{background:var(--primary-hover); border-color:var(--primary-hover);}
+  .btn-sm{padding:5px 10px; font-size:12px;}
+
+  .content{padding:24px 28px 60px 28px; flex:1;}
+  .page{display:none;}
+  .page.active{display:block; animation:fadein .18s ease;}
+  @keyframes fadein{from{opacity:0; transform:translateY(3px);} to{opacity:1; transform:none;}}
+
+  .page-header{display:flex; align-items:flex-end; justify-content:space-between; margin-bottom:18px;}
+  .header-actions{display:flex; align-items:center; gap:8px; flex-wrap:wrap; justify-content:flex-end;}
+
+  /* データ分析 */
+  .an-hint{font-size:11.5px; color:var(--text-faint); line-height:1.6;}
+  .an-card{margin-bottom:18px;}
+  .an-total{font-size:12.5px; font-weight:700; color:var(--primary-deep);}
+  .an-body{padding:16px 18px 18px;}
+  .an-section-label{
+    font-size:11px; text-transform:uppercase; letter-spacing:0.06em; font-weight:700;
+    color:var(--text-faint); margin:6px 0 10px;
+  }
+  .an-day-head{display:flex; align-items:center; gap:10px;}
+  .an-day-head select{
+    text-transform:none; letter-spacing:normal; font-weight:600;
+    font-size:12px; color:var(--text); background:var(--surface);
+    border:1px solid var(--border); border-radius:8px; padding:4px 8px; cursor:pointer;
+  }
+  .an-gauges{display:flex; flex-wrap:wrap; gap:22px; margin-bottom:10px;}
+  .gauge{width:120px; text-align:center;}
+  .gauge svg{width:100px; height:100px;}
+  .gauge-num{font-family:"JetBrains Mono",monospace; font-size:20px; font-weight:800; fill:var(--text);}
+  .gauge-label{font-size:12.5px; font-weight:700; margin-top:4px;}
+  .gauge-sub{font-size:11px; color:var(--text-faint); font-family:"JetBrains Mono",monospace; margin-top:1px;}
+  .an-bars{overflow-x:auto;}
+  .bar-row{display:flex; align-items:flex-end; gap:6px; min-height:130px; padding-top:6px;}
+  .bar-col{display:flex; flex-direction:column; align-items:center; gap:3px; min-width:24px;}
+  .bar-val{font-size:10.5px; color:var(--text-secondary); font-family:"JetBrains Mono",monospace; height:14px;}
+  .bar-track{width:20px; height:96px; display:flex; align-items:flex-end;}
+  .bar-fill{width:100%; background:var(--primary); border-radius:4px 4px 0 0; min-height:2px; transition:height .2s;}
+  .bar-day{font-size:10px; color:var(--text-faint); font-family:"JetBrains Mono",monospace;}
+  .an-nodata{padding:24px; text-align:center; color:var(--text-faint); font-size:13px;}
+  .page-header h1{font-size:21px; margin:0 0 4px 0; font-weight:700;}
+  .page-header p{margin:0; color:var(--text-secondary); font-size:13px;}
+
+  /* ---------- Home widgets ---------- */
+  .grid-home{display:grid; grid-template-columns: 1.3fr 1fr; gap:18px; align-items:start;}
+  .card{
+    background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
+    box-shadow:var(--shadow-sm);
+  }
+  .card-head{
+    padding:14px 18px; border-bottom:1px solid var(--border);
+    display:flex; align-items:center; justify-content:space-between;
+  }
+  .card-head h2{font-size:14.5px; margin:0; font-weight:700;}
+  .card-body{padding:6px 8px;}
+  .task-row{
+    display:flex; align-items:center; gap:12px; padding:11px 12px; border-radius:6px;
+    cursor:pointer;
+  }
+  .task-row:hover{background:var(--surface-alt);}
+  .row-hover-action{opacity:0; flex-shrink:0; transition:opacity .1s;}
+  .task-row:hover .row-hover-action, .sched-row:hover .row-hover-action{opacity:1;}
+  .task-check{
+    width:18px;height:18px;border-radius:5px;border:1.5px solid var(--border-strong);
+    flex-shrink:0; display:flex;align-items:center;justify-content:center; cursor:pointer;
+  }
+  .task-check.done{background:var(--primary); border-color:var(--primary);}
+  .task-check.done svg{width:11px;height:11px; stroke:#fff;}
+  .task-main{flex:1; min-width:0;}
+  .task-title{font-size:13.5px; font-weight:600;}
+  .task-title.done{text-decoration:line-through; color:var(--text-faint); font-weight:500;}
+  .task-meta{font-size:11.5px; color:var(--text-faint); margin-top:2px;}
+  .task-badge{
+    font-size:10.5px; font-weight:700; padding:2px 8px; border-radius:20px; flex-shrink:0;
+  }
+  .badge-high{background:var(--danger-soft); color:var(--danger);}
+  .badge-mid{background:var(--warn-soft); color:var(--warn);}
+  .badge-low{background:var(--info-soft); color:var(--info);}
+
+  .sched-row{display:flex; align-items:center; gap:12px; padding:11px 12px; border-radius:6px;}
+  .sched-row:hover{background:var(--surface-alt);}
+  .sched-time{
+    width:52px; flex-shrink:0; font-family:"JetBrains Mono",monospace; font-size:12px;
+    font-weight:700; color:var(--primary-deep); padding-top:1px;
+  }
+  .sched-bar{width:3px; border-radius:3px; background:var(--primary); align-self:stretch; flex-shrink:0;}
+  .sched-main{flex:1; padding-bottom:2px;}
+  .sched-title{font-size:13px; font-weight:600;}
+  .sched-sub{font-size:11.5px; color:var(--text-faint); margin-top:1px;}
+
+  .empty{padding:34px 18px; text-align:center; color:var(--text-faint);}
+  .empty svg{width:30px;height:30px; opacity:0.35; margin-bottom:8px;}
+  .empty p{margin:0; font-size:13px;}
+
+  .stat-strip{display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:18px;}
+  .stat-box{
+    background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
+    padding:14px 16px; box-shadow:var(--shadow-sm);
+  }
+  .stat-num{font-size:22px; font-weight:800; font-family:"JetBrains Mono",monospace; letter-spacing:-0.02em;}
+  .stat-label{font-size:11.5px; color:var(--text-secondary); margin-top:2px; font-weight:600;}
+
+  /* ---------- Tabs / Filters ---------- */
+  .tabs{display:flex; gap:2px; border-bottom:1px solid var(--border); margin-bottom:16px;}
+  .tab{
+    padding:9px 4px; margin-right:22px; font-size:13.5px; font-weight:600;
+    color:var(--text-faint); cursor:pointer; border-bottom:2px solid transparent; margin-bottom:-1px;
+  }
+  .tab:hover{color:var(--text);}
+  .tab.active{color:var(--primary-deep); border-bottom-color:var(--primary);}
+  .tab .cnt{color:var(--text-faint); font-weight:600; margin-left:3px;}
+  .tab.active .cnt{color:var(--primary-deep);}
+
+  .filter-bar{display:flex; align-items:center; gap:10px; margin-bottom:14px; flex-wrap:wrap;}
+  .filter-bar select, .filter-bar input[type=text]{
+    border:1px solid var(--border-strong); border-radius:6px; padding:7px 10px;
+    font-size:12.5px; background:var(--surface); color:var(--text); font-family:inherit;
+    min-width:120px;
+  }
+  .filter-bar .search-box{position:relative; min-width:220px;}
+  .filter-bar .search-box input{width:100%; padding-left:30px;}
+  .filter-bar .search-box svg{position:absolute; left:9px; top:8.5px; width:14px; height:14px; stroke:var(--text-faint);}
+  .filter-label{font-size:11.5px; color:var(--text-faint); font-weight:600; margin-right:-4px;}
+  .clear-filters{font-size:12px; color:var(--primary-deep); cursor:pointer; font-weight:600;}
+
+  /* keyboard focus — visible on every interactive surface */
+  :focus-visible{outline:2px solid var(--primary); outline-offset:2px; border-radius:4px;}
+
+  /* ---------- Table ---------- */
+  .table-wrap{
+    background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
+    overflow-x:auto; box-shadow:var(--shadow-sm);
+  }
+
+  /* 一括変更 */
+  .bulk-bar{
+    display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+    background:var(--primary-soft); border:1px solid var(--primary-soft-strong);
+    border-radius:var(--radius); padding:10px 14px; margin-bottom:12px;
+  }
+  .bulk-count{font-size:12.5px; color:var(--primary-deep);}
+  .bulk-count b{font-family:"JetBrains Mono",monospace; font-size:14px;}
+  .bulk-bar select{
+    border:1px solid var(--border-strong); border-radius:6px; padding:6px 9px;
+    font-size:12.5px; background:var(--surface); color:var(--text); font-family:inherit;
+  }
+  .bulk-bar .filter-label{color:var(--primary-deep);}
+  .bulk-sep{width:1px; align-self:stretch; background:var(--primary-soft-strong); margin:0 2px;}
+  /* ランク */
+  .rank-badge{
+    display:inline-block; min-width:20px; padding:1px 6px; margin-right:6px;
+    border-radius:5px; font-size:10.5px; font-weight:800; text-align:center;
+    font-family:"JetBrains Mono",monospace; vertical-align:middle; line-height:1.6;
+  }
+  .rank-SS{background:#7c3aed; color:#fff;}
+  .rank-S{background:#dc2626; color:#fff;}
+  .rank-A{background:#ea580c; color:#fff;}
+  .rank-B{background:#2563eb; color:#fff;}
+  .rank-C{background:#64748b; color:#fff;}
+
+  /* メール配信 */
+  .legal-note{
+    display:flex; gap:10px; align-items:flex-start;
+    background:var(--warn-soft); border:1px solid #EBD9AE; border-radius:var(--radius);
+    padding:11px 13px; margin-bottom:18px; font-size:12.5px; line-height:1.7; color:#6E5518;
+  }
+  .legal-note svg{width:16px;height:16px;flex-shrink:0;margin-top:3px;stroke:var(--warn);}
+  .legal-note.danger{background:var(--danger-soft); border-color:#EFC9C6; color:#7A2F2A;}
+  .legal-note.danger svg{stroke:var(--danger);}
+  .format-hint{font-size:11.5px; color:var(--text-secondary); line-height:1.7; margin-top:6px;}
+  .tally{border:1px solid var(--border); border-radius:var(--radius); overflow:hidden;}
+  .tally-row{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:8px 13px; font-size:12.5px; border-bottom:1px solid var(--border);
+  }
+  .tally-row:last-child{border-bottom:none;}
+  .tally-row.minus{color:var(--text-secondary);}
+  .tally-row.minus .tally-num{color:var(--danger);}
+  .tally-row.total{background:var(--primary-soft); font-weight:700; color:var(--primary-deep);}
+  .tally-num{font-family:"JetBrains Mono",monospace; font-weight:700;}
+  .tally-row.total .tally-num{font-size:15px;}
+  .opt-line{
+    display:flex; align-items:center; gap:7px; font-size:12.5px;
+    color:var(--text-secondary); cursor:pointer; margin-top:9px;
+  }
+  .opt-line input{cursor:pointer;}
+  .optout-badge{
+    display:inline-block; font-size:10px; font-weight:700; padding:1px 7px; border-radius:20px;
+    background:var(--danger-soft); color:var(--danger); margin-top:3px;
+  }
+  .mail-meta{font-size:10.5px; color:var(--text-faint); margin-top:3px;}
+
+  .col-check{width:38px; text-align:center;}
+  .col-check input{cursor:pointer; width:15px; height:15px;}
+  tbody td.col-check{padding-left:10px; padding-right:10px;}
+  table{width:100%; border-collapse:collapse;}
+  thead th{
+    text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:0.04em;
+    color:var(--text-faint); font-weight:700; padding:11px 16px; background:var(--surface-alt);
+    border-bottom:1px solid var(--border); white-space:nowrap;
+  }
+  tbody td{padding:12px 16px; border-bottom:1px solid var(--border); font-size:13px; vertical-align:middle;}
+  tbody tr:last-child td{border-bottom:none;}
+  tbody tr:hover{background:var(--surface-alt);}
+  .cell-name{font-weight:700; color:var(--text); display:inline-block; min-width:180px;}
+  .cell-name.linkable{color:var(--primary-deep); cursor:pointer;}
+  .cell-name.linkable:hover{text-decoration:underline;}
+  /* クリックでコピーするアイコン（メール・電話） */
+  .copy-ic{
+    display:inline-flex; align-items:center; justify-content:center;
+    width:28px; height:28px; border-radius:7px; cursor:pointer;
+    color:var(--primary-deep); background:var(--primary-soft);
+    font-size:15px; line-height:1; user-select:none; transition:background .15s;
+  }
+  .copy-ic:hover{background:var(--primary-soft-strong);}
+  .cell-sub{font-size:11.5px; color:var(--text-faint); margin-top:1px;}
+  .owner-chip{display:flex; align-items:center; gap:7px;}
+  .owner-chip .avatar{width:20px;height:20px;font-size:9.5px;}
+  .unassigned{color:var(--text-faint); font-style:normal; font-size:12.5px;}
+
+  .status-pill{
+    display:inline-flex; align-items:center; gap:5px; font-size:11.5px; font-weight:700;
+    padding:4px 10px; border-radius:20px; white-space:nowrap;
+  }
+  .dot{width:6px;height:6px;border-radius:50%;}
+
+  /* status color mapping */
+  /* ステータス13段階。進み具合が色で分かるよう、段階ごとに色をまとめている
+     未着手=赤 / 接触=ティール / 反応あり=青 / 商談=琥珀 / 提案=紫 / 受注=緑 / 終了=グレー */
+  .st-未対応{background:var(--danger-soft); color:var(--danger);}
+  .st-未対応 .dot{background:var(--danger);}
+
+  .st-送信済{background:var(--info-soft); color:var(--info);}
+  .st-送信済 .dot{background:var(--info);}
+  .st-お問い合わせ済{background:var(--primary-soft); color:var(--primary-deep);}
+  .st-お問い合わせ済 .dot{background:var(--primary-deep);}
+  .st-フォロー1回目{background:var(--info-soft); color:var(--info);}
+  .st-フォロー1回目 .dot{background:var(--info);}
+  .st-フォロー2回目{background:var(--info-soft); color:var(--info);}
+  .st-フォロー2回目 .dot{background:var(--info);}
+
+  .st-返信あり{background:#E7F0FB; color:#2C63A8;}
+  .st-返信あり .dot{background:#2C63A8;}
+
+  .st-商談調整中{background:var(--warn-soft); color:var(--warn);}
+  .st-商談調整中 .dot{background:var(--warn);}
+  .st-商談予定{background:var(--warn-soft); color:var(--warn);}
+  .st-商談予定 .dot{background:var(--warn);}
+  .st-商談実施{background:var(--warn-soft); color:var(--warn);}
+  .st-商談実施 .dot{background:var(--warn);}
+
+  .st-提案書送付{background:#EEF0FC; color:#5A54C4;}
+  .st-提案書送付 .dot{background:#5A54C4;}
+  .st-検討中{background:#EEF0FC; color:#5A54C4;}
+  .st-検討中 .dot{background:#5A54C4;}
+
+  .st-受注{background:var(--accent-soft); color:var(--accent); font-weight:800;}
+  .st-受注 .dot{background:var(--accent);}
+
+  .st-反応なし{background:#F0F3F1; color:#68746C;}
+  .st-反応なし .dot{background:#68746C;}
+  .st-対応終了{background:#F0F3F1; color:#68746C;}
+  .st-対応終了 .dot{background:#68746C;}
+
+  /* 旧ステータス（自動変換前のデータが残っていた場合の保険） */
+  .st-連絡済, .st-フォロー中, .st-対応完了,
+  .st-アポイント設定済, .st-見込みあり, .st-保留, .st-成立, .st-失注{
+    background:#F0F3F1; color:#68746C;
+  }
+  .st-連絡済 .dot, .st-フォロー中 .dot, .st-対応完了 .dot,
+  .st-アポイント設定済 .dot, .st-見込みあり .dot, .st-保留 .dot,
+  .st-成立 .dot, .st-失注 .dot{background:#68746C;}
+
+  .amount{font-family:"JetBrains Mono",monospace; font-weight:700;}
+  .status-time{font-size:10px; color:var(--text-faint); margin-top:3px; font-family:"JetBrains Mono",monospace;}
+  .row-actions{opacity:0; transition:opacity .1s;}
+  tbody tr:hover .row-actions{opacity:1;}
+  .icon-btn{
+    width:26px;height:26px; border-radius:6px; border:1px solid var(--border);
+    background:var(--surface); display:inline-flex; align-items:center; justify-content:center;
+    cursor:pointer; margin-left:4px;
+  }
+  .icon-btn:hover{background:var(--surface-alt);}
+  .icon-btn-danger:hover{background:var(--danger-soft); border-color:var(--danger); color:var(--danger);}
+  .icon-btn svg{width:13px;height:13px;}
+
+  /* ---------- Modal ---------- */
+  .modal-overlay{
+    position:fixed; inset:0; background:rgba(16,34,23,0.42); display:none;
+    align-items:center; justify-content:center; z-index:100; padding:20px;
+  }
+  .modal-overlay.open{display:flex;}
+  .modal{
+    background:var(--surface); border-radius:10px; width:480px; max-width:100%;
+    box-shadow:var(--shadow-md); max-height:88vh; overflow-y:auto;
+  }
+  .modal-head{padding:18px 22px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center;}
+  .modal-head h3{margin:0; font-size:16px; font-weight:700;}
+  .modal-close{cursor:pointer; color:var(--text-faint); font-size:18px; line-height:1;}
+  .modal-body{padding:20px 22px;}
+  .field{margin-bottom:14px;}
+  .field label{display:block; font-size:12px; font-weight:700; color:var(--text-secondary); margin-bottom:5px;}
+  .field input, .field select{
+    width:100%; padding:9px 11px; border:1px solid var(--border-strong); border-radius:6px;
+    font-size:13px; font-family:inherit; color:var(--text); background:var(--surface);
+  }
+  .field-row{display:flex; gap:12px;}
+  .field-row .field{flex:1;}
+  .modal-foot{padding:16px 22px; border-top:1px solid var(--border); display:flex; justify-content:flex-end; gap:10px;}
+
+  .modal-wide{width:600px;}
+  .detail-topline{display:flex; align-items:center; gap:12px; margin-bottom:16px;}
+  .detail-avatar{
+    width:44px;height:44px;border-radius:10px; background:var(--primary-deep); color:#fff;
+    display:flex;align-items:center;justify-content:center; font-weight:700; font-size:17px; flex-shrink:0;
+  }
+  .detail-sub{font-size:12px; color:var(--text-faint); margin-top:2px;}
+  .detail-section-label{
+    font-size:11px; text-transform:uppercase; letter-spacing:0.06em; font-weight:700;
+    color:var(--text-faint); margin:18px 0 8px 0;
+  }
+  .detail-section-label:first-of-type{margin-top:2px;}
+  .deal-mini-row{
+    display:flex; align-items:center; gap:10px; padding:9px 0; border-bottom:1px solid var(--border);
+  }
+  .deal-mini-row:last-child{border-bottom:none;}
+  .deal-mini-title{font-size:12.5px; font-weight:600; flex:1; min-width:0;}
+  .deal-mini-amount{font-family:"JetBrains Mono",monospace; font-size:12px; font-weight:700; color:var(--text-secondary);}
+  .no-deals{font-size:12.5px; color:var(--text-faint); padding:6px 0;}
+
+  .note-item{padding:9px 0; border-bottom:1px solid var(--border);}
+  .note-item:last-child{border-bottom:none;}
+  .note-meta{font-size:10.5px; color:var(--text-faint); margin-bottom:3px; font-weight:600;}
+  .note-text{font-size:12.5px; line-height:1.6; white-space:pre-wrap;}
+  .note-input-row{display:flex; gap:8px; margin-top:10px;}
+  .note-input-row textarea{
+    flex:1; border:1px solid var(--border-strong); border-radius:6px; padding:8px 10px;
+    font-size:12.5px; font-family:inherit; color:var(--text); resize:vertical; min-height:36px;
+  }
+  .notes-box{max-height:190px; overflow-y:auto; margin-bottom:0;}
+
+  /* ステータス変更履歴 */
+  .log-box{max-height:170px; overflow-y:auto;}
+  .log-item{
+    display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+    padding:8px 0; border-bottom:1px solid var(--border);
+  }
+  .log-item:last-child{border-bottom:none;}
+  .log-time{font-size:11px; color:var(--text-faint); white-space:nowrap;}
+  .log-move{display:inline-flex; align-items:center; gap:6px;}
+  .log-arrow{color:var(--text-faint); font-size:12px;}
+  .log-by{margin-left:auto; font-size:11.5px; color:var(--text-secondary); font-weight:600;}
+
+  /* ---------- AI prospecting card ---------- */
+  .ai-card{
+    margin-bottom:18px;
+    background:linear-gradient(180deg, var(--surface) 0%, var(--surface) 100%);
+    border-color:var(--border);
+  }
+  .ai-card .card-head h2{display:flex; align-items:center;}
+  .ai-badge{
+    font-size:10px; font-weight:700; color:var(--primary-deep); background:var(--primary-soft);
+    padding:3px 9px; border-radius:20px; letter-spacing:0.02em;
+  }
+  .ai-card-body{padding:16px 18px 18px 18px;}
+  .ai-desc{margin:0 0 12px 0; font-size:12.5px; color:var(--text-secondary); line-height:1.6;}
+  .ai-search-row{display:flex; gap:10px; align-items:center;}
+  .ai-search-row input{
+    flex:1; border:1px solid var(--border-strong); border-radius:6px; padding:9px 12px;
+    font-size:13px; font-family:inherit; color:var(--text);
+  }
+  .ai-search-row select{
+    border:1px solid var(--border-strong); border-radius:6px; padding:9px 10px;
+    font-size:13px; font-family:inherit; color:var(--text); background:var(--surface);
+  }
+  /* 貼り付け一括登録 */
+  .ai-format-hint{
+    display:flex; align-items:center; gap:9px; flex-wrap:wrap;
+    background:var(--surface-alt); border:1px solid var(--border); border-radius:var(--radius);
+    padding:9px 12px; margin-bottom:10px;
+  }
+  .ai-format-label{
+    font-size:10.5px; font-weight:700; letter-spacing:0.04em; text-transform:uppercase;
+    color:var(--text-faint); white-space:nowrap;
+  }
+  .ai-format-hint code{
+    font-family:"JetBrains Mono","SF Mono",Consolas,monospace; font-size:12px;
+    color:var(--primary-deep); background:var(--primary-soft);
+    padding:2px 8px; border-radius:4px; white-space:nowrap;
+  }
+  .ai-format-note{font-size:11.5px; color:var(--text-secondary); line-height:1.6;}
+  .ai-file-row{display:flex; align-items:center; gap:11px; flex-wrap:wrap; margin-bottom:12px;}
+  .ai-file-name{
+    font-size:12px; font-weight:600; color:var(--primary-deep);
+    background:var(--primary-soft); padding:3px 10px; border-radius:20px;
+  }
+  .ai-file-name:empty{display:none;}
+  .ai-or{
+    display:flex; align-items:center; gap:10px;
+    font-size:11.5px; color:var(--text-faint); font-weight:600; margin-bottom:8px;
+  }
+  .ai-or::before, .ai-or::after{content:""; height:1px; background:var(--border); flex:1;}
+  .ai-paste-area{
+    width:100%; min-height:118px; resize:vertical;
+    border:1px solid var(--border-strong); border-radius:6px; padding:10px 12px;
+    font-family:"JetBrains Mono","SF Mono",Consolas,monospace; font-size:12.5px; line-height:1.7;
+    color:var(--text); background:var(--surface); tab-size:12; white-space:pre; overflow-x:auto;
+  }
+  .ai-paste-area::placeholder{color:var(--text-faint);}
+
+  .ai-status{
+    margin-top:12px; font-size:12.5px; color:var(--text-secondary);
+    display:flex; align-items:center; gap:8px;
+  }
+  .ai-status.error{color:var(--danger);}
+  .ai-status.ok{color:var(--primary-deep); font-weight:600;}
+  .ai-status.warn{color:#8A6D1B; font-weight:600;}
+
+  /* 重複の可能性がある取り込み行 */
+  tr.dup-row{background:var(--warn-soft);}
+  tr.dup-row:hover{background:#FBEEC8;}
+  .dup-badge{
+    display:inline-block; margin-top:3px; font-size:10.5px; font-weight:700; line-height:1.5;
+    color:#8A6D1B; background:#FBF0D2; border:1px solid #EBD9AE; border-radius:4px; padding:1px 7px;
+  }
+  .ai-results-wrap{margin-top:16px;}
+  .ai-results-head{display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;}
+  .ai-table-wrap{box-shadow:none; border-color:var(--border);}
+  .ai-add-btn{
+    font-size:11.5px; font-weight:700; color:var(--primary-deep); background:var(--primary-soft);
+    border:none; padding:5px 11px; border-radius:6px; cursor:pointer;
+  }
+  .ai-add-btn:hover{background:var(--primary-soft-strong);}
+  .ai-add-btn:disabled{color:var(--text-faint); background:var(--surface-alt); cursor:default;}
+  .ai-source-note{font-size:11px; color:var(--text-faint); margin-top:8px;}
+
+  .toast{
+    position:fixed; bottom:22px; right:22px; background:var(--primary-deep); color:#fff;
+    padding:12px 18px; border-radius:8px; font-size:13px; font-weight:600;
+    box-shadow:var(--shadow-md); opacity:0; transform:translateY(8px);
+    transition:all .25s ease; z-index:200; display:flex; align-items:center; gap:8px;
+  }
+  .toast.show{opacity:1; transform:none;}
+
+  /* ---------- ログイン画面 ---------- */
+  .gate{
+    position:fixed; inset:0; background:var(--bg); z-index:300;
+    display:flex; align-items:center; justify-content:center; padding:20px;
+  }
+  .gate-card{
+    background:var(--surface); border:1px solid var(--border); border-radius:12px;
+    box-shadow:var(--shadow-md); padding:28px 30px; width:380px; max-width:100%;
+  }
+  .gate-brand{display:flex; align-items:center; gap:11px; margin-bottom:22px;}
+  .gate-title{font-weight:700; font-size:17px; letter-spacing:0.02em;}
+  .gate-sub{font-size:10.5px; color:var(--text-faint); margin-top:1px; letter-spacing:0.03em;}
+  .gate-boot{font-size:13px; color:var(--text-secondary); padding:10px 0;}
+  .gate-boot.error{color:var(--danger); line-height:1.7;}
+  .gate-btn{width:100%; justify-content:center; margin-top:4px;}
+  .gate-error{
+    display:none; font-size:12.5px; color:var(--danger); line-height:1.6;
+    background:var(--danger-soft); border-radius:6px; padding:9px 11px; margin-bottom:12px;
+  }
+  .gate-error.show{display:block;}
+  .gate-note{
+    margin-top:16px; padding-top:14px; border-top:1px solid var(--border);
+    font-size:11.5px; color:var(--text-faint); line-height:1.7;
+  }
+
+  ::-webkit-scrollbar{width:10px; height:10px;}
+  ::-webkit-scrollbar-thumb{background:#D3E0D7; border-radius:6px;}
+</style>
+</head>
+<body>
+
+<!-- ログイン画面。認証が済むまでアプリ本体は表示しない -->
+<div class="gate" id="gate">
+  <div class="gate-card">
+    <div class="gate-brand">
+      <div class="brand-mark">cb</div>
+      <div>
+        <div class="gate-title">crowdbasket CRM</div>
+        <div class="gate-sub">SALES &amp; MARKETING</div>
+      </div>
+    </div>
+    <div id="gate-boot" class="gate-boot">接続しています…</div>
+    <form id="gate-form" style="display:none" onsubmit="doLogin(event)">
+      <div class="field"><label for="gate-email">メールアドレス</label>
+        <input type="email" id="gate-email" autocomplete="username" required></div>
+      <div class="field"><label for="gate-pass">パスワード</label>
+        <input type="password" id="gate-pass" autocomplete="current-password" required></div>
+      <div class="gate-error" id="gate-error"></div>
+      <button type="submit" class="btn btn-primary gate-btn" id="gate-btn">ログイン</button>
+    </form>
+    <div class="gate-note">
+      アカウントはFirebaseコンソールで作成したものをお使いください。この画面から新規登録はできません。
+    </div>
+  </div>
+</div>
+
+<div id="app" style="display:none">
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div class="sidebar-brand">
+      <div class="brand-mark">cb</div>
+      <div>
+        <div class="brand-text">crowdbasket CRM</div>
+        <div class="brand-sub">SALES &amp; MARKETING</div>
+      </div>
+    </div>
+    <div class="nav">
+      <div class="nav-item active" data-page="home">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12l9-9 9 9"/><path d="M5 10v10h14V10"/></svg>
+        ホーム
+      </div>
+      <div class="nav-section-label">パイプライン</div>
+      <div class="nav-item" data-page="contacts">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg>
+        新規クライアント
+        <span class="nav-count" id="cnt-contacts">0</span>
+      </div>
+      <div class="nav-item" data-page="clients">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21V8l9-5 9 5v13"/><path d="M9 21v-6h6v6"/></svg>
+        クライアントデータ
+        <span class="nav-count" id="cnt-clients">0</span>
+      </div>
+      <div class="nav-item" data-page="deals">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M7 15l4-5 3 3 5-7"/></svg>
+        取引ステータス一覧表
+        <span class="nav-count" id="cnt-deals">0</span>
+      </div>
+      <div class="nav-section-label">レポート</div>
+      <div class="nav-item" data-page="analytics">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>
+        データ分析
+      </div>
+    </div>
+    <div class="sidebar-footer">
+      <div class="save-state" id="save-state">この端末に保存されます</div>
+      <div class="data-actions">
+        <button onclick="exportData()" title="データをJSONファイルに書き出します">バックアップ</button>
+        <button onclick="document.getElementById('import-file').click()" title="書き出したファイルから戻します">復元</button>
+        <button class="danger" onclick="doSignOut()" title="ログアウトします">ログアウト</button>
+      </div>
+      <input type="file" id="import-file" accept=".json" style="display:none" onchange="importData(event)">
+      <div class="footer-ver">ログイン中: <span id="signed-in-as">—</span></div>
+      <div class="footer-ver">crowdbasket CRM v2.0（共有版）</div>
+    </div>
+  </div>
+
+  <!-- Main -->
+  <div class="main">
+    <div class="topbar">
+      <div class="topbar-title" id="topbar-title">ホーム</div>
+      <div class="user-switch">
+        <div class="avatar" id="current-avatar">田</div>
+        <label>ログイン中:</label>
+        <select id="current-user"></select>
+      </div>
+      <button class="btn btn-primary" onclick="openContactModal()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 5v14M5 12h14"/></svg>
+        新規クライアント作成
+      </button>
+    </div>
+
+    <div class="content">
+
+      <!-- ============ HOME ============ -->
+      <div class="page active" id="page-home">
+        <div class="page-header">
+          <div>
+            <h1 id="home-greeting">おはようございます</h1>
+            <p id="home-date"></p>
+          </div>
+        </div>
+
+        <div class="stat-strip">
+          <div class="stat-box">
+            <div class="stat-num" id="stat-tasks">0</div>
+            <div class="stat-label">本日の未完了タスク</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-num" id="stat-unassigned">0</div>
+            <div class="stat-label">未割当ての会社</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-num" id="stat-mydeals">0</div>
+            <div class="stat-label">自分の進行中案件</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-num" id="stat-won">0</div>
+            <div class="stat-label">今月の成立件数</div>
+          </div>
+        </div>
+
+        <div class="grid-home">
+          <div class="card">
+            <div class="card-head">
+              <h2>本日のタスク</h2>
+              <div style="display:flex; align-items:center; gap:10px;">
+                <span class="filter-label" id="task-progress">0 / 0 完了</span>
+                <span class="icon-btn" title="タスクを追加" onclick="openTaskModal()">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 5v14M5 12h14"/></svg>
+                </span>
+              </div>
+            </div>
+            <div class="card-body" id="task-list"></div>
+          </div>
+
+          <div class="card">
+            <div class="card-head">
+              <h2>本日のスケジュール</h2>
+              <span class="icon-btn" title="予定を追加" onclick="openScheduleModal()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 5v14M5 12h14"/></svg>
+              </span>
+            </div>
+            <div class="card-body" id="sched-list"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============ CONTACTS (新規クライアント) ============ -->
+      <div class="page" id="page-contacts">
+        <div class="page-header">
+          <div>
+            <h1>新規クライアント</h1>
+            <p>問い合わせ・名刺交換などで得た新規クライアント候補を管理します</p>
+          </div>
+          <div class="header-actions">
+            <button class="btn" onclick="openMailExport()">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18v12H3z"/><path d="M3 7l9 6 9-6"/></svg>
+              メール配信リストを書き出す
+            </button>
+            <button class="btn" onclick="openOptOutImport()">配信停止を取り込む</button>
+            <button class="btn btn-primary" onclick="openContactModal()">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 5v14M5 12h14"/></svg>
+              新規追加
+            </button>
+          </div>
+        </div>
+
+        <div class="card ai-card">
+          <div class="card-head">
+            <h2>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px; margin-right:4px;"><path d="M4 5h16M4 12h16M4 19h10"/></svg>
+              企業リストを貼り付けて一括登録
+            </h2>
+            <span class="ai-badge">Excel・スプレッドシート対応</span>
+          </div>
+          <div class="card-body ai-card-body">
+            <p class="ai-desc">Excelやスプレッドシートからコピーした表を貼り付けると、新規クライアントとして一括で取り込めます。</p>
+
+            <div class="ai-format-hint">
+              <span class="ai-format-label">列の順番</span>
+              <code>会社名 → 電話番号 → メールアドレス → お問い合わせフォームURL → 担当者 → ステータス → 事業内容 → 売上規模 → 創業年数 → 上場区分 → チケットツール → メモ</code>
+              <span class="ai-format-note">会社名だけでも取り込めます。後ろの列は空欄で構いません。1行目が見出しの場合は自動で読み飛ばします。フォーマットは下の「Excelテンプレートを保存」から取得できます。</span>
+            </div>
+
+            <div class="ai-file-row">
+              <button class="btn" onclick="document.getElementById('paste-file').click()">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2"/><path d="M12 3v13M7 8l5-5 5 5"/></svg>
+                ファイルを選ぶ
+              </button>
+              <span class="ai-format-note">.xlsx と .csv に対応しています</span>
+              <span id="file-name" class="ai-file-name"></span>
+              <input type="file" id="paste-file" accept=".xlsx,.csv,.txt" style="display:none" onchange="handleFilePick(event)">
+            </div>
+
+            <div class="ai-or">または、下の欄に直接貼り付け</div>
+
+            <textarea id="paste-input" class="ai-paste-area" spellcheck="false" placeholder="株式会社サンプル音楽	03-0000-0000	info@sample.co.jp	https://sample.co.jp/contact	小熊 夢樹	送信済	音楽制作	10億円	25年	非上場	Zendesk	展示会で名刺交換
+合同会社テスト	06-0000-0000	info@test.co.jp
+株式会社サード"></textarea>
+
+            <div class="ai-search-row" style="margin-top:10px;">
+              <button class="btn btn-primary" onclick="parsePastedList()">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
+                読み込む
+              </button>
+              <button class="btn" onclick="clearPastedList()">クリア</button>
+              <button class="btn" onclick="downloadTemplateXlsx()" title="この列構成のExcelフォーマットを保存します">Excelテンプレートを保存</button>
+            </div>
+            <div id="ai-status" class="ai-status" style="display:none"></div>
+
+            <div id="ai-results-wrap" style="display:none">
+              <div class="ai-results-head">
+                <span class="filter-label" id="ai-results-count">0件読み込みました</span>
+                <span class="clear-filters" onclick="addAllAiResults()">すべて新規クライアントに追加</span>
+              </div>
+              <div class="table-wrap ai-table-wrap">
+                <table>
+                  <thead><tr>
+                    <th>会社名</th><th>電話番号</th><th>メールアドレス</th><th>お問い合わせ</th><th>担当者</th><th>ステータス</th><th></th>
+                  </tr></thead>
+                  <tbody id="ai-results-tbody"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="tabs" id="contacts-tabs">
+          <div class="tab active" data-scope="all">すべての会社 <span class="cnt" id="tab-c-all">0</span></div>
+          <div class="tab" data-scope="mine">自分の担当会社 <span class="cnt" id="tab-c-mine">0</span></div>
+          <div class="tab" data-scope="unassigned">未割当ての会社 <span class="cnt" id="tab-c-unassigned">0</span></div>
+        </div>
+
+        <div class="filter-bar">
+          <div class="search-box">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>
+            <input type="text" id="contacts-search" placeholder="会社名で検索">
+          </div>
+          <span class="filter-label">担当者</span>
+          <select id="contacts-filter-owner"><option value="">すべて</option></select>
+          <span class="filter-label">ステータス</span>
+          <select id="contacts-filter-status"><option value="">すべて</option></select>
+          <span class="filter-label">ランク</span>
+          <select id="contacts-filter-rank">
+            <option value="">すべて</option>
+            <option value="SS">SS</option><option value="S">S</option><option value="A">A</option><option value="B">B</option><option value="C">C</option>
+          </select>
+          <span class="filter-label">メール</span>
+          <select id="contacts-filter-mail">
+            <option value="">すべて</option>
+            <option value="sendable">配信できるもののみ</option>
+            <option value="optout">配信停止のみ</option>
+            <option value="noemail">アドレス未取得のみ</option>
+          </select>
+          <span class="filter-label">並び替え</span>
+          <select id="contacts-sort">
+            <option value="date-desc">作成日(新しい順)</option>
+            <option value="date-asc">作成日(古い順)</option>
+            <option value="name-asc">担当者名(A→Z)</option>
+          </select>
+          <button class="btn btn-sm" onclick="openAiRank('contacts')" title="事業内容などからAIがS/A/B/Cを判定します">AIでランク判定</button>
+          <span class="clear-filters" onclick="clearFilters('contacts')">フィルターをクリア</span>
+        </div>
+
+        <div class="bulk-bar" id="bulk-contacts" style="display:none">
+          <span class="bulk-count"><b id="bulk-contacts-count">0</b> 件を選択中</span>
+          <span class="filter-label">担当者</span>
+          <select id="bulk-contacts-owner"><option value="">変更しない</option><option value="__none__">未割当てにする</option></select>
+          <span class="filter-label">ステータス</span>
+          <select id="bulk-contacts-status"><option value="">変更しない</option></select>
+          <button class="btn btn-primary btn-sm" onclick="applyBulk('contacts')">一括変更</button>
+          <span class="bulk-sep"></span>
+          <button class="btn btn-sm" style="color:var(--danger); border-color:var(--danger-soft);" onclick="bulkDelete('contacts')">選択を削除</button>
+          <span class="clear-filters" onclick="clearSelection('contacts')">選択を解除</span>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th class="col-check"><input type="checkbox" id="check-all-contacts" onclick="toggleSelectAll('contacts', this.checked)"></th>
+              <th>会社名</th><th>電話</th><th>メール</th><th>フォーム</th><th>業種</th><th>売上規模</th><th>上場</th><th>担当者</th><th>ステータス</th><th></th>
+            </tr></thead>
+            <tbody id="contacts-tbody"></tbody>
+          </table>
+          <div class="empty" id="contacts-empty" style="display:none">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg>
+            <p>該当する会社がありません</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============ CLIENTS ============ -->
+      <div class="page" id="page-clients">
+        <div class="page-header">
+          <div>
+            <h1>クライアントデータ</h1>
+            <p>成約・取引実績のあるクライアント企業を管理します。データはこの端末のブラウザに保存されます。</p>
+          </div>
+          <button class="btn btn-primary" onclick="openClientModal()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 5v14M5 12h14"/></svg>
+            新規追加
+          </button>
+        </div>
+
+        <div class="tabs" id="clients-tabs">
+          <div class="tab active" data-scope="all">すべてのクライアント <span class="cnt" id="tab-cl-all">0</span></div>
+          <div class="tab" data-scope="mine">自分のクライアント <span class="cnt" id="tab-cl-mine">0</span></div>
+          <div class="tab" data-scope="unassigned">未割当てのクライアント <span class="cnt" id="tab-cl-unassigned">0</span></div>
+        </div>
+
+        <div class="filter-bar">
+          <div class="search-box">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>
+            <input type="text" id="clients-search" placeholder="会社名・業種で検索">
+          </div>
+          <span class="filter-label">担当者</span>
+          <select id="clients-filter-owner"><option value="">すべて</option></select>
+          <span class="filter-label">ステータス</span>
+          <select id="clients-filter-status"><option value="">すべて</option></select>
+          <span class="filter-label">ランク</span>
+          <select id="clients-filter-rank">
+            <option value="">すべて</option>
+            <option value="SS">SS</option><option value="S">S</option><option value="A">A</option><option value="B">B</option><option value="C">C</option>
+          </select>
+          <span class="filter-label">並び替え</span>
+          <select id="clients-sort">
+            <option value="date-desc">作成日(新しい順)</option>
+            <option value="date-asc">作成日(古い順)</option>
+            <option value="name-asc">担当者名(A→Z)</option>
+          </select>
+          <button class="btn btn-sm" onclick="openAiRank('clients')" title="事業内容などからAIがS/A/B/Cを判定します">AIでランク判定</button>
+          <span class="clear-filters" onclick="clearFilters('clients')">フィルターをクリア</span>
+        </div>
+
+        <div class="bulk-bar" id="bulk-clients" style="display:none">
+          <span class="bulk-count"><b id="bulk-clients-count">0</b> 件を選択中</span>
+          <span class="filter-label">担当者</span>
+          <select id="bulk-clients-owner"><option value="">変更しない</option><option value="__none__">未割当てにする</option></select>
+          <span class="filter-label">ステータス</span>
+          <select id="bulk-clients-status"><option value="">変更しない</option></select>
+          <button class="btn btn-primary btn-sm" onclick="applyBulk('clients')">一括変更</button>
+          <span class="clear-filters" onclick="clearSelection('clients')">選択を解除</span>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th class="col-check"><input type="checkbox" id="check-all-clients" onclick="toggleSelectAll('clients', this.checked)"></th>
+              <th>会社名</th><th>電話</th><th>メール</th><th>フォーム</th><th>業種</th><th>売上規模</th><th>上場</th><th>担当者</th><th>ステータス</th><th></th>
+            </tr></thead>
+            <tbody id="clients-tbody"></tbody>
+          </table>
+          <div class="empty" id="clients-empty" style="display:none">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 21V8l9-5 9 5v13"/><path d="M9 21v-6h6v6"/></svg>
+            <p>該当するクライアントがありません</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============ DEALS ============ -->
+      <div class="page" id="page-deals">
+        <div class="page-header">
+          <div>
+            <h1>取引ステータス一覧表</h1>
+            <p>商談・取引の進行状況を一覧で確認します</p>
+          </div>
+          <button class="btn btn-primary" onclick="openDealModal()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 5v14M5 12h14"/></svg>
+            新規取引追加
+          </button>
+        </div>
+
+        <div class="tabs" id="deals-tabs">
+          <div class="tab active" data-scope="all">すべてのクライアント <span class="cnt" id="tab-d-all">0</span></div>
+          <div class="tab" data-scope="mine">自分のクライアント <span class="cnt" id="tab-d-mine">0</span></div>
+        </div>
+
+        <div class="filter-bar">
+          <div class="search-box">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>
+            <input type="text" id="deals-search" placeholder="会社名・案件名で検索">
+          </div>
+          <span class="filter-label">ステータス</span>
+          <select id="deals-filter-status"><option value="">すべて</option></select>
+          <span class="filter-label">担当者</span>
+          <select id="deals-filter-owner"><option value="">すべて</option></select>
+          <span class="clear-filters" onclick="clearFilters('deals')">フィルターをクリア</span>
+        </div>
+
+        <div class="bulk-bar" id="bulk-deals" style="display:none">
+          <span class="bulk-count"><b id="bulk-deals-count">0</b> 件を選択中</span>
+          <span class="filter-label">担当者</span>
+          <select id="bulk-deals-owner"><option value="">変更しない</option><option value="__none__">未割当てにする</option></select>
+          <span class="filter-label">ステータス</span>
+          <select id="bulk-deals-status"><option value="">変更しない</option></select>
+          <button class="btn btn-primary btn-sm" onclick="applyBulk('deals')">一括変更</button>
+          <span class="clear-filters" onclick="clearSelection('deals')">選択を解除</span>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th class="col-check"><input type="checkbox" id="check-all-deals" onclick="toggleSelectAll('deals', this.checked)"></th>
+              <th>会社名</th><th>電話</th><th>メール</th><th>フォーム</th><th>業種</th><th>売上規模</th><th>上場</th><th>担当者</th><th>ステータス</th><th></th>
+            </tr></thead>
+            <tbody id="deals-tbody"></tbody>
+          </table>
+          <div class="empty" id="deals-empty" style="display:none">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 3v18h18"/><path d="M7 15l4-5 3 3 5-7"/></svg>
+            <p>該当する取引がありません</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============ ANALYTICS ============ -->
+      <div class="page" id="page-analytics">
+        <div class="page-header">
+          <div>
+            <h1>データ分析</h1>
+            <p>日ごとの実績を記録し、メールと問い合わせの成果をグラフで確認します。</p>
+          </div>
+          <div class="header-actions">
+            <button class="btn" onclick="openDailyInput()">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 5v14M5 12h14"/></svg>
+              今日の実績を入力
+            </button>
+          </div>
+        </div>
+
+        <div class="filter-bar">
+          <span class="filter-label">対象月</span>
+          <select id="an-month"></select>
+          <span class="an-hint">送信・返信は入力値、開封率・クリック率は配信サービスの数値をご入力ください。</span>
+        </div>
+
+        <div class="card an-card">
+          <div class="card-head"><h2>メール</h2><span class="an-total" id="an-mail-total"></span></div>
+          <div class="card-body an-body">
+            <div class="an-gauges" id="an-mail-gauges"></div>
+
+            <div class="an-section-label an-day-head">日別の率
+              <select id="an-day"></select>
+            </div>
+            <div class="an-gauges" id="an-day-gauges"></div>
+
+            <div class="an-section-label">日別 送信件数</div>
+            <div class="an-bars" id="an-mail-bars"></div>
+          </div>
+        </div>
+
+        <div class="card an-card">
+          <div class="card-head"><h2>お問い合わせフォーム</h2><span class="an-total" id="an-inq-total"></span></div>
+          <div class="card-body an-body">
+            <div class="an-gauges" id="an-inq-gauges"></div>
+            <div class="an-section-label">日別 お問い合わせ件数</div>
+            <div class="an-bars" id="an-inq-bars"></div>
+          </div>
+        </div>
+
+        <div class="card an-card">
+          <div class="card-head"><h2>日別の記録</h2></div>
+          <div class="card-body">
+            <div class="table-wrap">
+              <table>
+                <thead><tr>
+                  <th>日付</th><th>送信</th><th>開封</th><th>クリック</th><th>返信</th>
+                  <th>問い合わせ</th><th>返答</th><th></th>
+                </tr></thead>
+                <tbody id="an-table"></tbody>
+              </table>
+              <div class="empty" id="an-empty" style="display:none"><p>この月の記録はまだありません</p></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- 日次実績の入力 -->
+<div class="modal-overlay" id="daily-modal">
+  <div class="modal">
+    <div class="modal-head"><h3 id="daily-modal-title">実績を入力</h3><span class="modal-close" onclick="closeModal('daily-modal')">&times;</span></div>
+    <div class="modal-body">
+      <div class="field"><label>日付 *</label><input type="date" id="dl-date"></div>
+
+      <div class="detail-section-label" style="margin-top:2px;">メール</div>
+      <div class="field-row">
+        <div class="field"><label>送信件数</label><input type="number" min="0" id="dl-sent" placeholder="0"></div>
+        <div class="field"><label>開封件数</label><input type="number" min="0" id="dl-opened" placeholder="0"></div>
+      </div>
+      <div class="field-row">
+        <div class="field"><label>クリック件数</label><input type="number" min="0" id="dl-clicked" placeholder="0"></div>
+        <div class="field"><label>返信件数</label><input type="number" min="0" id="dl-replied" placeholder="0"></div>
+      </div>
+
+      <div class="detail-section-label">お問い合わせフォーム</div>
+      <div class="field-row">
+        <div class="field"><label>お問い合わせ件数</label><input type="number" min="0" id="dl-inq" placeholder="0"></div>
+        <div class="field"><label>返答件数</label><input type="number" min="0" id="dl-inqrep" placeholder="0"></div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" id="dl-delete-btn" style="color:var(--danger); border-color:var(--danger-soft); display:none;" onclick="deleteDaily()">削除</button>
+      <div style="flex:1"></div>
+      <button class="btn" onclick="closeModal('daily-modal')">キャンセル</button>
+      <button class="btn btn-primary" onclick="saveDaily()">保存する</button>
+    </div>
+  </div>
+</div>
+
+<!-- AIランク判定 Modal -->
+<div class="modal-overlay" id="ai-rank-modal">
+  <div class="modal">
+    <div class="modal-head"><h3>AIでランク判定</h3><span class="modal-close" onclick="closeModal('ai-rank-modal')">&times;</span></div>
+    <div class="modal-body">
+      <p class="ai-desc" style="font-size:12px; color:var(--text-secondary); line-height:1.7;">各社の「事業内容」などをもとに Claude が <b>S / A / B / C</b> を判定し、理由を各社のメモに残します（SSは手動）。判断材料が乏しい会社は「判定なし」になります。<br>APIキーはこの端末にのみ保存され、サーバー（Firestore）には送られません。</p>
+      <div class="field"><label>Anthropic APIキー</label><input type="password" id="ai-api-key" placeholder="sk-ant-..."></div>
+      <label class="opt-line"><input type="checkbox" id="ai-save-key" checked> このキーをこの端末に保存する</label>
+      <div class="field" style="margin-top:8px;"><label>対象</label><div class="detail-sub" id="ai-rank-target"></div></div>
+      <div class="detail-section-label">進捗</div>
+      <div class="log-box" id="ai-rank-log" style="max-height:220px; overflow:auto; white-space:pre-wrap; font-size:12px; font-family:monospace;"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" onclick="closeModal('ai-rank-modal')">閉じる</button>
+      <button class="btn btn-primary" id="ai-rank-run" onclick="runAiRank()">判定を開始</button>
+    </div>
+  </div>
+</div>
+
+<!-- Task Modal -->
+<div class="modal-overlay" id="task-modal">
+  <div class="modal">
+    <div class="modal-head"><h3 id="task-modal-title">タスクを追加</h3><span class="modal-close" onclick="closeModal('task-modal')">&times;</span></div>
+    <div class="modal-body">
+      <div class="field"><label>タスク内容 *</label><input type="text" id="tk-title" placeholder="例:伊藤様へ初回架電"></div>
+      <div class="field"><label>関連メモ(会社名・案件名など)</label><input type="text" id="tk-sub" placeholder="例:株式会社フロンティア"></div>
+      <div class="field-row">
+        <div class="field"><label>担当者</label>
+          <select id="tk-owner"></select>
+        </div>
+        <div class="field"><label>優先度</label>
+          <select id="tk-priority">
+            <option value="high">優先度高</option>
+            <option value="mid">優先度中</option>
+            <option value="low">優先度低</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" id="tk-delete-btn" style="color:var(--danger); border-color:var(--danger-soft); display:none;" onclick="deleteTaskFromModal()">削除</button>
+      <div style="flex:1"></div>
+      <button class="btn" onclick="closeModal('task-modal')">キャンセル</button>
+      <button class="btn btn-primary" onclick="saveTask()">保存する</button>
+    </div>
+  </div>
+</div>
+
+<!-- Schedule Modal -->
+<div class="modal-overlay" id="schedule-modal">
+  <div class="modal">
+    <div class="modal-head"><h3 id="schedule-modal-title">予定を追加</h3><span class="modal-close" onclick="closeModal('schedule-modal')">&times;</span></div>
+    <div class="modal-body">
+      <div class="field-row">
+        <div class="field" style="flex:0.6;"><label>時刻 *</label><input type="text" id="sc-time" placeholder="10:00"></div>
+        <div class="field"><label>予定タイトル *</label><input type="text" id="sc-title" placeholder="例:株式会社ネクストコア 定例MTG"></div>
+      </div>
+      <div class="field"><label>詳細(場所・所要時間など)</label><input type="text" id="sc-sub" placeholder="例:オンライン / 60分"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" id="sc-delete-btn" style="color:var(--danger); border-color:var(--danger-soft); display:none;" onclick="deleteScheduleFromModal()">削除</button>
+      <div style="flex:1"></div>
+      <button class="btn" onclick="closeModal('schedule-modal')">キャンセル</button>
+      <button class="btn btn-primary" onclick="saveSchedule()">保存する</button>
+    </div>
+  </div>
+</div>
+
+<!-- Contact Modal -->
+<div class="modal-overlay" id="contact-modal">
+  <div class="modal">
+    <div class="modal-head"><h3>新規クライアント作成</h3><span class="modal-close" onclick="closeModal('contact-modal')">&times;</span></div>
+    <div class="modal-body">
+      <div class="field"><label>会社名 *</label><input type="text" id="nc-name" placeholder="株式会社サンプル"></div>
+      <div class="field-row">
+        <div class="field"><label>電話番号</label><input type="text" id="nc-phone" placeholder="03-0000-0000"></div>
+        <div class="field"><label>メールアドレス</label><input type="text" id="nc-email" placeholder="info@example.com"></div>
+      </div>
+      <div class="field"><label>お問い合わせフォームURL</label><input type="text" id="nc-inquiry-form" placeholder="https://example.com/contact"></div>
+
+      <div class="detail-section-label">会社情報</div>
+      <div class="field"><label>事業内容（サービスの種類）</label><input type="text" id="nc-business" placeholder="例：音楽制作・アーティストマネジメント"></div>
+      <div class="field"><label>創業年数</label><input type="text" id="nc-founded" placeholder="例：25年（1999年創業）"></div>
+      <div class="field"><label>チケットツール</label><input type="text" id="nc-ticket" placeholder="例：Zendesk / Backlog / Redmine など"></div>
+
+      <div class="detail-section-label">クライアント属性</div>
+      <div class="field-row">
+        <div class="field"><label>主催者であるか</label><select id="nc-organizer"></select></div>
+        <div class="field"><label>イベント規模</label><select id="nc-eventscale"></select></div>
+      </div>
+      <div class="field"><label>LINE公式アカウント</label><select id="nc-line"></select></div>
+
+      <div class="field"><label>メモ</label><input type="text" id="nc-note" placeholder="展示会で名刺交換 など"></div>
+      <div class="field"><label>ランク</label>
+        <select id="nc-rank">
+          <option value="">未設定</option>
+          <option value="SS">SS</option><option value="S">S</option><option value="A">A</option><option value="B">B</option><option value="C">C</option>
+        </select>
+      </div>
+      <div class="field-row">
+        <div class="field"><label>担当者</label>
+          <select id="nc-owner"><option value="">未割当て</option></select>
+        </div>
+        <div class="field"><label>ステータス</label>
+          <select id="nc-status">
+            </select>
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" onclick="closeModal('contact-modal')">キャンセル</button>
+      <button class="btn btn-primary" onclick="saveContact()">保存する</button>
+    </div>
+  </div>
+</div>
+
+<!-- Client Modal -->
+<div class="modal-overlay" id="client-modal">
+  <div class="modal">
+    <div class="modal-head"><h3>新規クライアント追加</h3><span class="modal-close" onclick="closeModal('client-modal')">&times;</span></div>
+    <div class="modal-body">
+      <div class="field"><label>クライアント名(会社名) *</label><input type="text" id="ncl-name" placeholder="株式会社サンプル"></div>
+      <div class="field"><label>業種</label><input type="text" id="ncl-industry" placeholder="製造業"></div>
+      <div class="field-row">
+        <div class="field"><label>メールアドレス</label><input type="text" id="ncl-email" placeholder="contact@example.com"></div>
+        <div class="field"><label>電話番号</label><input type="text" id="ncl-phone" placeholder="03-0000-0000"></div>
+      </div>
+      <div class="field"><label>お問い合わせフォームURL</label><input type="text" id="ncl-inquiry-form" placeholder="https://example.com/contact"></div>
+
+      <div class="detail-section-label">会社情報</div>
+      <div class="field"><label>事業内容（サービスの種類）</label><input type="text" id="ncl-business" placeholder="例：音楽制作・アーティストマネジメント"></div>
+      <div class="field"><label>創業年数</label><input type="text" id="ncl-founded" placeholder="例：25年（1999年創業）"></div>
+      <div class="field"><label>チケットツール</label><input type="text" id="ncl-ticket" placeholder="例：Zendesk / Backlog / Redmine など"></div>
+
+      <div class="detail-section-label">クライアント属性</div>
+      <div class="field-row">
+        <div class="field"><label>主催者であるか</label><select id="ncl-organizer"></select></div>
+        <div class="field"><label>イベント規模</label><select id="ncl-eventscale"></select></div>
+      </div>
+      <div class="field"><label>LINE公式アカウント</label><select id="ncl-line"></select></div>
+      <div class="field"><label>ランク</label>
+        <select id="ncl-rank">
+          <option value="">未設定</option>
+          <option value="SS">SS</option><option value="S">S</option><option value="A">A</option><option value="B">B</option><option value="C">C</option>
+        </select>
+      </div>
+      <div class="field-row">
+        <div class="field"><label>担当者</label>
+          <select id="ncl-owner"><option value="">未割当て</option></select>
+        </div>
+        <div class="field"><label>ステータス</label>
+          <select id="ncl-status">
+            </select>
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" onclick="closeModal('client-modal')">キャンセル</button>
+      <button class="btn btn-primary" onclick="saveClient()">保存する</button>
+    </div>
+  </div>
+</div>
+
+<!-- Deal Modal -->
+<div class="modal-overlay" id="deal-modal">
+  <div class="modal">
+    <div class="modal-head"><h3>新規取引追加</h3><span class="modal-close" onclick="closeModal('deal-modal')">&times;</span></div>
+    <div class="modal-body">
+      <div class="field"><label>クライアント *</label>
+        <select id="nd-client"></select>
+      </div>
+      <div class="field"><label>案件名</label><input type="text" id="nd-title" placeholder="基幹システム刷新案件"></div>
+      <div class="field-row">
+        <div class="field"><label>金額(円)</label><input type="text" id="nd-amount" placeholder="1000000"></div>
+        <div class="field"><label>担当者</label>
+          <select id="nd-owner"></select>
+        </div>
+      </div>
+      <div class="field"><label>ステータス</label>
+        <select id="nd-status">
+          </select>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" onclick="closeModal('deal-modal')">キャンセル</button>
+      <button class="btn btn-primary" onclick="saveDeal()">保存する</button>
+    </div>
+  </div>
+</div>
+
+<!-- Client Detail Modal -->
+<div class="modal-overlay" id="client-detail-modal">
+  <div class="modal modal-wide">
+    <div class="modal-head"><h3>クライアント詳細</h3><span class="modal-close" onclick="closeModal('client-detail-modal')">&times;</span></div>
+    <div class="modal-body">
+      <div class="detail-topline">
+        <div class="detail-avatar" id="cd-avatar">?</div>
+        <div>
+          <div style="font-size:16px; font-weight:700;" id="cd-name-display"></div>
+          <div class="detail-sub" id="cd-created-display"></div>
+        </div>
+        <button class="btn btn-primary btn-sm" style="margin-left:auto;" onclick="copyInquiryTemplate()" title="お問い合わせフォーム用の定型文をコピーします">定型文をコピー</button>
+      </div>
+
+      <div class="detail-section-label">基本情報</div>
+      <div class="field"><label>クライアント名</label><input type="text" id="cd-name"></div>
+      <div class="field"><label>業種</label><input type="text" id="cd-industry"></div>
+      <div class="field"><label>ランク</label>
+        <select id="cd-rank">
+          <option value="">未設定</option>
+          <option value="SS">SS</option><option value="S">S</option><option value="A">A</option><option value="B">B</option><option value="C">C</option>
+        </select>
+      </div>
+      <div class="field-row">
+        <div class="field"><label>メールアドレス</label><input type="text" id="cd-email"></div>
+        <div class="field"><label>電話番号</label><input type="text" id="cd-phone"></div>
+      </div>
+      <div class="field"><label>お問い合わせフォームURL</label><input type="text" id="cd-inquiry-form" placeholder="https://example.com/contact"></div>
+
+      <div class="detail-section-label">会社情報</div>
+      <div class="field"><label>事業内容（サービスの種類）</label><input type="text" id="cd-business" placeholder="例：音楽制作・アーティストマネジメント"></div>
+      <div class="field"><label>創業年数</label><input type="text" id="cd-founded" placeholder="例：25年（1999年創業）"></div>
+      <div class="field"><label>チケットツール</label><input type="text" id="cd-ticket" placeholder="例：Zendesk / Backlog / Redmine など"></div>
+
+      <div class="detail-section-label">クライアント属性</div>
+      <div class="field-row">
+        <div class="field"><label>主催者であるか</label><select id="cd-organizer"></select></div>
+        <div class="field"><label>イベント規模</label><select id="cd-eventscale"></select></div>
+      </div>
+      <div class="field"><label>LINE公式アカウント</label><select id="cd-line"></select></div>
+      <div class="field-row">
+        <div class="field"><label>担当者</label>
+          <select id="cd-owner"><option value="">未割当て</option></select>
+        </div>
+        <div class="field"><label>ステータス</label>
+          <select id="cd-status">
+            </select>
+          <div class="detail-sub" id="cd-status-updated" style="margin-top:5px;"></div>
+        </div>
+      </div>
+
+      <div class="detail-section-label">ステータス変更履歴</div>
+      <div class="log-box" id="cd-status-log"></div>
+
+      <div class="detail-section-label">メモ</div>
+      <div class="notes-box" id="cd-notes-list"></div>
+      <div class="note-input-row">
+        <textarea id="cd-note-input" placeholder="メモを入力…"></textarea>
+        <button class="btn btn-sm" onclick="addClientNote()">追加</button>
+      </div>
+
+      <div class="detail-section-label">関連する取引</div>
+      <div id="cd-deals-list"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" style="color:var(--danger); border-color:var(--danger-soft);" onclick="deleteClient(cdCurrentId)">削除</button>
+      <div style="flex:1"></div>
+      <button class="btn" onclick="closeModal('client-detail-modal')">閉じる</button>
+      <button class="btn btn-primary" onclick="saveClientDetail()">変更を保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- Contact Detail Modal -->
+<div class="modal-overlay" id="contact-detail-modal">
+  <div class="modal modal-wide">
+    <div class="modal-head"><h3>会社詳細</h3><span class="modal-close" onclick="closeModal('contact-detail-modal')">&times;</span></div>
+    <div class="modal-body">
+      <div class="detail-topline">
+        <div class="detail-avatar" id="kd-avatar">?</div>
+        <div>
+          <div style="font-size:16px; font-weight:700;" id="kd-name-display"></div>
+          <div class="detail-sub" id="kd-created-display"></div>
+        </div>
+        <button class="btn btn-primary btn-sm" style="margin-left:auto;" onclick="copyInquiryTemplate()" title="お問い合わせフォーム用の定型文をコピーします">定型文をコピー</button>
+      </div>
+
+      <div class="detail-section-label">基本情報</div>
+      <div class="field"><label>会社名</label><input type="text" id="kd-name"></div>
+      <div class="field"><label>ランク</label>
+        <select id="kd-rank">
+          <option value="">未設定</option>
+          <option value="SS">SS</option><option value="S">S</option><option value="A">A</option><option value="B">B</option><option value="C">C</option>
+        </select>
+      </div>
+      <div class="field-row">
+        <div class="field"><label>電話番号</label><input type="text" id="kd-phone"></div>
+        <div class="field"><label>メールアドレス</label><input type="text" id="kd-email"></div>
+      </div>
+      <div class="field"><label>お問い合わせフォームURL</label><input type="text" id="kd-inquiry-form" placeholder="https://example.com/contact"></div>
+
+      <div class="detail-section-label">担当者情報</div>
+      <div class="field"><label>担当者名</label><input type="text" id="kd-contact-name" placeholder="例：営業部 田中様"></div>
+      <div class="field-row">
+        <div class="field"><label>電話番号</label><input type="text" id="kd-contact-phone" placeholder="03-0000-0000"></div>
+        <div class="field"><label>メールアドレス</label><input type="text" id="kd-contact-email" placeholder="tanaka@example.com"></div>
+      </div>
+
+      <div class="detail-section-label">会社情報</div>
+      <div class="field"><label>事業内容（サービスの種類）</label><input type="text" id="kd-business" placeholder="例：音楽制作・アーティストマネジメント"></div>
+      <div class="field-row">
+        <div class="field"><label>売上規模</label><input type="text" id="kd-revenue" placeholder="例：10億円"></div>
+        <div class="field"><label>創業年数</label><input type="text" id="kd-founded" placeholder="例：25年（1999年創業）"></div>
+      </div>
+      <div class="field"><label>上場・非上場</label><select id="kd-listing"></select></div>
+      <div class="field"><label>チケットツール</label><input type="text" id="kd-ticket" placeholder="例：Zendesk / Backlog / Redmine など"></div>
+
+      <div class="detail-section-label">クライアント属性</div>
+      <div class="field-row">
+        <div class="field"><label>主催者であるか</label><select id="kd-organizer"></select></div>
+        <div class="field"><label>イベント規模</label><select id="kd-eventscale"></select></div>
+      </div>
+      <div class="field"><label>LINE公式アカウント</label><select id="kd-line"></select></div>
+
+      <div class="detail-section-label">メール送信</div>
+      <label class="opt-line"><input type="checkbox" id="kd-optout"> メールの配信を停止する（配信リストから除外されます）</label>
+      <div class="mail-meta" id="kd-mail-meta"></div>
+      <div class="field"><label>送信タグ（送ったメール内容のメモ）</label><input type="text" id="kd-mailtag" placeholder="例：初回提案 / 事例紹介 / 再アプローチ"></div>
+      <div class="field-row">
+        <div class="field"><label>担当者</label>
+          <select id="kd-owner"><option value="">未割当て</option></select>
+        </div>
+        <div class="field"><label>ステータス</label>
+          <select id="kd-status">
+            </select>
+          <div class="detail-sub" id="kd-status-updated" style="margin-top:5px;"></div>
+        </div>
+      </div>
+
+      <div class="detail-section-label">ステータス変更履歴</div>
+      <div class="log-box" id="kd-status-log"></div>
+
+      <div class="detail-section-label">メモ</div>
+      <div class="notes-box" id="kd-notes-list"></div>
+      <div class="note-input-row">
+        <textarea id="kd-note-input" placeholder="メモを入力…"></textarea>
+        <button class="btn btn-sm" onclick="addContactNote()">追加</button>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" style="color:var(--danger); border-color:var(--danger-soft);" onclick="deleteContact(kdCurrentId)">削除</button>
+      <div style="flex:1"></div>
+      <button class="btn" onclick="closeModal('contact-detail-modal')">閉じる</button>
+      <button class="btn btn-primary" onclick="saveContactDetail()">変更を保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- Deal Notes Modal -->
+<div class="modal-overlay" id="deal-notes-modal">
+  <div class="modal">
+    <div class="modal-head"><h3>取引メモ</h3><span class="modal-close" onclick="closeModal('deal-notes-modal')">&times;</span></div>
+    <div class="modal-body">
+      <div style="font-size:15px; font-weight:700;" id="dn-title-display"></div>
+      <div class="detail-sub" id="dn-client-display" style="margin-bottom:2px;"></div>
+      <div class="detail-sub" id="dn-status-display" style="margin-bottom:16px;"></div>
+
+      <div class="detail-section-label" style="margin-top:0;">ステータス変更履歴</div>
+      <div class="log-box" id="dn-status-log"></div>
+
+      <div class="detail-section-label">メモ</div>
+      <div class="notes-box" id="dn-notes-list"></div>
+      <div class="note-input-row">
+        <textarea id="dn-note-input" placeholder="メモを入力…"></textarea>
+        <button class="btn btn-sm" onclick="addDealNote()">追加</button>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" style="color:var(--danger); border-color:var(--danger-soft);" onclick="deleteDeal(dnCurrentId)">この取引を削除</button>
+      <div style="flex:1"></div>
+      <button class="btn" onclick="closeModal('deal-notes-modal')">閉じる</button>
+    </div>
+  </div>
+</div>
+
+<!-- Confirm Modal (replaces native confirm(), which is blocked in sandboxed previews) -->
+<!-- メール配信リストの書き出し -->
+<div class="modal-overlay" id="mail-export-modal">
+  <div class="modal modal-wide">
+    <div class="modal-head"><h3>メール配信リストを書き出す</h3><span class="modal-close" onclick="closeModal('mail-export-modal')">&times;</span></div>
+    <div class="modal-body">
+      <div class="legal-note">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16.5v.01"/></svg>
+        <div>
+          広告・宣伝を含むメールには、<b>送信者の名称・住所と、配信停止の連絡先を必ず記載してください</b>（特定電子メール法）。
+          配信停止の依頼を受けた宛先には、以後送信できません。受け取った依頼は「配信停止を取り込む」から登録してください。
+        </div>
+      </div>
+
+      <div class="detail-section-label" style="margin-top:2px;">書き出す件数</div>
+      <div class="tally" id="mail-tally"></div>
+
+      <div class="field" style="margin-top:16px;"><label>書き出す形式</label>
+        <select id="mail-format" onchange="renderFormatHint()">
+          <option value="merge">Word差し込み印刷用（Outlookで1社ずつ送る）</option>
+          <option value="bcc">BCC貼り付け用（Outlookで一斉に送る）</option>
+          <option value="service">メール配信サービス用</option>
+        </select>
+        <div class="format-hint" id="mail-format-hint"></div>
+      </div>
+
+      <div class="field"><label>キャンペーン名 *</label>
+        <input type="text" id="mail-campaign" placeholder="例：2026年8月 新規開拓メール"></div>
+
+      <div class="field"><label>送信タグ（送るメール内容のメモ）</label>
+        <input type="text" id="mail-tag" placeholder="例：初回提案 / 事例紹介 / 再アプローチ">
+        <div class="format-hint">この内容が、書き出した各社の「送信タグ」にまとめて記録されます。</div>
+      </div>
+
+      <label class="opt-line"><input type="checkbox" id="mail-skip-recent" checked onchange="renderMailTally()">
+        30日以内に送信済みの会社を除く</label>
+      <div class="field" style="margin-bottom:0;"><label>書き出した会社のステータスを一括で変更</label>
+        <select id="mail-mark-status">
+          <option value="">変更しない</option>
+          <option value="送信済">送信済にする</option>
+          <option value="お問い合わせ済">お問い合わせ済にする</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" onclick="closeModal('mail-export-modal')">キャンセル</button>
+      <button class="btn btn-primary" id="mail-export-btn" onclick="runMailExport()">CSVを書き出す</button>
+    </div>
+  </div>
+</div>
+
+<!-- BCC貼り付け用のアドレス一覧 -->
+<div class="modal-overlay" id="bcc-modal">
+  <div class="modal modal-wide">
+    <div class="modal-head"><h3>BCCに貼り付けるアドレス</h3><span class="modal-close" onclick="closeModal('bcc-modal')">&times;</span></div>
+    <div class="modal-body">
+      <div class="legal-note danger">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16.5v.01"/></svg>
+        <div>
+          必ず <b>BCC欄</b> に貼り付けてください。<b>宛先(To)やCCに貼ると、送信先すべてのアドレスが受信者全員に見えてしまいます。</b>
+          取引先のアドレスが他社に漏れる事故になりますので、貼り付け先を送信前に必ずご確認ください。
+        </div>
+      </div>
+      <div class="field"><label>アドレス一覧（<span id="bcc-count">0</span>件・セミコロン区切り）</label>
+        <textarea id="bcc-output" class="ai-paste-area" style="min-height:150px; white-space:pre-wrap;" readonly></textarea></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" onclick="closeModal('bcc-modal')">閉じる</button>
+      <button class="btn btn-primary" onclick="copyBcc()">コピーする</button>
+    </div>
+  </div>
+</div>
+
+<!-- 配信停止の取り込み -->
+<div class="modal-overlay" id="optout-modal">
+  <div class="modal">
+    <div class="modal-head"><h3>配信停止を取り込む</h3><span class="modal-close" onclick="closeModal('optout-modal')">&times;</span></div>
+    <div class="modal-body">
+      <p class="ai-desc">配信サービス側で配信停止になった宛先を貼り付けてください。1行に1件、または先頭列にメールアドレスが入ったCSVでも読み取れます。</p>
+      <textarea id="optout-input" class="ai-paste-area" style="min-height:130px" spellcheck="false" placeholder="info@example.com
+contact@sample.co.jp"></textarea>
+      <div class="ai-search-row" style="margin-top:10px;">
+        <button class="btn" onclick="document.getElementById('optout-file').click()">ファイルを選ぶ</button>
+        <span class="ai-format-note">.csv / .txt に対応しています</span>
+        <input type="file" id="optout-file" accept=".csv,.txt" style="display:none" onchange="loadOptOutFile(event)">
+      </div>
+      <div id="optout-status" class="ai-status" style="display:none"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" onclick="closeModal('optout-modal')">閉じる</button>
+      <button class="btn btn-primary" onclick="runOptOutImport()">配信停止として登録</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="confirm-modal">
+  <div class="modal" style="width:400px;">
+    <div class="modal-head"><h3>確認</h3><span class="modal-close" onclick="resolveConfirm(false)">&times;</span></div>
+    <div class="modal-body">
+      <p id="confirm-message" style="margin:0; font-size:13.5px; line-height:1.7; color:var(--text);"></p>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" onclick="resolveConfirm(false)">キャンセル</button>
+      <button class="btn" id="confirm-alt" style="display:none;" onclick="resolveConfirmAlt()"></button>
+      <button class="btn btn-primary" id="confirm-ok" style="background:var(--danger); border-color:var(--danger);" onclick="resolveConfirm(true)">削除する</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+
+<!-- ============================================================
+     ▼▼▼ ここだけ書き換えてください ▼▼▼
+     Firebaseコンソール →「プロジェクトの設定」→「マイアプリ」の
+     firebaseConfig の値をそのまま貼り付けます。
+     ここに載る値は公開前提のもので、秘密鍵ではありません。
+     実際のアクセス制限はFirestoreのセキュリティルールで行います。
+     ============================================================ -->
+<script type="module">
+  const firebaseConfig = {
+    apiKey:            "AIzaSyCPVl5WKuGJGmphUBdF4KLZ578V8fRZVUI",
+    authDomain:        "cloud-firestore-d30ec.firebaseapp.com",
+    projectId:         "cloud-firestore-d30ec",
+    storageBucket:     "cloud-firestore-d30ec.firebasestorage.app",
+    messagingSenderId: "917417718363",
+    appId:             "1:917417718363:web:a6fbb7fc9ab323af95c57e"
+  };
+  /* ▲▲▲ 書き換えるのはここまで ▲▲▲ */
+
+  const V = "10.12.0";
+  try{
+    const { initializeApp } = await import(`https://www.gstatic.com/firebasejs/${V}/firebase-app.js`);
+    const { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } =
+      await import(`https://www.gstatic.com/firebasejs/${V}/firebase-auth.js`);
+    const { getFirestore, doc, onSnapshot, setDoc, enableIndexedDbPersistence } =
+      await import(`https://www.gstatic.com/firebasejs/${V}/firebase-firestore.js`);
+
+    const app  = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db   = getFirestore(app);
+    // オフラインでも直前の内容を表示できるようにする（複数タブで開くと片方だけ有効）
+    enableIndexedDbPersistence(db).catch(()=>{});
+
+    window.FB = {
+      auth, db,
+      signIn: (em, pw)=>signInWithEmailAndPassword(auth, em, pw),
+      signOut: ()=>signOut(auth),
+      onAuth: cb=>onAuthStateChanged(auth, cb),
+      docRef: ()=>doc(db, 'workspaces', 'default'),
+      watch: (ref, cb, err)=>onSnapshot(ref, {includeMetadataChanges:true}, cb, err),
+      write: (ref, data)=>setDoc(ref, data),
+    };
+    window.dispatchEvent(new Event('fb-ready'));
+  } catch(e){
+    console.error(e);
+    window.FB_ERROR = e;
+    window.dispatchEvent(new Event('fb-failed'));
+  }
+</script>
+
+<script>
+/* ============================================================
+   crowdbasket CRM — sample in-memory data & app logic
+   ============================================================ */
+
+const SALES_REPS = [
+  {id:'u1', name:'小熊 夢樹'},
+  {id:'u2', name:'石井 啓章'},
+];
+
+/* ステータスは3画面で共通。ここだけ直せば全画面に反映される */
+const STATUS_LIST = [
+  '未対応','送信済','お問い合わせ済','返信あり','商談調整中','商談予定','商談実施',
+  '提案書送付','検討中','受注','フォロー1回目','フォロー2回目','反応なし','対応終了',
+];
+
+/* 旧ステータスからの読み替え。既存データを一度だけ自動変換する */
+const STATUS_MIGRATION = {
+  '連絡済':'送信済', 'フォロー中':'フォロー1回目', '対応完了':'対応終了',
+  'アポイント設定済':'商談調整中', '見込みあり':'検討中', '保留':'検討中',
+  '成立':'受注', '失注':'対応終了',
+};
+
+/* 上場の区分 */
+const LISTING_OPTIONS = ['', '上場', '非上場', '不明'];
+
+/* 主催者であるか */
+const ORGANIZER_OPTIONS = ['', 'はい', 'いいえ'];
+/* イベント規模（小: 〜500名 / 中: 500〜5,000名 / 大: 5,000名〜） */
+const EVENT_SCALE_OPTIONS = ['', '小（～500名）', '中（500～5,000名）', '大（5,000名～）'];
+/* LINE公式アカウントの有無 */
+const LINE_OPTIONS = ['', '有', '無'];
+
+/* クライアントのランク（優先度）。上から高い順 */
+const RANK_OPTIONS = ['SS', 'S', 'A', 'B', 'C'];
+function rankBadge(rank){
+  return RANK_OPTIONS.includes(rank) ? `<span class="rank-badge rank-${rank}">${rank}</span>` : '';
+}
+
+/* ========== AIによるランク自動判定（Claude API） ========== */
+/* コスト重視でHaiku 4.5。精度を上げたい場合は claude-sonnet-5 などに変更可 */
+const AI_MODEL = 'claude-haiku-4-5';
+
+/* ユーザーが定義した仕分け基準（SSは手動のためAIはS/A/B/Cのみ判定） */
+const RANK_RUBRIC = `あなたは営業リードを評価するアシスタントです。各企業を以下の基準で S / A / B / C のいずれかに分類してください。SSはユーザーが手動で付けるため、あなたが選ぶのは S / A / B / C のみです。判断材料（特に事業内容）が乏しく確信が持てない場合は、rank を空文字 "" にしてください。無理に推測しないこと。
+
+S: イベント・公演・ファン向け施策が多く、顧客データを蓄積したい企業。販売後のフォローやセグメント配信まで活かしやすい。
+A: いまは紙や別システムで運用していて、効率化ニーズが強い企業。改善余地は大きいが現状把握が必要。
+B: チケット販売はあるが、LINE活用も物販も少ない企業。価値訴求が弱く優先度は下がる。
+C: 単発イベントのみで、顧客管理や継続接点がほぼない企業。`;
+
+let aiRankSection = null;
+
+/* 対象ID：行が選択されていればそれ、無ければ「表示中で未ランクの行」 */
+function aiRankTargetIds(section){
+  const arr = dataOf(section);
+  if(selection[section].size > 0) return [...selection[section]];
+  return visibleIds[section].filter(id=>{
+    const r = (arr.find(x=>x.id===id) || {}).rank;
+    return !r;
+  });
+}
+
+function openAiRank(section){
+  aiRankSection = section;
+  const ids = aiRankTargetIds(section);
+  const basis = selection[section].size > 0 ? '選択中の行' : '表示中で未ランクの行';
+  document.getElementById('ai-rank-target').textContent = `${SECTION_LABEL[section]}：${ids.length}件（${basis}）`;
+  document.getElementById('ai-rank-log').textContent = '';
+  document.getElementById('ai-api-key').value = localStorage.getItem('anthropicApiKey') || '';
+  document.getElementById('ai-rank-run').disabled = ids.length === 0;
+  openModal('ai-rank-modal');
+}
+
+/* Claude API を呼んで JSON 配列 [{id, rank, reason}] を得る */
+async function aiClassify(apiKey, companies){
+  const sys = RANK_RUBRIC + '\n\n出力は JSON 配列のみ。各要素は {"id": 数値, "rank": "S"|"A"|"B"|"C"|"", "reason": "40字以内の日本語の理由"}。説明文やコードブロック記号を付けず、配列だけを返すこと。';
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true',
+    },
+    body: JSON.stringify({
+      model: AI_MODEL,
+      max_tokens: 2048,
+      system: sys,
+      messages: [{ role: 'user', content: '次の企業を評価してください:\n' + JSON.stringify(companies) }],
+    }),
+  });
+  if(!res.ok){
+    const t = await res.text();
+    throw new Error('API ' + res.status + '：' + t.slice(0, 200));
+  }
+  const data = await res.json();
+  const text = (data.content || []).filter(b=>b.type==='text').map(b=>b.text).join('');
+  let t = text.trim().replace(/^```(?:json)?/i, '').replace(/```$/,'').trim();
+  const s = t.indexOf('['), e = t.lastIndexOf(']');
+  if(s >= 0 && e > s) t = t.slice(s, e + 1);
+  const arr = JSON.parse(t);
+  return Array.isArray(arr) ? arr : [];
+}
+
+async function runAiRank(){
+  const section = aiRankSection;
+  const key = document.getElementById('ai-api-key').value.trim();
+  if(!key){ toast('APIキーを入力してください'); return; }
+  if(document.getElementById('ai-save-key').checked) localStorage.setItem('anthropicApiKey', key);
+  else localStorage.removeItem('anthropicApiKey');
+
+  const arr = dataOf(section);
+  const ids = aiRankTargetIds(section);
+  if(!ids.length){ toast('対象がありません'); return; }
+
+  const runBtn = document.getElementById('ai-rank-run');
+  runBtn.disabled = true;
+  const logEl = document.getElementById('ai-rank-log');
+  const log = m => { logEl.textContent += m + '\n'; logEl.scrollTop = logEl.scrollHeight; };
+  log(`対象 ${ids.length}件を判定します…`);
+
+  const BATCH = 10;
+  let done = 0, ok = 0;
+  for(let i=0; i<ids.length; i+=BATCH){
+    const batchIds = ids.slice(i, i + BATCH);
+    const companies = batchIds.map(id=>{
+      const c = arr.find(x=>x.id===id) || {};
+      return {
+        id: c.id, 会社名: c.name, 事業内容: c.business || '', 業種: c.industry || '',
+        売上規模: c.revenue || '', 上場: c.listing || '', 創業: c.founded || '',
+        メモ: (c.notes || []).map(n=>n.text).join(' / '),
+      };
+    });
+    try{
+      const results = await aiClassify(key, companies);
+      results.forEach(r=>{
+        const c = arr.find(x=>x.id===r.id);
+        if(!c) return;
+        if(RANK_OPTIONS.includes(r.rank)){
+          c.rank = r.rank;
+          if(!c.notes) c.notes = [];
+          c.notes.push({ text: `【AI判定】${r.rank}：${r.reason || ''}`, time: nowDateTimeStr(), author: 'AI判定' });
+          ok++;
+          log(`  ${c.name} → ${r.rank}`);
+        } else {
+          log(`  ${c.name} → 判定なし（情報不足）`);
+        }
+      });
+    }catch(err){
+      log(`エラー: ${err.message}`);
+    }
+    done += batchIds.length;
+    log(`進捗 ${done}/${ids.length}`);
+    rerender(section);
+  }
+  runBtn.disabled = false;
+  log(`完了：${ok}件にランクを付けました。`);
+  toast(`AI判定完了：${ok}件`);
+}
+
+let currentUser = SALES_REPS[0].id;
+
+function ownerName(id){
+  const o = SALES_REPS.find(r=>r.id===id);
+  return o ? o.name : null;
+}
+function initials(name){ return name ? name[0] : '?'; }
+
+/* ---- sample data ---- */
+/* 新規クライアントは会社単位で管理する。name が会社名そのもの。 */
+let contacts = [
+  {id:1, name:'株式会社フロンティア', email:'info@frontier.co.jp', phone:'03-1234-5601', inquiryForm:'https://frontier.co.jp/contact', owner:'u1', created:'2026-07-14', status:'未対応', statusUpdated:'2026/07/14 09:20', notes:[]},
+  {id:2, name:'合同会社ブルーム', email:'contact@bloom.co.jp', phone:'06-2345-5602', inquiryForm:'', owner:'u2', created:'2026-07-13', status:'連絡済', statusUpdated:'2026/07/13 14:05', notes:[{text:'初回架電、来週改めて連絡する約束', time:'2026/07/13 14:10', author:'石井 啓章'}]},
+  {id:3, name:'株式会社ナカムラ工芸', email:'', phone:'090-3456-5603', inquiryForm:'https://nakamura-kougei.jp/inquiry', owner:null, created:'2026-07-13', status:'未対応', statusUpdated:'2026/07/13 10:00', notes:[]},
+  {id:4, name:'株式会社サミット物流', email:'info@summit-logi.jp', phone:'052-4567-5604', inquiryForm:'', owner:'u1', created:'2026-07-11', status:'フォロー中', statusUpdated:'2026/07/12 11:30', notes:[{text:'資料送付済み。来週火曜に電話フォロー予定', time:'2026/07/12 11:32', author:'小熊 夢樹'}]},
+  {id:5, name:'加藤製作所株式会社', email:'', phone:'080-5678-5605', inquiryForm:'', owner:null, created:'2026-07-10', status:'未対応', statusUpdated:'2026/07/10 09:00', notes:[]},
+  {id:6, name:'株式会社グリーンテック', email:'info@greentech.jp', phone:'011-6789-5606', inquiryForm:'https://greentech.jp/contact', owner:'u1', created:'2026-07-09', status:'対応完了', statusUpdated:'2026/07/11 16:40', notes:[]},
+  {id:7, name:'ウィズダム株式会社', email:'info@wisdom.co.jp', phone:'092-7890-5607', inquiryForm:'', owner:'u2', created:'2026-07-08', status:'フォロー中', statusUpdated:'2026/07/09 13:15', notes:[]},
+  {id:8, name:'松本デザイン株式会社', email:'', phone:'070-8901-5608', inquiryForm:'', owner:null, created:'2026-07-07', status:'未対応', statusUpdated:'2026/07/07 09:45', notes:[]},
+];
+
+let clients = [
+  {id:1, name:'株式会社ネクストコア', industry:'IT・ソフトウェア', email:'info@nextcore.co.jp', phone:'03-1111-2201', owner:'u1', created:'2026-06-20', status:'対応完了', statusUpdated:'2026/07/02 10:15', notes:[{text:'基幹システム刷新の予算感をヒアリング済み。次回は役員同席予定', time:'2026/07/02 10:20', author:'小熊 夢樹'}], inquiryForm:'https://nextcore.co.jp/contact'},
+  {id:2, name:'扶桑製薬株式会社', industry:'製薬', email:'contact@fuso-pharma.jp', phone:'06-2222-2202', owner:'u2', created:'2026-06-25', status:'フォロー中', statusUpdated:'2026/07/10 15:00', notes:[], inquiryForm:'https://fuso-pharma.jp/inquiry'},
+  {id:3, name:'株式会社ライトハウス建設', industry:'建設', email:'info@lighthouse-c.jp', phone:'092-3333-2203', owner:null, created:'2026-06-28', status:'未対応', statusUpdated:'2026/06/28 09:30', notes:[], inquiryForm:''},
+  {id:4, name:'アオゾラ食品株式会社', industry:'食品製造', email:'info@aozora-foods.jp', phone:'011-4444-2204', owner:'u1', created:'2026-07-01', status:'連絡済', statusUpdated:'2026/07/05 11:00', notes:[], inquiryForm:''},
+  {id:5, name:'株式会社メリディアン商事', industry:'商社', email:'sales@meridian.co.jp', phone:'052-5555-2205', owner:'u1', created:'2026-07-03', status:'フォロー中', statusUpdated:'2026/07/12 09:50', notes:[{text:'在庫管理システムの要件定義書を送付。来週返信予定', time:'2026/07/12 09:55', author:'小熊 夢樹'}], inquiryForm:'https://meridian-shoji.co.jp/contact'},
+  {id:6, name:'とわ美容クリニック', industry:'医療・美容', email:'info@towa-clinic.jp', phone:'03-6666-2206', owner:null, created:'2026-07-06', status:'未対応', statusUpdated:'2026/07/06 13:20', notes:[], inquiryForm:''},
+  {id:7, name:'株式会社ヤマブキ運輸', industry:'運輸・物流', email:'contact@yamabuki-un.jp', phone:'022-7777-2207', owner:'u2', created:'2026-07-09', status:'対応完了', statusUpdated:'2026/07/10 17:10', notes:[], inquiryForm:''},
+];
+
+let deals = [
+  {id:1, clientId:1, client:'株式会社ネクストコア', title:'基幹システム刷新案件', amount:8500000, owner:'u1', updated:'2026-07-15', statusChangedAt:'2026/07/15 10:30', status:'商談予定', notes:[]},
+  {id:2, clientId:2, client:'扶桑製薬株式会社', title:'マーケティングDX支援', amount:4200000, owner:'u2', updated:'2026-07-14', statusChangedAt:'2026/07/14 16:00', status:'見込みあり', notes:[]},
+  {id:3, clientId:4, client:'アオゾラ食品株式会社', title:'ECサイト構築', amount:3100000, owner:'u1', updated:'2026-07-13', statusChangedAt:'2026/07/13 09:40', status:'アポイント設定済', notes:[]},
+  {id:4, clientId:5, client:'株式会社メリディアン商事', title:'在庫管理システム導入', amount:6000000, owner:'u1', updated:'2026-07-12', statusChangedAt:'2026/07/12 14:20', status:'保留', notes:[{text:'先方の予算承認待ち。8月上旬に再確認予定', time:'2026/07/12 14:25', author:'小熊 夢樹'}]},
+  {id:5, clientId:7, client:'株式会社ヤマブキ運輸', title:'配送ルート最適化SaaS', amount:2400000, owner:'u2', updated:'2026-07-10', statusChangedAt:'2026/07/10 17:15', status:'成立', notes:[]},
+  {id:6, clientId:6, client:'とわ美容クリニック', title:'予約管理システム', amount:980000, owner:null, updated:'2026-07-08', statusChangedAt:'2026/07/08 11:00', status:'失注', notes:[]},
+  {id:7, clientId:3, client:'株式会社ライトハウス建設', title:'原価管理ツール導入', amount:5200000, owner:'u2', updated:'2026-07-07', statusChangedAt:'2026/07/07 10:05', status:'商談予定', notes:[]},
+  {id:8, clientId:1, client:'株式会社ネクストコア', title:'広告運用代行', amount:1800000, owner:'u1', updated:'2026-07-05', statusChangedAt:'2026/07/05 09:15', status:'成立', notes:[]},
+];
+
+let tasks = [
+  {id:1, title:'伊藤様へ初回架電', sub:'株式会社フロンティア', owner:'u1', priority:'high', done:false},
+  {id:2, title:'扶桑製薬 見積書送付', sub:'扶桑製薬株式会社', owner:'u2', priority:'high', done:false},
+  {id:3, title:'ネクストコア 商談資料準備', sub:'基幹システム刷新案件', owner:'u1', priority:'mid', done:false},
+  {id:4, title:'メリディアン商事 フォローアップ', sub:'在庫管理システム導入', owner:'u1', priority:'low', done:true},
+  {id:5, title:'小林様に事例資料を送付', sub:'株式会社サミット物流', owner:'u1', priority:'mid', done:false},
+];
+
+let schedule = [
+  {id:1, time:'10:00', title:'株式会社ネクストコア 定例MTG', sub:'オンライン / 60分'},
+  {id:2, time:'13:30', title:'扶桑製薬 見積提示', sub:'先方オフィス訪問'},
+  {id:3, time:'15:00', title:'社内マーケティング会議', sub:'会議室A'},
+  {id:4, time:'17:00', title:'アオゾラ食品 架電フォロー', sub:'電話 / 15分'},
+];
+
+let nextIds = {contact: 9, client: 8, deal: 9, task: 6, schedule: 5};
+
+/* 日次実績。キーは 'YYYY-MM-DD'、値は各件数 */
+let dailyStats = {};
+
+/* ---------- Firestoreによる端末間の同期 ----------
+   データ全体を1つのドキュメント(workspaces/default)に入れ、
+   onSnapshotで変更を受け取る。片方の端末の変更が、もう一方に即座に反映される。
+
+   注意（設計上の割り切り）:
+   ドキュメント単位で丸ごと書き換えるため、2人がほぼ同時に別々の行を編集すると
+   あとから書いた方の内容で上書きされる。書き込みまでの待ち時間を800msに抑えて
+   その窓を小さくしているが、完全には防げない。 */
+let syncReady = false;      // 最初の受信が済んだか
+let applyingRemote = false; // 受信内容を反映中（そのまま書き戻さないため）
+let lastSaved = '';
+let currentUserEmail = '';
+
+function snapshot(){
+  return JSON.stringify({v:1, contacts, clients, deals, tasks, schedule, nextIds, dailyStats});
+}
+
+function setSaveState(text, warn){
+  const el = document.getElementById('save-state');
+  if(!el) return;
+  el.textContent = text;
+  el.classList.toggle('warn', !!warn);
+}
+
+/* 変更がないか短い間隔で見て、変わっていれば送る。
+   個々の操作に保存処理を書くと漏れるため、この方式にしている。 */
+function tickSave(){
+  if(!syncReady || applyingRemote) return;
+  if(snapshot() === lastSaved) return;
+  pushData();
+}
+
+async function pushData(){
+  const s = snapshot();
+  if(s === lastSaved) return;
+  try{
+    const d = JSON.parse(s);
+    await window.FB.write(window.FB.docRef(), {
+      ...d,
+      updatedAt: new Date().toISOString(),
+      updatedBy: currentUserEmail,
+    });
+    lastSaved = s;
+    setSaveState('全員と同期済み', false);
+  } catch(e){
+    console.error('保存に失敗しました', e);
+    setSaveState('保存できません（通信を確認してください）', true);
+  }
+}
+
+/* 受信した内容を画面に反映する */
+function applyRemote(d){
+  applyingRemote = true;
+  try{
+    if(Array.isArray(d.contacts)) contacts = d.contacts;
+    if(Array.isArray(d.clients))  clients  = d.clients;
+    if(Array.isArray(d.deals))    deals    = d.deals;
+    if(Array.isArray(d.tasks))    tasks    = d.tasks;
+    if(Array.isArray(d.schedule)) schedule = d.schedule;
+    if(d.dailyStats && typeof d.dailyStats === 'object') dailyStats = d.dailyStats;
+    if(d.nextIds && typeof d.nextIds === 'object') nextIds = Object.assign({}, nextIds, d.nextIds);
+    const converted = migrateStatuses();
+    lastSaved = snapshot();
+    Object.keys(selection).forEach(k=>selection[k].clear());
+    renderAll();
+    // 変換が起きた場合は、その結果を全員に反映させる
+    if(converted > 0){
+      applyingRemote = false;
+      pushData();
+      toast(`古いステータス${converted}件を新しい区分に変換しました`);
+    }
+  } finally {
+    applyingRemote = false;
+  }
+}
+
+function startSync(){
+  window.FB.watch(window.FB.docRef(), snap=>{
+    if(!snap.exists()){
+      // 初回だけ、いまのサンプルデータを初期値として書き込む
+      syncReady = true;
+      lastSaved = '';
+      pushData();
+      return;
+    }
+    const fromCache = snap.metadata.fromCache;
+    const hasLocalEdit = snap.metadata.hasPendingWrites;
+    if(!hasLocalEdit) applyRemote(snap.data());   // 自分の書き込みの反響は無視する
+    syncReady = true;
+    setSaveState(fromCache ? 'オフライン（この端末に一時保存）' : '全員と同期済み', fromCache);
+  }, err=>{
+    console.error(err);
+    setSaveState('同期できません（権限か通信をご確認ください）', true);
+  });
+}
+
+/* バックアップ（JSONファイルとして書き出し） */
+function exportData(){
+  try{
+    const blob = new Blob([snapshot()], {type:'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const d = new Date();
+    const pad = n => String(n).padStart(2,'0');
+    a.href = url;
+    a.download = `crowdbasket-crm-${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}.json`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url), 1000);
+    toast('バックアップを書き出しました');
+  } catch(e){
+    console.error(e);
+    toast('書き出せませんでした');
+  }
+}
+
+/* 復元（全員のデータを置き換える） */
+function importData(ev){
+  const file = ev.target.files && ev.target.files[0];
+  ev.target.value = '';
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = ()=>{
+    let d;
+    try{ d = JSON.parse(reader.result); }
+    catch(e){ toast('このファイルは読み込めません'); return; }
+    if(!d || !Array.isArray(d.contacts)){ toast('バックアップファイルの形式ではありません'); return; }
+    showConfirm('いまのデータをバックアップの内容で置き換えます。これは全員の画面に反映されます。よろしいですか?', ()=>{
+      contacts = d.contacts;
+      clients  = Array.isArray(d.clients)  ? d.clients  : [];
+      deals    = Array.isArray(d.deals)    ? d.deals    : [];
+      tasks    = Array.isArray(d.tasks)    ? d.tasks    : [];
+      schedule = Array.isArray(d.schedule) ? d.schedule : [];
+      if(d.nextIds) nextIds = Object.assign({}, nextIds, d.nextIds);
+      Object.keys(selection).forEach(k=>selection[k].clear());
+      renderAll();
+      pushData();
+      toast('バックアップから復元しました');
+    }, {okLabel:'復元する', danger:false});
+  };
+  reader.readAsText(file);
+}
+
+function doSignOut(){
+  showConfirm('ログアウトします。よろしいですか?', ()=>{
+    window.FB.signOut().then(()=>location.reload());
+  }, {okLabel:'ログアウト', danger:false});
+}
+
+/* ---------- ログイン ---------- */
+function gateError(msg){
+  const el = document.getElementById('gate-error');
+  el.textContent = msg;
+  el.classList.add('show');
+}
+
+async function doLogin(ev){
+  ev.preventDefault();
+  const btn = document.getElementById('gate-btn');
+  const email = document.getElementById('gate-email').value.trim();
+  const pass  = document.getElementById('gate-pass').value;
+  document.getElementById('gate-error').classList.remove('show');
+  btn.disabled = true; btn.textContent = 'ログインしています…';
+  try{
+    await window.FB.signIn(email, pass);
+  } catch(e){
+    const code = (e && e.code) || '';
+    let msg = 'ログインできませんでした。';
+    if(code.includes('invalid-credential') || code.includes('wrong-password') || code.includes('user-not-found')){
+      msg = 'メールアドレスまたはパスワードが違います。';
+    } else if(code.includes('too-many-requests')){
+      msg = '試行回数が多すぎます。しばらく待ってからお試しください。';
+    } else if(code.includes('network')){
+      msg = '通信できませんでした。ネットワークをご確認ください。';
+    } else if(code.includes('invalid-email')){
+      msg = 'メールアドレスの形式が正しくありません。';
+    }
+    gateError(msg + (code ? `（${code}）` : ''));
+  } finally {
+    btn.disabled = false; btn.textContent = 'ログイン';
+  }
+}
+
+
+/* ---------- helpers ---------- */
+/* ---------- custom confirm modal (native confirm() is blocked in sandboxed artifact previews) ---------- */
+let pendingConfirmAction = null;
+let pendingConfirmAlt = null;
+/* opts: {okLabel, danger, altLabel, onAlt}
+   altLabel/onAlt を渡すと、3つ目の選択肢ボタンが出る。省略時は削除向けの赤いボタン。 */
+function showConfirm(message, onConfirm, opts){
+  opts = opts || {};
+  document.getElementById('confirm-message').textContent = message;
+  const btn = document.getElementById('confirm-ok');
+  btn.textContent = opts.okLabel || '削除する';
+  const danger = opts.danger !== false;
+  btn.style.background = danger ? 'var(--danger)' : 'var(--primary)';
+  btn.style.borderColor = danger ? 'var(--danger)' : 'var(--primary)';
+
+  const alt = document.getElementById('confirm-alt');
+  if(opts.altLabel && opts.onAlt){
+    alt.textContent = opts.altLabel;
+    alt.style.display = 'inline-flex';
+    pendingConfirmAlt = opts.onAlt;
+  } else {
+    alt.style.display = 'none';
+    pendingConfirmAlt = null;
+  }
+
+  pendingConfirmAction = onConfirm;
+  openModal('confirm-modal');
+}
+function resolveConfirm(result){
+  closeModal('confirm-modal');
+  const action = pendingConfirmAction;
+  pendingConfirmAction = null;
+  pendingConfirmAlt = null;
+  if(result && action) action();
+}
+function resolveConfirmAlt(){
+  closeModal('confirm-modal');
+  const action = pendingConfirmAlt;
+  pendingConfirmAlt = null;
+  pendingConfirmAction = null;
+  if(action) action();
+}
+
+function toast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), 2200);
+}
+function fmtDate(d){
+  const dt = new Date(d+'T00:00:00');
+  return dt.toLocaleDateString('ja-JP',{year:'numeric',month:'2-digit',day:'2-digit'});
+}
+function fmtYen(n){ return '¥' + n.toLocaleString('ja-JP'); }
+/* 登録日などに使う「今日」。以前は固定値だったため、登録日が実際の日付にならなかった */
+function todayStr(){
+  const d = new Date();
+  const pad = n => String(n).padStart(2,'0');
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+}
+function nowDateTimeStr(){
+  const d = new Date();
+  const pad = n => String(n).padStart(2,'0');
+  return `${d.getFullYear()}/${pad(d.getMonth()+1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function statusPill(status){
+  return `<span class="status-pill st-${status}"><span class="dot"></span>${status}</span>`;
+}
+
+/* ステータスを変えたら、必ずこの関数を通して日時と変更者を記録する。
+   最新の日時(statusUpdated / statusChangedAt)と、履歴(statusLog)の両方を更新する。 */
+function changeStatus(rec, newStatus, kind){
+  if(!rec || newStatus === rec.status) return false;
+  const from = rec.status;
+  const at = nowDateTimeStr();
+  rec.status = newStatus;
+  if(kind === 'deal'){ rec.statusChangedAt = at; rec.updated = todayStr(); }
+  else { rec.statusUpdated = at; }
+  if(!rec.statusLog) rec.statusLog = [];
+  rec.statusLog.push({from, to:newStatus, time:at, by:ownerName(currentUser) || '不明'});
+  return true;
+}
+
+/* 旧ステータスを新しい13段階へ読み替える。
+   すでに変換済みのデータには何もしないため、何度実行しても安全。 */
+function migrateStatuses(){
+  let changed = 0;
+  [contacts, clients, deals].forEach(list=>{
+    if(!Array.isArray(list)) return;
+    list.forEach(r=>{
+      const to = STATUS_MIGRATION[r.status];
+      if(!to) return;
+      const from = r.status;
+      r.status = to;
+      if(!r.statusLog) r.statusLog = [];
+      r.statusLog.push({from, to, time: nowDateTimeStr(), by:'自動変換'});
+      changed++;
+    });
+  });
+  return changed;
+}
+
+function renderStatusLog(containerId, log){
+  const el = document.getElementById(containerId);
+  if(!log || !log.length){
+    el.innerHTML = '<div class="no-deals">まだステータスの変更はありません</div>';
+    return;
+  }
+  el.innerHTML = log.slice().reverse().map(e=>`
+    <div class="log-item">
+      <span class="num log-time">${escapeHtml(e.time)}</span>
+      <span class="log-move">${statusPill(e.from)}<span class="log-arrow">→</span>${statusPill(e.to)}</span>
+      <span class="log-by">${escapeHtml(e.by||'')}</span>
+    </div>`).join('');
+}
+function statusCell(status, changedAt){
+  return `<div>${statusPill(status)}${changedAt ? `<div class="status-time">${escapeHtml(changedAt)}</div>` : ''}</div>`;
+}
+function renderNotesList(containerId, notesArr){
+  const el = document.getElementById(containerId);
+  if(!notesArr || notesArr.length===0){
+    el.innerHTML = '<div class="no-deals">メモはまだありません</div>';
+    return;
+  }
+  el.innerHTML = notesArr.slice().reverse().map(n=>`
+    <div class="note-item">
+      <div class="note-meta">${escapeHtml(n.author)} ・ <span class="num">${escapeHtml(n.time)}</span></div>
+      <div class="note-text">${escapeHtml(n.text)}</div>
+    </div>`).join('');
+}
+function ownerCell(ownerId){
+  const name = ownerName(ownerId);
+  if(!name) return `<span class="unassigned">未割当て</span>`;
+  return `<div class="owner-chip"><div class="avatar">${initials(name)}</div>${name}</div>`;
+}
+
+/* ---------- populate owner selects ---------- */
+function populateOwnerSelects(){
+  const targets = ['contacts-filter-owner','clients-filter-owner','deals-filter-owner','nc-owner','ncl-owner','cd-owner','kd-owner','tk-owner',
+                   'bulk-contacts-owner','bulk-clients-owner','bulk-deals-owner'];
+  targets.forEach(id=>{
+    const el = document.getElementById(id);
+    SALES_REPS.forEach(r=>{
+      const opt = document.createElement('option');
+      opt.value = r.id; opt.textContent = r.name;
+      el.appendChild(opt);
+    });
+  });
+  const ndOwner = document.getElementById('nd-owner');
+  SALES_REPS.forEach(r=>{
+    const opt = document.createElement('option');
+    opt.value = r.id; opt.textContent = r.name;
+    ndOwner.appendChild(opt);
+  });
+  ndOwner.value = currentUser;
+
+  const curSel = document.getElementById('current-user');
+  SALES_REPS.forEach(r=>{
+    const opt = document.createElement('option');
+    opt.value = r.id; opt.textContent = r.name;
+    curSel.appendChild(opt);
+  });
+  curSel.value = currentUser;
+  curSel.addEventListener('change', ()=>{
+    currentUser = curSel.value;
+    document.getElementById('current-avatar').textContent = initials(ownerName(currentUser));
+    renderAll();
+  });
+  document.getElementById('current-avatar').textContent = initials(ownerName(currentUser));
+
+  // status filter options (contacts/clients share same status set)
+  // ステータスを扱うすべての選択欄を、共通の定義から作る
+  ['contacts-filter-status','clients-filter-status','deals-filter-status',
+   'nc-status','ncl-status','cd-status','kd-status','nd-status'].forEach(id=>{
+    const el = document.getElementById(id);
+    if(!el) return;
+    STATUS_LIST.forEach(s=>{
+      const opt = document.createElement('option'); opt.value=s; opt.textContent=s;
+      el.appendChild(opt);
+    });
+  });
+
+  // 上場区分（会社詳細のみ）
+  ['kd-listing'].forEach(id=>{
+    const el = document.getElementById(id);
+    if(!el) return;
+    LISTING_OPTIONS.forEach(v=>{
+      const opt = document.createElement('option');
+      opt.value = v; opt.textContent = v || '未設定';
+      el.appendChild(opt);
+    });
+  });
+
+  // 主催者であるか / イベント規模 / LINE公式アカウント（4フォーム共通）
+  [
+    { ids: ['nc-organizer','ncl-organizer','cd-organizer','kd-organizer'], opts: ORGANIZER_OPTIONS },
+    { ids: ['nc-eventscale','ncl-eventscale','cd-eventscale','kd-eventscale'], opts: EVENT_SCALE_OPTIONS },
+    { ids: ['nc-line','ncl-line','cd-line','kd-line'], opts: LINE_OPTIONS },
+  ].forEach(({ids, opts})=>{
+    ids.forEach(id=>{
+      const el = document.getElementById(id);
+      if(!el) return;
+      opts.forEach(v=>{
+        const opt = document.createElement('option');
+        opt.value = v; opt.textContent = v || '未設定';
+        el.appendChild(opt);
+      });
+    });
+  });
+
+  // 一括変更のステータス選択肢（取引だけ値が異なる）
+  ['contacts','clients','deals'].forEach(section=>{
+    const el = document.getElementById(`bulk-${section}-status`);
+    BULK_STATUS[section].forEach(s=>{
+      const opt = document.createElement('option'); opt.value=s; opt.textContent=s;
+      el.appendChild(opt);
+    });
+  });
+}
+
+/* ---------- 一括変更 ----------
+   selection = チェックが入っている行のid。visibleIds = いま絞り込みで表示中の行のid。
+   「すべて選択」は表示中の行だけを対象にする（フィルターの外まで巻き込まないため）。 */
+const selection = {contacts: new Set(), clients: new Set(), deals: new Set()};
+const visibleIds = {contacts: [], clients: [], deals: []};
+const BULK_STATUS = {contacts: STATUS_LIST, clients: STATUS_LIST, deals: STATUS_LIST};
+const SECTION_LABEL = {contacts:'新規クライアント', clients:'クライアント', deals:'取引'};
+
+function dataOf(section){
+  return section === 'contacts' ? contacts : section === 'clients' ? clients : deals;
+}
+function rerender(section){
+  if(section === 'contacts') renderContacts();
+  else if(section === 'clients') renderClients();
+  else renderDeals();
+}
+
+function toggleSelect(section, id, on){
+  if(on) selection[section].add(id); else selection[section].delete(id);
+  refreshBulkUI(section);
+}
+
+function toggleSelectAll(section, on){
+  visibleIds[section].forEach(id=>{
+    if(on) selection[section].add(id); else selection[section].delete(id);
+  });
+  rerender(section);
+}
+
+function clearSelection(section){
+  selection[section].clear();
+  rerender(section);
+}
+
+/* 選択件数の表示、バーの出し入れ、見出しチェックの状態合わせ */
+function refreshBulkUI(section){
+  const ids = visibleIds[section];
+  const chosen = ids.filter(id=>selection[section].has(id));
+  const total = selection[section].size;
+
+  const bar = document.getElementById('bulk-' + section);
+  bar.style.display = total ? 'flex' : 'none';
+  document.getElementById(`bulk-${section}-count`).textContent = total;
+
+  const all = document.getElementById('check-all-' + section);
+  all.checked = ids.length > 0 && chosen.length === ids.length;
+  all.indeterminate = chosen.length > 0 && chosen.length < ids.length;
+}
+
+function applyBulk(section){
+  const ids = [...selection[section]];
+  if(!ids.length){ toast('行が選択されていません'); return; }
+
+  const ownerSel = document.getElementById(`bulk-${section}-owner`);
+  const statusSel = document.getElementById(`bulk-${section}-status`);
+  const ownerVal = ownerSel.value;
+  const statusVal = statusSel.value;
+  if(!ownerVal && !statusVal){ toast('変更する項目を選んでください'); return; }
+
+  const rows = dataOf(section).filter(x=>selection[section].has(x.id));
+  if(!rows.length){ toast('対象の行が見つかりませんでした'); return; }
+
+  const changes = [];
+  if(ownerVal) changes.push('担当者を「' + (ownerVal === '__none__' ? '未割当て' : ownerName(ownerVal)) + '」に');
+  if(statusVal) changes.push('ステータスを「' + statusVal + '」に');
+
+  showConfirm(
+    `${SECTION_LABEL[section]} ${rows.length}件の${changes.join('、')}変更します。よろしいですか?`,
+    ()=>{
+      rows.forEach(r=>{
+        if(ownerVal) r.owner = (ownerVal === '__none__') ? null : ownerVal;
+        if(statusVal) changeStatus(r, statusVal, section === 'deals' ? 'deal' : 'record');
+      });
+      ownerSel.value = ''; statusSel.value = '';
+      selection[section].clear();
+      renderAll();
+      toast(`${rows.length}件を一括変更しました`);
+    },
+    {okLabel:'一括変更する', danger:false}
+  );
+}
+
+/* 選択した行を一括削除。クライアント削除時は単体版と同様に関連する取引も消す */
+function bulkDelete(section){
+  const ids = new Set(selection[section]);
+  if(!ids.size){ toast('行が選択されていません'); return; }
+  const n = ids.size;
+  showConfirm(
+    `${SECTION_LABEL[section]} ${n}件を削除します。この操作は元に戻せません。よろしいですか?`,
+    ()=>{
+      if(section === 'contacts'){
+        contacts = contacts.filter(x=>!ids.has(x.id));
+      } else if(section === 'clients'){
+        clients = clients.filter(x=>!ids.has(x.id));
+        deals = deals.filter(d=>!ids.has(d.clientId)); // 関連する取引も削除
+      } else {
+        deals = deals.filter(x=>!ids.has(x.id));
+      }
+      selection[section].clear();
+      renderAll();
+      toast(`${n}件を削除しました`);
+    },
+    {okLabel:'削除する', danger:true}
+  );
+}
+
+/* ---------- メール配信リスト ----------
+   実際の送信は外部のメール配信サービスが担当する。
+   ここでは「誰に送ってよいか」を確定させ、送った記録を残すことに専念する。 */
+
+function hasEmail(c){
+  return !!(c.email && c.email.includes('@'));
+}
+/* 配信してよい相手か。アドレスがあり、配信停止でないこと */
+function isSendable(c){
+  return hasEmail(c) && !c.emailOptOut;
+}
+/* 最終送信からの経過日数。未送信は null */
+function daysSinceMailed(c){
+  if(!c.lastMailedAt) return null;
+  const t = Date.parse(c.lastMailedAt.replace(/\//g, '-').replace(' ', 'T'));
+  if(isNaN(t)) return null;
+  return (Date.now() - t) / 86400000;
+}
+
+/* 対象の会社を、書き出す分と除外する分に振り分ける。
+   行にチェックが入っていればその選択、無ければ「いま絞り込みで表示中の全件」を対象にする。 */
+function mailTargetBase(){
+  if(selection.contacts.size > 0){
+    return {rows: contacts.filter(c=>selection.contacts.has(c.id)), basis:'選択した会社'};
+  }
+  const ids = new Set(visibleIds.contacts);
+  return {rows: contacts.filter(c=>ids.has(c.id)), basis:'いま表示中の会社（絞り込み結果）'};
+}
+
+function buildMailTally(){
+  const base = mailTargetBase();
+  const picked = base.rows;
+  const skipRecent = document.getElementById('mail-skip-recent').checked;
+
+  const noEmail = [], optOut = [], recent = [], target = [];
+  picked.forEach(c=>{
+    if(!hasEmail(c))      { noEmail.push(c); return; }
+    if(c.emailOptOut)     { optOut.push(c);  return; }
+    const d = daysSinceMailed(c);
+    if(skipRecent && d !== null && d < 30){ recent.push(c); return; }
+    target.push(c);
+  });
+  return {picked, noEmail, optOut, recent, target, basis: base.basis};
+}
+
+function renderMailTally(){
+  const t = buildMailTally();
+  const rows = [
+    `<div class="tally-row"><span>${escapeHtml(t.basis)}</span><span class="tally-num">${t.picked.length}</span></div>`,
+    `<div class="tally-row minus"><span>メールアドレスが未取得</span><span class="tally-num">-${t.noEmail.length}</span></div>`,
+    `<div class="tally-row minus"><span>配信停止</span><span class="tally-num">-${t.optOut.length}</span></div>`,
+    `<div class="tally-row minus"><span>30日以内に送信済み</span><span class="tally-num">-${t.recent.length}</span></div>`,
+    `<div class="tally-row total"><span>書き出す件数</span><span class="tally-num">${t.target.length}</span></div>`,
+  ].join('');
+  document.getElementById('mail-tally').innerHTML = rows;
+  document.getElementById('mail-export-btn').disabled = t.target.length === 0;
+}
+
+const FORMAT_HINT = {
+  merge: 'Wordの差し込み印刷でこのCSVを読み込むと、会社名を差し込んだメールを1社ずつ個別に送れます。相手には他の宛先が見えません。',
+  bcc:   '全員に同じ本文を一度に送る形式です。会社名の差し込みはできません。貼り付け先を必ずBCCにしてください。',
+  service: 'Brevoなどのメール配信サービスに取り込む形式です（列名は英語）。',
+};
+
+function renderFormatHint(){
+  const f = document.getElementById('mail-format').value;
+  document.getElementById('mail-format-hint').textContent = FORMAT_HINT[f] || '';
+  document.getElementById('mail-export-btn').textContent =
+    f === 'bcc' ? 'アドレス一覧を作る' : 'CSVを書き出す';
+}
+
+function openMailExport(){
+  if(contacts.length === 0){ toast('登録されている会社がありません'); return; }
+  document.getElementById('mail-campaign').value = '';
+  document.getElementById('mail-tag').value = '';
+  document.getElementById('mail-format').value = 'merge';
+  document.getElementById('mail-skip-recent').checked = true;
+  document.getElementById('mail-mark-status').value = '';
+  renderFormatHint();
+  renderMailTally();
+  openModal('mail-export-modal');
+}
+
+/* お問い合わせフォーム用の定型文（固定文・全社共通） */
+const INQUIRY_TEMPLATE = `【販売手数料３％】LINEを使ったチケット＆グッズ販売ツールのご提案
+ご担当者様
+
+突然のご連絡失礼いたします。
+株式会社アクティブチャネルの石井啓章と申します。
+
+この度御社の事業を拝見し、是非弊社のクラウドバスケットをご活用いただきたくご連絡をさせて頂きました。
+
+クラウドバスケットとは、
+LINE公式アカウントを使ってチケット・グッズ販売ができるツールです。
+LINEを使えばただチケット販売するだけではなく、購入者と継続的なコミュニケーションが
+取れるので顧客単価を大幅に向上出来ます。
+
+https://crowdbasket.jp
+
+本来であれば、初期費用38万円や月額固定費30万円のところ
+先着3社様限定で0円に
+売上金額×3%の手数料にて導入させていただきます。
+
+◆ 主な特徴
+・LINEアプリ内で商品購入から決済まで完結できるカート機能を搭載し、短い導線でユーザー離脱を防ぎます。
+・ユーザーの行動や嗜好に合わせたステップ配信・セグメント配信など、高度なシナリオ配信が自動で可能です。
+・アンケートと分析により購買行動と合わせたニーズ把握を行い、最適化配信につなげ、顧客理解を深めます。
+・LINE外広告媒体を含めた広告効果を可視化し、CPAの改善を支援します。
+・導入前後の相談・設定支援や運用指導まで、柔軟なカスタマイズとサポート対応を提供します。
+
+もしご興味をお持ちいただけましたら、サービス資料や無料デモのご案内も可能です。
+
+現在キャンペーン実施中のため、ご関心がございましたら本メールへご返信いただけますと幸いです。
+
+何卒よろしくお願いいたします。`;
+
+function copyInquiryTemplate(){
+  navigator.clipboard.writeText(INQUIRY_TEMPLATE)
+    .then(()=>toast('お問い合わせ定型文をコピーしました'))
+    .catch(()=>{
+      // クリップボードAPIが使えない環境では一時テキストエリアで手動コピー
+      const ta = document.createElement('textarea');
+      ta.value = INQUIRY_TEMPLATE;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      try{ document.execCommand('copy'); toast('お問い合わせ定型文をコピーしました'); }
+      catch(e){ toast('Ctrl + C でコピーしてください'); }
+      document.body.removeChild(ta);
+    });
+}
+
+/* 任意のテキストをクリップボードにコピー（メール・電話など） */
+function copyText(text, label){
+  const t = String(text || '');
+  if(!t) return;
+  navigator.clipboard.writeText(t)
+    .then(()=>toast(`${label}をコピーしました`))
+    .catch(()=>{
+      const ta = document.createElement('textarea');
+      ta.value = t; ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.select();
+      try{ document.execCommand('copy'); toast(`${label}をコピーしました`); }
+      catch(e){ toast('コピーできませんでした'); }
+      document.body.removeChild(ta);
+    });
+}
+
+/* 一覧セル用：値があればアイコン（クリックでコピー）、無ければ「—」 */
+function copyIcon(value, type){
+  if(!value) return '<span class="unassigned">—</span>';
+  const icon = type === 'email' ? '✉' : '☏';
+  const label = type === 'email' ? 'メールアドレス' : '電話番号';
+  const js = String(value).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  const onclick = escapeHtml(`copyText('${js}', '${label}')`);
+  const title = escapeHtml(String(value));
+  return `<span class="copy-ic" title="${title}（クリックでコピー）" onclick="${onclick}">${icon}</span>`;
+}
+
+function copyBcc(){
+  const ta = document.getElementById('bcc-output');
+  ta.select();
+  navigator.clipboard.writeText(ta.value)
+    .then(()=>toast('コピーしました。Outlookの BCC 欄に貼り付けてください'))
+    .catch(()=>{
+      // クリップボードが使えない環境では選択状態にして手動コピーを促す
+      toast('Ctrl + C でコピーしてください');
+    });
+}
+
+/* カンマ・引用符・改行を含む値を安全に囲む */
+function csvCell(v){
+  const s = (v === null || v === undefined) ? '' : String(v);
+  return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+
+function runMailExport(){
+  const campaign = document.getElementById('mail-campaign').value.trim();
+  if(!campaign){ toast('キャンペーン名を入力してください'); return; }
+  const mailTag = document.getElementById('mail-tag').value.trim();
+
+  const t = buildMailTally();
+  if(t.target.length === 0){ toast('書き出せる会社がありません'); return; }
+  const markStatus = document.getElementById('mail-mark-status').value;
+
+  const format = document.getElementById('mail-format').value;
+
+  if(format === 'bcc'){
+    // Outlookの宛先の区切りはセミコロン
+    document.getElementById('bcc-output').value = t.target.map(c=>c.email.trim()).join('; ');
+    document.getElementById('bcc-count').textContent = t.target.length;
+    closeModal('mail-export-modal');
+    openModal('bcc-modal');
+  } else {
+    // Wordの差し込み印刷では、この見出しがそのまま差し込み項目名になる
+    const cols = format === 'merge'
+      ? [['メールアドレス', c=>c.email], ['会社名', c=>c.name],
+         ['担当者', c=>ownerName(c.owner) || ''], ['ステータス', c=>c.status]]
+      : [['email', c=>c.email], ['company', c=>c.name],
+         ['owner', c=>ownerName(c.owner) || ''], ['status', c=>c.status], ['crm_id', c=>c.id]];
+
+    const lines = [cols.map(x=>x[0]).join(',')].concat(
+      t.target.map(c=>cols.map(x=>csvCell(x[1](c))).join(','))
+    );
+    // ExcelでもUTF-8として正しく開けるようBOMを付ける
+    const blob = new Blob(['﻿' + lines.join('\r\n')], {type:'text/csv;charset=utf-8'});
+
+    try{
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const d = new Date();
+      const pad = n => String(n).padStart(2,'0');
+      a.href = url;
+      a.download = `配信リスト_${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}.csv`;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(()=>URL.revokeObjectURL(url), 1000);
+    } catch(e){
+      console.error(e);
+      toast('書き出せませんでした');
+      return;
+    }
+    closeModal('mail-export-modal');
+  }
+
+  // 送った記録を残す
+  const now = nowDateTimeStr();
+  t.target.forEach(c=>{
+    c.lastMailedAt = now;
+    c.lastCampaign = campaign;
+    if(mailTag){
+      // 送信タグは追記（過去のタグを消さない）。同じタグの重複は避ける
+      const ex = (c.mailTag || '').split(/[、,]/).map(s=>s.trim()).filter(Boolean);
+      if(!ex.includes(mailTag)) ex.push(mailTag);
+      c.mailTag = ex.join('、');
+    }
+    if(markStatus) changeStatus(c, markStatus, 'record');
+  });
+
+  renderAll();
+  toast(`${t.target.length}件を書き出しました`);
+}
+
+/* ---------- 配信停止の取り込み ---------- */
+function openOptOutImport(){
+  document.getElementById('optout-input').value = '';
+  document.getElementById('optout-status').style.display = 'none';
+  openModal('optout-modal');
+}
+
+function loadOptOutFile(ev){
+  const file = ev.target.files && ev.target.files[0];
+  ev.target.value = '';
+  if(!file) return;
+  readTextFile(file).then(text=>{
+    document.getElementById('optout-input').value = text;
+  }).catch(e=>{
+    console.error(e);
+    toast('ファイルを読み込めませんでした');
+  });
+}
+
+function runOptOutImport(){
+  const raw = document.getElementById('optout-input').value;
+  const statusEl = document.getElementById('optout-status');
+  const show = (msg, kind)=>{
+    statusEl.className = 'ai-status' + (kind ? ' ' + kind : '');
+    statusEl.textContent = msg;
+    statusEl.style.display = 'flex';
+  };
+
+  // 各行の先頭列を拾う。CSVをそのまま貼っても読めるようにする
+  const addrs = raw.split(/\r?\n/)
+    .map(l=>l.trim()).filter(Boolean)
+    .map(l=>(splitRow(l)[0] || '').trim().toLowerCase())
+    .filter(a=>a.includes('@'));
+
+  if(addrs.length === 0){ show('メールアドレスが見つかりませんでした。', 'error'); return; }
+
+  const set = new Set(addrs);
+  const hit = contacts.filter(c=>hasEmail(c) && set.has(c.email.trim().toLowerCase()));
+  const already = hit.filter(c=>c.emailOptOut).length;
+  const newly = hit.length - already;
+  const unknown = set.size - new Set(hit.map(c=>c.email.trim().toLowerCase())).size;
+
+  if(newly === 0){
+    show(`新たに登録する会社はありませんでした。（対象${addrs.length}件中：登録済み${already}件／CRMに該当なし${unknown}件）`, 'ok');
+    return;
+  }
+
+  showConfirm(`${newly}件を配信停止として登録します。以後、配信リストの書き出しから除外されます。よろしいですか?`, ()=>{
+    hit.forEach(c=>{ c.emailOptOut = true; });
+    closeModal('optout-modal');
+    renderAll();
+    toast(`${newly}件を配信停止に登録しました`);
+  }, {okLabel:'登録する', danger:false});
+}
+
+/* ---------- state for tabs/filters ---------- */
+const state = {
+  contacts:{scope:'all', owner:'', status:'', search:'', sort:'date-desc', mail:'', rank:''},
+  clients:{scope:'all', owner:'', status:'', search:'', sort:'date-desc', rank:''},
+  deals:{scope:'all', status:'', owner:'', search:''},
+};
+
+function clearFilters(section){
+  if(section==='contacts'){
+    document.getElementById('contacts-filter-owner').value='';
+    document.getElementById('contacts-filter-status').value='';
+    document.getElementById('contacts-filter-mail').value='';
+    document.getElementById('contacts-filter-rank').value='';
+    document.getElementById('contacts-search').value='';
+    state.contacts.owner=''; state.contacts.status=''; state.contacts.search=''; state.contacts.mail=''; state.contacts.rank='';
+    renderContacts();
+  } else if(section==='clients'){
+    document.getElementById('clients-filter-owner').value='';
+    document.getElementById('clients-filter-status').value='';
+    document.getElementById('clients-filter-rank').value='';
+    document.getElementById('clients-search').value='';
+    state.clients.owner=''; state.clients.status=''; state.clients.search=''; state.clients.rank='';
+    renderClients();
+  } else if(section==='deals'){
+    document.getElementById('deals-filter-owner').value='';
+    document.getElementById('deals-filter-status').value='';
+    document.getElementById('deals-search').value='';
+    state.deals.owner=''; state.deals.status=''; state.deals.search='';
+    renderDeals();
+  }
+}
+
+/* ---------- navigation ---------- */
+document.querySelectorAll('.nav-item[data-page]').forEach(item=>{
+  item.addEventListener('click', ()=>{
+    document.querySelectorAll('.nav-item[data-page]').forEach(i=>i.classList.remove('active'));
+    item.classList.add('active');
+    const page = item.dataset.page;
+    document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+    document.getElementById('page-'+page).classList.add('active');
+    const titles = {home:'ホーム', contacts:'新規クライアント', clients:'クライアントデータ', deals:'取引ステータス一覧表', analytics:'データ分析'};
+    document.getElementById('topbar-title').textContent = titles[page];
+    if(page === 'analytics') renderAnalytics();
+  });
+});
+
+/* ---------- tabs ---------- */
+function setupTabs(containerId, stateKey, renderFn){
+  document.querySelectorAll('#'+containerId+' .tab').forEach(tab=>{
+    tab.addEventListener('click', ()=>{
+      document.querySelectorAll('#'+containerId+' .tab').forEach(t=>t.classList.remove('active'));
+      tab.classList.add('active');
+      state[stateKey].scope = tab.dataset.scope;
+      renderFn();
+    });
+  });
+}
+
+/* ---------- CONTACTS render ---------- */
+function renderContacts(){
+  state.contacts.owner = document.getElementById('contacts-filter-owner').value;
+  state.contacts.status = document.getElementById('contacts-filter-status').value;
+  state.contacts.search = document.getElementById('contacts-search').value.trim().toLowerCase();
+  state.contacts.sort = document.getElementById('contacts-sort').value;
+  state.contacts.mail = document.getElementById('contacts-filter-mail').value;
+  state.contacts.rank = document.getElementById('contacts-filter-rank').value;
+
+  let list = contacts.slice();
+  const s = state.contacts;
+
+  if(s.scope==='mine') list = list.filter(c=>c.owner===currentUser);
+  if(s.scope==='unassigned') list = list.filter(c=>!c.owner);
+  if(s.owner) list = list.filter(c=>c.owner===s.owner);
+  if(s.status) list = list.filter(c=>c.status===s.status);
+  if(s.search) list = list.filter(c=> c.name.toLowerCase().includes(s.search));
+  if(s.mail==='sendable') list = list.filter(c=> isSendable(c));
+  if(s.mail==='optout')   list = list.filter(c=> c.emailOptOut);
+  if(s.mail==='noemail')  list = list.filter(c=> !hasEmail(c));
+  if(s.rank) list = list.filter(c=> c.rank === s.rank);
+
+  if(s.sort==='date-desc') list.sort((a,b)=>b.created.localeCompare(a.created));
+  if(s.sort==='date-asc') list.sort((a,b)=>a.created.localeCompare(b.created));
+  if(s.sort==='name-asc') list.sort((a,b)=> (ownerName(a.owner)||'').localeCompare(ownerName(b.owner)||'', 'ja'));
+
+  document.getElementById('tab-c-all').textContent = contacts.length;
+  document.getElementById('tab-c-mine').textContent = contacts.filter(c=>c.owner===currentUser).length;
+  document.getElementById('tab-c-unassigned').textContent = contacts.filter(c=>!c.owner).length;
+  document.getElementById('cnt-contacts').textContent = contacts.length;
+
+  const tbody = document.getElementById('contacts-tbody');
+  tbody.innerHTML = '';
+  document.getElementById('contacts-empty').style.display = list.length ? 'none':'block';
+  visibleIds.contacts = list.map(c=>c.id);
+  refreshBulkUI('contacts');
+
+  list.forEach(c=>{
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="col-check"><input type="checkbox" ${selection.contacts.has(c.id)?'checked':''} onclick="toggleSelect('contacts', ${c.id}, this.checked)"></td>
+      <td><div class="cell-name linkable" onclick="openContactDetail(${c.id})">${rankBadge(c.rank)}${escapeHtml(c.name)}</div></td>
+      <td>${copyIcon(c.phone, 'phone')}</td>
+      <td>
+        ${copyIcon(c.email, 'email')}
+        ${c.emailOptOut ? '<div class="optout-badge">配信停止</div>' : ''}
+        ${c.lastMailedAt ? `<div class="mail-meta">送信 ${escapeHtml(c.lastMailedAt)}</div>` : ''}
+      </td>
+      <td>${c.inquiryForm ? `<a href="${escapeHtml(c.inquiryForm)}" target="_blank" rel="noopener" style="color:var(--primary-deep); text-decoration:none; font-size:12px;">フォーム ↗</a>` : '<span class="unassigned">—</span>'}</td>
+      <td>${c.business ? escapeHtml(c.business) : '<span class="unassigned">—</span>'}</td>
+      <td>${c.revenue ? escapeHtml(c.revenue) : '<span class="unassigned">—</span>'}</td>
+      <td>${c.listing ? escapeHtml(c.listing) : '<span class="unassigned">—</span>'}</td>
+      <td>${ownerCell(c.owner)}</td>
+      <td>${statusCell(c.status, c.statusUpdated)}</td>
+      <td>
+        <div class="row-actions">
+          <span class="icon-btn" title="詳細・メモを見る" onclick="openContactDetail(${c.id})">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+          </span>
+          <span class="icon-btn" title="クライアントに変換" onclick="convertToClient(${c.id})">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
+          </span>
+          <span class="icon-btn icon-btn-danger" title="削除" onclick="deleteContact(${c.id})">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M9 7V5a2 2 0 012-2h2a2 2 0 012 2v2m-7 0v12a2 2 0 002 2h4a2 2 0 002-2V7"/></svg>
+          </span>
+        </div>
+      </td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+/* ---------- CLIENTS render ---------- */
+function renderClients(){
+  state.clients.owner = document.getElementById('clients-filter-owner').value;
+  state.clients.status = document.getElementById('clients-filter-status').value;
+  state.clients.search = document.getElementById('clients-search').value.trim().toLowerCase();
+  state.clients.sort = document.getElementById('clients-sort').value;
+  state.clients.rank = document.getElementById('clients-filter-rank').value;
+
+  let list = clients.slice();
+  const s = state.clients;
+
+  if(s.scope==='mine') list = list.filter(c=>c.owner===currentUser);
+  if(s.scope==='unassigned') list = list.filter(c=>!c.owner);
+  if(s.owner) list = list.filter(c=>c.owner===s.owner);
+  if(s.status) list = list.filter(c=>c.status===s.status);
+  if(s.search) list = list.filter(c=> (c.name+c.industry).toLowerCase().includes(s.search));
+  if(s.rank) list = list.filter(c=> c.rank === s.rank);
+
+  if(s.sort==='date-desc') list.sort((a,b)=>b.created.localeCompare(a.created));
+  if(s.sort==='date-asc') list.sort((a,b)=>a.created.localeCompare(b.created));
+  if(s.sort==='name-asc') list.sort((a,b)=> (ownerName(a.owner)||'').localeCompare(ownerName(b.owner)||'', 'ja'));
+
+  document.getElementById('tab-cl-all').textContent = clients.length;
+  document.getElementById('tab-cl-mine').textContent = clients.filter(c=>c.owner===currentUser).length;
+  document.getElementById('tab-cl-unassigned').textContent = clients.filter(c=>!c.owner).length;
+  document.getElementById('cnt-clients').textContent = clients.length;
+
+  const tbody = document.getElementById('clients-tbody');
+  tbody.innerHTML = '';
+  document.getElementById('clients-empty').style.display = list.length ? 'none':'block';
+  visibleIds.clients = list.map(c=>c.id);
+  refreshBulkUI('clients');
+
+  list.forEach(c=>{
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="col-check"><input type="checkbox" ${selection.clients.has(c.id)?'checked':''} onclick="toggleSelect('clients', ${c.id}, this.checked)"></td>
+      <td><div class="cell-name linkable" onclick="openClientDetail(${c.id})">${rankBadge(c.rank)}${escapeHtml(c.name)}</div></td>
+      <td>${copyIcon(c.phone, 'phone')}</td>
+      <td>${copyIcon(c.email, 'email')}</td>
+      <td>${c.inquiryForm ? `<a href="${escapeHtml(c.inquiryForm)}" target="_blank" rel="noopener" style="color:var(--primary-deep); text-decoration:none; font-size:12px;">フォーム ↗</a>` : '<span class="unassigned">—</span>'}</td>
+      <td>${c.industry ? escapeHtml(c.industry) : '<span class="unassigned">—</span>'}</td>
+      <td>${c.revenue ? escapeHtml(c.revenue) : '<span class="unassigned">—</span>'}</td>
+      <td>${c.listing ? escapeHtml(c.listing) : '<span class="unassigned">—</span>'}</td>
+      <td>${ownerCell(c.owner)}</td>
+      <td>${statusCell(c.status, c.statusUpdated)}</td>
+      <td>
+        <div class="row-actions">
+          <span class="icon-btn" title="詳細を見る" onclick="openClientDetail(${c.id})">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+          </span>
+          <span class="icon-btn icon-btn-danger" title="削除" onclick="deleteClient(${c.id})">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M9 7V5a2 2 0 012-2h2a2 2 0 012 2v2m-7 0v12a2 2 0 002 2h4a2 2 0 002-2V7"/></svg>
+          </span>
+        </div>
+      </td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+/* ---------- DEALS render ---------- */
+function renderDeals(){
+  state.deals.status = document.getElementById('deals-filter-status').value;
+  state.deals.owner = document.getElementById('deals-filter-owner').value;
+  state.deals.search = document.getElementById('deals-search').value.trim().toLowerCase();
+
+  let list = deals.slice();
+  const s = state.deals;
+
+  if(s.scope==='mine') list = list.filter(d=>d.owner===currentUser);
+  if(s.status) list = list.filter(d=>d.status===s.status);
+  if(s.owner) list = list.filter(d=>d.owner===s.owner);
+  if(s.search) list = list.filter(d=> (d.client+d.title).toLowerCase().includes(s.search));
+
+  list.sort((a,b)=>b.updated.localeCompare(a.updated));
+
+  document.getElementById('tab-d-all').textContent = deals.length;
+  document.getElementById('tab-d-mine').textContent = deals.filter(d=>d.owner===currentUser).length;
+  document.getElementById('cnt-deals').textContent = deals.length;
+
+  const tbody = document.getElementById('deals-tbody');
+  tbody.innerHTML = '';
+  document.getElementById('deals-empty').style.display = list.length ? 'none':'block';
+  visibleIds.deals = list.map(d=>d.id);
+  refreshBulkUI('deals');
+
+  list.forEach(d=>{
+    const tr = document.createElement('tr');
+    const clickable = d.clientId ? `class="cell-name linkable" onclick="openClientDetail(${d.clientId})"` : `class="cell-name"`;
+    // 連絡先は取引ではなくクライアント側に持っているので、そこから引く
+    const cl = clients.find(x=>x.id===d.clientId) || {};
+    tr.innerHTML = `
+      <td class="col-check"><input type="checkbox" ${selection.deals.has(d.id)?'checked':''} onclick="toggleSelect('deals', ${d.id}, this.checked)"></td>
+      <td>
+        <div ${clickable}>${escapeHtml(d.client)}</div>
+        <div class="cell-sub">${escapeHtml(d.title||'(案件名未設定)')} ・ <span class="amount" style="font-size:11.5px;">${fmtYen(d.amount||0)}</span></div>
+      </td>
+      <td>${copyIcon(cl.phone, 'phone')}</td>
+      <td>${copyIcon(cl.email, 'email')}</td>
+      <td>${cl.inquiryForm ? `<a href="${escapeHtml(cl.inquiryForm)}" target="_blank" rel="noopener" style="color:var(--primary-deep); text-decoration:none; font-size:12px;">フォーム ↗</a>` : '<span class="unassigned">—</span>'}</td>
+      <td>${cl.industry ? escapeHtml(cl.industry) : '<span class="unassigned">—</span>'}</td>
+      <td>${cl.revenue ? escapeHtml(cl.revenue) : '<span class="unassigned">—</span>'}</td>
+      <td>${cl.listing ? escapeHtml(cl.listing) : '<span class="unassigned">—</span>'}</td>
+      <td>${ownerCell(d.owner)}</td>
+      <td>
+        <select onchange="updateDealStatus(${d.id}, this.value)" style="border:none;background:transparent;font-size:11.5px;font-weight:700;cursor:pointer;">
+          ${STATUS_LIST.map(st=>`<option value="${st}" ${st===d.status?'selected':''}>${st}</option>`).join('')}
+        </select>
+        <div class="status-time">${escapeHtml(d.statusChangedAt || fmtDate(d.updated))}</div>
+      </td>
+      <td>
+        <div class="row-actions">
+          <span class="icon-btn" title="メモを見る" onclick="openDealNotes(${d.id})">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v13H8l-4 4z"/></svg>
+          </span>
+          <span class="icon-btn icon-btn-danger" title="削除" onclick="deleteDeal(${d.id})">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M9 7V5a2 2 0 012-2h2a2 2 0 012 2v2m-7 0v12a2 2 0 002 2h4a2 2 0 002-2V7"/></svg>
+          </span>
+        </div>
+      </td>`;
+    tbody.appendChild(tr);
+  });
+}
+function updateDealStatus(id, status){
+  const d = deals.find(x=>x.id===id);
+  if(!d) return;
+  if(changeStatus(d, status, 'deal')){
+    toast('ステータスを更新しました');
+    renderDeals(); renderHome();
+  }
+}
+
+/* ---------- HOME render ---------- */
+function renderHome(){
+  const hour = new Date().getHours();
+  document.getElementById('home-greeting').textContent =
+    ownerName(currentUser) + ' さん、お疲れ様です';
+  const now = new Date();
+  const wd = ['日','月','火','水','木','金','土'][now.getDay()];
+  document.getElementById('home-date').textContent =
+    `${now.getFullYear()}年${now.getMonth()+1}月${now.getDate()}日(${wd})の業務状況`;
+
+  const myTasks = tasks.filter(t=>t.owner===currentUser);
+  const undone = myTasks.filter(t=>!t.done);
+  document.getElementById('stat-tasks').textContent = undone.length;
+  document.getElementById('task-progress').textContent = `${myTasks.length-undone.length} / ${myTasks.length} 完了`;
+
+  document.getElementById('stat-unassigned').textContent = contacts.filter(c=>!c.owner).length;
+  document.getElementById('stat-mydeals').textContent = deals.filter(d=>d.owner===currentUser && !['成立','失注'].includes(d.status)).length;
+  document.getElementById('stat-won').textContent = deals.filter(d=>d.owner===currentUser && d.status==='成立').length;
+
+  const taskList = document.getElementById('task-list');
+  taskList.innerHTML = '';
+  if(myTasks.length===0){
+    taskList.innerHTML = `<div class="empty"><p>本日のタスクはありません</p></div>`;
+  } else {
+    myTasks.forEach(t=>{
+      const row = document.createElement('div');
+      row.className='task-row';
+      row.innerHTML = `
+        <div class="task-check ${t.done?'done':''}" onclick="toggleTask(${t.id})">
+          ${t.done?'<svg viewBox="0 0 24 24" fill="none" stroke-width="3"><path d="M5 12l4 4 10-10"/></svg>':''}
+        </div>
+        <div class="task-main">
+          <div class="task-title ${t.done?'done':''}">${escapeHtml(t.title)}</div>
+          <div class="task-meta">${escapeHtml(t.sub)}</div>
+        </div>
+        <div class="task-badge badge-${t.priority}">${t.priority==='high'?'優先度高':t.priority==='mid'?'優先度中':'優先度低'}</div>
+        <span class="icon-btn row-hover-action" title="編集" onclick="openTaskModal(${t.id})">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/></svg>
+        </span>`;
+      taskList.appendChild(row);
+    });
+  }
+
+  const schedList = document.getElementById('sched-list');
+  schedList.innerHTML = '';
+  const sortedSchedule = schedule.slice().sort((a,b)=> a.time.localeCompare(b.time));
+  if(sortedSchedule.length===0){
+    schedList.innerHTML = `<div class="empty"><p>本日の予定はありません</p></div>`;
+  } else {
+    sortedSchedule.forEach(ev=>{
+      const row = document.createElement('div');
+      row.className = 'sched-row';
+      row.innerHTML = `
+        <div class="sched-time">${escapeHtml(ev.time)}</div>
+        <div class="sched-bar"></div>
+        <div class="sched-main">
+          <div class="sched-title">${escapeHtml(ev.title)}</div>
+          <div class="sched-sub">${escapeHtml(ev.sub)}</div>
+        </div>
+        <span class="icon-btn row-hover-action" title="編集" onclick="openScheduleModal(${ev.id})">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/></svg>
+        </span>`;
+      schedList.appendChild(row);
+    });
+  }
+}
+function toggleTask(id){
+  const t = tasks.find(x=>x.id===id);
+  if(t){ t.done = !t.done; renderHome(); }
+}
+
+/* ---------- task edit/create/delete ---------- */
+let tkCurrentId = null;
+function openTaskModal(id){
+  tkCurrentId = id || null;
+  const t = id ? tasks.find(x=>x.id===id) : null;
+  document.getElementById('task-modal-title').textContent = t ? 'タスクを編集' : 'タスクを追加';
+  document.getElementById('tk-title').value = t ? t.title : '';
+  document.getElementById('tk-sub').value = t ? t.sub : '';
+  document.getElementById('tk-owner').value = t ? t.owner : currentUser;
+  document.getElementById('tk-priority').value = t ? t.priority : 'mid';
+  document.getElementById('tk-delete-btn').style.display = t ? 'inline-flex' : 'none';
+  openModal('task-modal');
+}
+function saveTask(){
+  const title = document.getElementById('tk-title').value.trim();
+  if(!title){ toast('タスク内容を入力してください'); return; }
+  const sub = document.getElementById('tk-sub').value.trim();
+  const owner = document.getElementById('tk-owner').value;
+  const priority = document.getElementById('tk-priority').value;
+
+  if(tkCurrentId){
+    const t = tasks.find(x=>x.id===tkCurrentId);
+    if(t){ t.title=title; t.sub=sub; t.owner=owner; t.priority=priority; }
+    toast('タスクを更新しました');
+  } else {
+    tasks.push({id: nextIds.task++, title, sub, owner, priority, done:false});
+    toast('タスクを追加しました');
+  }
+  closeModal('task-modal');
+  renderHome();
+}
+function deleteTaskFromModal(){
+  if(!tkCurrentId) return;
+  const t = tasks.find(x=>x.id===tkCurrentId);
+  if(!t) return;
+  showConfirm(`「${t.title}」を削除しますか?`, ()=>{
+    tasks = tasks.filter(x=>x.id!==tkCurrentId);
+    closeModal('task-modal');
+    toast('タスクを削除しました');
+    renderHome();
+  });
+}
+
+/* ---------- schedule edit/create/delete ---------- */
+let scCurrentId = null;
+function openScheduleModal(id){
+  scCurrentId = id || null;
+  const ev = id ? schedule.find(x=>x.id===id) : null;
+  document.getElementById('schedule-modal-title').textContent = ev ? '予定を編集' : '予定を追加';
+  document.getElementById('sc-time').value = ev ? ev.time : '';
+  document.getElementById('sc-title').value = ev ? ev.title : '';
+  document.getElementById('sc-sub').value = ev ? ev.sub : '';
+  document.getElementById('sc-delete-btn').style.display = ev ? 'inline-flex' : 'none';
+  openModal('schedule-modal');
+}
+function saveSchedule(){
+  const time = document.getElementById('sc-time').value.trim();
+  const title = document.getElementById('sc-title').value.trim();
+  if(!time || !title){ toast('時刻と予定タイトルを入力してください'); return; }
+  const sub = document.getElementById('sc-sub').value.trim();
+
+  if(scCurrentId){
+    const ev = schedule.find(x=>x.id===scCurrentId);
+    if(ev){ ev.time=time; ev.title=title; ev.sub=sub; }
+    toast('予定を更新しました');
+  } else {
+    schedule.push({id: nextIds.schedule++, time, title, sub});
+    toast('予定を追加しました');
+  }
+  closeModal('schedule-modal');
+  renderHome();
+}
+function deleteScheduleFromModal(){
+  if(!scCurrentId) return;
+  const ev = schedule.find(x=>x.id===scCurrentId);
+  if(!ev) return;
+  showConfirm(`「${ev.title}」の予定を削除しますか?`, ()=>{
+    schedule = schedule.filter(x=>x.id!==scCurrentId);
+    closeModal('schedule-modal');
+    toast('予定を削除しました');
+    renderHome();
+  });
+}
+
+/* ---------- modals ---------- */
+function openModal(id){ document.getElementById(id).classList.add('open'); }
+function closeModal(id){ document.getElementById(id).classList.remove('open'); }
+document.querySelectorAll('.modal-overlay').forEach(ov=>{
+  ov.addEventListener('click', e=>{ if(e.target===ov) closeModal(ov.id); });
+});
+
+function openContactModal(){
+  document.getElementById('nc-name').value='';
+  document.getElementById('nc-email').value='';
+  document.getElementById('nc-phone').value='';
+  document.getElementById('nc-inquiry-form').value='';
+  document.getElementById('nc-business').value='';
+  document.getElementById('nc-founded').value='';
+  document.getElementById('nc-ticket').value='';
+  document.getElementById('nc-organizer').value='';
+  document.getElementById('nc-eventscale').value='';
+  document.getElementById('nc-line').value='';
+  document.getElementById('nc-note').value='';
+  document.getElementById('nc-owner').value='';
+  document.getElementById('nc-status').value='未対応';
+  openModal('contact-modal');
+}
+function saveContact(){
+  const name = document.getElementById('nc-name').value.trim();
+  if(!name){ toast('会社名を入力してください'); return; }
+  const note = document.getElementById('nc-note').value.trim();
+  contacts.unshift({
+    id: nextIds.contact++,
+    name,
+    email: document.getElementById('nc-email').value.trim(),
+    phone: document.getElementById('nc-phone').value.trim(),
+    inquiryForm: document.getElementById('nc-inquiry-form').value.trim(),
+    business: document.getElementById('nc-business').value.trim(),
+    founded: document.getElementById('nc-founded').value.trim(),
+    ticketTool: document.getElementById('nc-ticket').value.trim(),
+    isOrganizer: document.getElementById('nc-organizer').value,
+    eventScale: document.getElementById('nc-eventscale').value,
+    lineOfficial: document.getElementById('nc-line').value,
+    rank: document.getElementById('nc-rank').value,
+    owner: document.getElementById('nc-owner').value || null,
+    created: todayStr(),
+    status: document.getElementById('nc-status').value,
+    statusUpdated: nowDateTimeStr(),
+    notes: note ? [{text: note, time: nowDateTimeStr(), author: ownerName(currentUser)}] : [],
+  });
+  closeModal('contact-modal');
+  toast('新規クライアントを作成しました');
+  renderContacts(); renderHome();
+  document.querySelector('.nav-item[data-page="contacts"]').click();
+}
+function deleteContact(id){
+  const c = contacts.find(x=>x.id===id);
+  if(!c) return;
+  showConfirm(`「${c.name}」を削除しますか?この操作は元に戻せません。`, ()=>{
+    contacts = contacts.filter(x=>x.id!==id);
+    closeModal('contact-detail-modal');
+    toast(c.name + ' を削除しました');
+    renderContacts(); renderHome();
+  });
+}
+
+/* ---------- 貼り付けによる一括登録 ---------- */
+let aiResults = [];
+
+/* 1行分を列に分割する。Excel/スプレッドシートからの貼り付けはタブ区切り、
+   CSVはカンマ区切りになるため、行ごとに判定する。CSVの引用符付きセルにも対応。 */
+function splitRow(line){
+  if(line.includes('\t')) return line.split('\t').map(s=>s.trim());
+
+  const cells = [];
+  let cur = '', inQuotes = false;
+  for(let i=0; i<line.length; i++){
+    const ch = line[i];
+    if(inQuotes){
+      if(ch === '"'){
+        if(line[i+1] === '"'){ cur += '"'; i++; }  // "" は引用符そのもの
+        else inQuotes = false;
+      } else cur += ch;
+    } else if(ch === '"'){
+      inQuotes = true;
+    } else if(ch === ','){
+      cells.push(cur.trim()); cur = '';
+    } else cur += ch;
+  }
+  cells.push(cur.trim());
+  return cells;
+}
+
+/* 担当者名の列を担当者IDに対応づける。空白の有無は無視して照合する。
+   一致しなければ未割当てとして取り込む（勝手に誰かに割り当てない） */
+/* 重複チェック用に、表記ゆれを吸収したキーを作る */
+function normKey(s){ return (s || '').toString().replace(/[\s　]/g, '').toLowerCase(); }
+function normPhone(s){ return (s || '').toString().replace(/[^0-9]/g, ''); }
+
+/* 取り込む1行が、既に登録済みの会社と一致しないか調べる。
+   会社名・メール・電話のいずれかが一致したら重複とみなす。
+   新規クライアントとクライアントデータの両方を対象にする。 */
+function findExistingMatch(row){
+  const nk = normKey(row.company_name);
+  const em = normKey(row.email);
+  const ph = normPhone(row.phone);
+  const pool = contacts.concat(clients);
+  for(const c of pool){
+    if(nk && normKey(c.name) === nk) return {name:c.name, by:'会社名'};
+    if(em && c.email && normKey(c.email) === em) return {name:c.name, by:'メール'};
+    if(ph && c.phone && normPhone(c.phone) === ph) return {name:c.name, by:'電話番号'};
+  }
+  return null;
+}
+
+function ownerIdFromName(text){
+  if(!text) return null;
+  const key = text.replace(/[\s　]/g, '');
+  const hit = SALES_REPS.find(r=>r.name.replace(/[\s　]/g, '') === key);
+  return hit ? hit.id : null;
+}
+
+/* 貼り付けられたステータス文字を、正しい区分に寄せる。
+   13区分そのままはもちろん、旧区分や空欄も受け付ける。判定できなければ未対応。 */
+function normalizeStatus(text){
+  if(!text) return '未対応';
+  const key = text.replace(/[\s　]/g, '');
+  const exact = STATUS_LIST.find(s=>s.replace(/[\s　]/g,'') === key);
+  if(exact) return exact;
+  if(STATUS_MIGRATION[text]) return STATUS_MIGRATION[text];
+  return '未対応';
+}
+
+/* 上場・非上場の表記ゆれを吸収する */
+function normalizeListing(text){
+  if(!text) return '';
+  const key = text.replace(/[\s　]/g, '');
+  if(/(非上場|未上場|プライベート)/.test(key)) return '非上場';
+  if(/(上場|パブリック|public)/i.test(key))    return '上場';
+  if(/(不明|未確認|要確認)/.test(key))          return '不明';
+  return '';
+}
+
+/* 1行目が見出し行かどうかを判定する */
+function looksLikeHeader(cells){
+  const head = (cells[0] || '').replace(/\s/g, '').toLowerCase();
+  return ['会社名','企業名','法人名','company','companyname','会社','企業'].includes(head);
+}
+
+function parsePastedList(){
+  const raw = document.getElementById('paste-input').value;
+  const statusEl = document.getElementById('ai-status');
+  const resultsWrap = document.getElementById('ai-results-wrap');
+
+  const showStatus = (msg, kind)=>{
+    statusEl.className = 'ai-status' + (kind ? ' ' + kind : '');
+    statusEl.textContent = msg;
+    statusEl.style.display = 'flex';
+  };
+
+  if(!raw.trim()){
+    resultsWrap.style.display = 'none';
+    showStatus('企業リストを貼り付けてください。', 'error');
+    return;
+  }
+
+  const lines = raw.split(/\r?\n/).filter(l=>l.trim());
+  let rows = lines.map(splitRow);
+  if(rows.length && looksLikeHeader(rows[0])) rows = rows.slice(1);
+
+  const parsed = [];
+  let skipped = 0;
+  rows.forEach(cells=>{
+    const company = (cells[0] || '').trim();
+    if(!company){ skipped++; return; }   // 会社名が無い行は取り込めない
+    const ownerText = (cells[4] || '').trim();
+    parsed.push({
+      company_name: company,
+      phone: (cells[1] || '').trim(),
+      email: (cells[2] || '').trim(),
+      inquiry_form: (cells[3] || '').trim(),
+      owner: ownerIdFromName(ownerText),
+      owner_text: ownerText,
+      status: normalizeStatus((cells[5] || '').trim()),
+      business: (cells[6] || '').trim(),
+      revenue: (cells[7] || '').trim(),
+      founded: (cells[8] || '').trim(),
+      listing: normalizeListing((cells[9] || '').trim()),
+      ticketTool: (cells[10] || '').trim(),
+      source_note: (cells[11] || '').trim(),
+      added: false,
+    });
+  });
+
+  if(parsed.length === 0){
+    resultsWrap.style.display = 'none';
+    showStatus('取り込める行がありませんでした。1列目に会社名が入っているかご確認ください。', 'error');
+    return;
+  }
+
+  // 重複チェック：既存データとの一致（dupExisting）と、貼り付けたリスト内での重複（dupInList）
+  const seen = {};   // このリスト内で既に出た会社名/メール/電話
+  let dupCount = 0;
+  parsed.forEach(r=>{
+    r.dupExisting = findExistingMatch(r);
+
+    const keys = [normKey(r.company_name), normKey(r.email), normPhone(r.phone)].filter(Boolean);
+    r.dupInList = keys.some(k=>seen[k]);
+    keys.forEach(k=>{ seen[k] = true; });
+
+    if(r.dupExisting || r.dupInList) dupCount++;
+  });
+
+  aiResults = parsed;
+  showStatus(
+    `${parsed.length}件を読み込みました。` +
+    (skipped ? `（会社名が空の${skipped}行は除きました）` : '') +
+    (dupCount ? `重複の可能性が${dupCount}件あります（黄色の印）。内容をご確認ください。`
+              : ' 内容を確認して新規クライアントに追加してください。'),
+    dupCount ? 'warn' : 'ok'
+  );
+  renderAiResults();
+}
+
+function clearPastedList(){
+  document.getElementById('paste-input').value = '';
+  document.getElementById('file-name').textContent = '';
+  aiResults = [];
+  document.getElementById('ai-results-wrap').style.display = 'none';
+  document.getElementById('ai-status').style.display = 'none';
+}
+
+/* ---------- Excelテンプレートの生成（外部ライブラリなし） ----------
+   .xlsx は複数のXMLをまとめたZIP。無圧縮(stored)で手組みすれば追加部品なしで作れる。 */
+
+// CRC32（ZIPのチェックサム）
+const CRC_TABLE = (()=>{
+  const t = new Uint32Array(256);
+  for(let n=0; n<256; n++){
+    let c = n;
+    for(let k=0; k<8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+    t[n] = c >>> 0;
+  }
+  return t;
+})();
+function crc32(bytes){
+  let c = 0xFFFFFFFF;
+  for(let i=0; i<bytes.length; i++) c = CRC_TABLE[(c ^ bytes[i]) & 0xFF] ^ (c >>> 8);
+  return (c ^ 0xFFFFFFFF) >>> 0;
+}
+
+// 無圧縮ZIPを組み立てる。files = [{name, data(Uint8Array)}]
+function buildZip(files){
+  const enc = new TextEncoder();
+  const parts = [], central = [];
+  let offset = 0;
+
+  const u16 = n => [n & 255, (n>>8) & 255];
+  const u32 = n => [n & 255, (n>>8) & 255, (n>>16) & 255, (n>>>24) & 255];
+
+  files.forEach(f=>{
+    const nameBytes = enc.encode(f.name);
+    const crc = crc32(f.data);
+    const size = f.data.length;
+
+    const local = [].concat(
+      u32(0x04034b50), u16(20), u16(0), u16(0), u16(0), u16(0),
+      u32(crc), u32(size), u32(size), u16(nameBytes.length), u16(0)
+    );
+    const localHead = new Uint8Array(local);
+    parts.push(localHead, nameBytes, f.data);
+
+    central.push([].concat(
+      u32(0x02014b50), u16(20), u16(20), u16(0), u16(0), u16(0), u16(0),
+      u32(crc), u32(size), u32(size),
+      u16(nameBytes.length), u16(0), u16(0), u16(0), u16(0), u32(0), u32(offset)
+    ), Array.from(nameBytes));
+
+    offset += localHead.length + nameBytes.length + size;
+  });
+
+  const centralBytes = central.flat();
+  const centralStart = offset;
+  const eocd = [].concat(
+    u32(0x06054b50), u16(0), u16(0), u16(files.length), u16(files.length),
+    u32(centralBytes.length), u32(centralStart), u16(0)
+  );
+
+  const blobParts = parts.concat([new Uint8Array(centralBytes), new Uint8Array(eocd)]);
+  return new Blob(blobParts, {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+}
+
+// セルの中身をXMLとして安全にする
+function xmlEsc(s){
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// 1シートのworksheet XMLを作る。rows = 文字列の二次元配列
+function sheetXml(rows){
+  const colLetter = i=>{ let s=''; i++; while(i>0){ const m=(i-1)%26; s=String.fromCharCode(65+m)+s; i=(i-m-1)/26; } return s; };
+  const body = rows.map((row, r)=>{
+    const cells = row.map((v, c)=>{
+      if(v === '' || v == null) return '';
+      return `<c r="${colLetter(c)}${r+1}" t="inlineStr"><is><t xml:space="preserve">${xmlEsc(v)}</t></is></c>`;
+    }).join('');
+    return `<row r="${r+1}">${cells}</row>`;
+  }).join('');
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>${body}</sheetData></worksheet>`;
+}
+
+function downloadTemplateXlsx(){
+  const enc = new TextEncoder();
+  const headers = ['会社名','電話番号','メールアドレス','お問い合わせフォームURL','担当者',
+                   'ステータス','事業内容','売上規模','創業年数','上場区分','チケットツール','メモ'];
+  const example = ['株式会社サンプル音楽','03-0000-0000','info@sample.co.jp','https://sample.co.jp/contact',
+                   '小熊 夢樹','送信済','音楽制作','10億円','25年','非上場','Zendesk','展示会で名刺交換'];
+
+  // 別シートに、担当者とステータスの入力候補を参考として置く
+  const ref = [['入力候補（参考）'], ['担当者'], ...SALES_REPS.map(r=>[r.name]),
+               [''], ['ステータス'], ...STATUS_LIST.map(s=>[s]),
+               [''], ['上場区分'], ...['上場','非上場','不明'].map(v=>[v])];
+
+  const files = [
+    {name:'[Content_Types].xml', data: enc.encode(
+      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/worksheets/sheet2.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>`)},
+    {name:'_rels/.rels', data: enc.encode(
+      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`)},
+    {name:'xl/workbook.xml', data: enc.encode(
+      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="入力" sheetId="1" r:id="rId1"/><sheet name="入力候補" sheetId="2" r:id="rId2"/></sheets></workbook>`)},
+    {name:'xl/_rels/workbook.xml.rels', data: enc.encode(
+      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet2.xml"/></Relationships>`)},
+    {name:'xl/worksheets/sheet1.xml', data: enc.encode(sheetXml([headers, example]))},
+    {name:'xl/worksheets/sheet2.xml', data: enc.encode(sheetXml(ref))},
+  ];
+
+  try{
+    const blob = buildZip(files);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = '新規クライアント_取り込みフォーマット.xlsx';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url), 1000);
+    toast('Excelテンプレートを保存しました');
+  } catch(e){
+    console.error(e);
+    toast('保存できませんでした');
+  }
+}
+
+/* ---------- ファイルから読み込む（.xlsx / .csv） ----------
+   読み取った中身はタブ区切りに直して貼り付け欄に入れ、
+   既存の parsePastedList() にそのまま渡す。内容を目で確認・修正できる。 */
+async function handleFilePick(ev){
+  const file = ev.target.files && ev.target.files[0];
+  ev.target.value = '';            // 同じファイルを選び直せるようにする
+  if(!file) return;
+
+  const statusEl = document.getElementById('ai-status');
+  const show = (msg, kind)=>{
+    statusEl.className = 'ai-status' + (kind ? ' ' + kind : '');
+    statusEl.textContent = msg;
+    statusEl.style.display = 'flex';
+  };
+
+  document.getElementById('file-name').textContent = file.name;
+  show(`${file.name} を読み込んでいます…`);
+
+  try{
+    const text = /\.xlsx$/i.test(file.name)
+      ? await xlsxToTsv(await file.arrayBuffer())
+      : await readTextFile(file);
+    if(!text.trim()){ show('ファイルに中身が見つかりませんでした。', 'error'); return; }
+    document.getElementById('paste-input').value = text;
+    parsePastedList();
+  } catch(err){
+    console.error(err);
+    show('ファイルを読み込めませんでした：' + err.message, 'error');
+  }
+}
+
+/* Excelは日本語環境だとCSVをShift_JISで保存することがあるため、
+   UTF-8で読めなければShift_JISで読み直す */
+async function readTextFile(file){
+  const buf = await file.arrayBuffer();
+  try{
+    return new TextDecoder('utf-8', {fatal:true}).decode(buf);
+  } catch(e){
+    return new TextDecoder('shift_jis').decode(buf);
+  }
+}
+
+/* --- .xlsx（中身はXMLのZIP）を外部ライブラリなしで読む --- */
+function readZipIndex(bytes){
+  const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  // 末尾にある終端レコード(EOCD)を後ろから探す
+  let eocd = -1;
+  const limit = Math.max(0, bytes.length - 66000);
+  for(let i = bytes.length - 22; i >= limit; i--){
+    if(dv.getUint32(i, true) === 0x06054b50){ eocd = i; break; }
+  }
+  if(eocd < 0) throw new Error('xlsxファイルとして読み取れませんでした');
+
+  const count = dv.getUint16(eocd + 10, true);
+  let p = dv.getUint32(eocd + 16, true);
+  const entries = {};
+  for(let i = 0; i < count; i++){
+    if(dv.getUint32(p, true) !== 0x02014b50) break;
+    const method   = dv.getUint16(p + 10, true);
+    const compSize = dv.getUint32(p + 20, true);
+    const nameLen  = dv.getUint16(p + 28, true);
+    const extraLen = dv.getUint16(p + 30, true);
+    const cmtLen   = dv.getUint16(p + 32, true);
+    const offset   = dv.getUint32(p + 42, true);
+    const name = new TextDecoder('utf-8').decode(bytes.subarray(p + 46, p + 46 + nameLen));
+    entries[name] = {method, compSize, offset};
+    p += 46 + nameLen + extraLen + cmtLen;
+  }
+  return {dv, bytes, entries};
+}
+
+async function readZipText(zip, name){
+  const e = zip.entries[name];
+  if(!e) return null;
+  if(zip.dv.getUint32(e.offset, true) !== 0x04034b50) throw new Error('xlsxの内部構造が想定と異なります');
+  const nameLen  = zip.dv.getUint16(e.offset + 26, true);
+  const extraLen = zip.dv.getUint16(e.offset + 28, true);
+  const start = e.offset + 30 + nameLen + extraLen;
+  const data = zip.bytes.subarray(start, start + e.compSize);
+
+  if(e.method === 0) return new TextDecoder('utf-8').decode(data);   // 無圧縮
+  if(e.method !== 8) throw new Error('この圧縮方式には対応していません');
+  if(typeof DecompressionStream === 'undefined'){
+    throw new Error('お使いのブラウザはxlsxの展開に対応していません。CSVで保存してお試しください');
+  }
+  const stream = new Blob([data]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+  return await new Response(stream).text();
+}
+
+async function xlsxToTsv(buf){
+  const zip = readZipIndex(new Uint8Array(buf));
+
+  // 先頭のシートを読む
+  let sheetPath = 'xl/worksheets/sheet1.xml';
+  if(!zip.entries[sheetPath]){
+    const found = Object.keys(zip.entries).filter(n=>/^xl\/worksheets\/.+\.xml$/.test(n)).sort();
+    if(!found.length) throw new Error('シートが見つかりませんでした');
+    sheetPath = found[0];
+  }
+
+  // Excelが保存したファイルは文字列を共有テーブルに持つ
+  let shared = [];
+  if(zip.entries['xl/sharedStrings.xml']){
+    const ssDoc = new DOMParser().parseFromString(await readZipText(zip, 'xl/sharedStrings.xml'), 'application/xml');
+    shared = Array.from(ssDoc.getElementsByTagName('si')).map(si=>{
+      let s = '';
+      Array.from(si.childNodes).forEach(node=>{
+        if(node.nodeName === 't') s += node.textContent;
+        // <r> は書式が途中で変わった文字列。<rPh>(ふりがな)は読み飛ばす
+        else if(node.nodeName === 'r'){
+          Array.from(node.getElementsByTagName('t')).forEach(t=>{ s += t.textContent; });
+        }
+      });
+      return s;
+    });
+  }
+
+  const doc = new DOMParser().parseFromString(await readZipText(zip, sheetPath), 'application/xml');
+  const rows = [];
+  Array.from(doc.getElementsByTagName('row')).forEach(row=>{
+    const cells = [];
+    Array.from(row.getElementsByTagName('c')).forEach(c=>{
+      cells[colIndexOf(c.getAttribute('r') || '')] = cellTextOf(c, shared);
+    });
+    for(let i = 0; i < cells.length; i++){ if(cells[i] === undefined) cells[i] = ''; }
+    rows.push(cells);
+  });
+  while(rows.length && rows[rows.length-1].every(v=>!String(v).trim())) rows.pop();
+
+  return rows.map(r=>r.join('\t')).join('\n');
+}
+
+/* "C3" のようなセル番地から列番号(0始まり)を求める */
+function colIndexOf(ref){
+  const m = /^([A-Z]+)/.exec(ref);
+  if(!m) return 0;
+  let n = 0;
+  for(const ch of m[1]) n = n * 26 + (ch.charCodeAt(0) - 64);
+  return n - 1;
+}
+
+function cellTextOf(c, shared){
+  const t = c.getAttribute('t');
+  if(t === 'inlineStr'){
+    return Array.from(c.getElementsByTagName('t')).map(x=>x.textContent).join('');
+  }
+  const v = c.getElementsByTagName('v')[0];
+  if(!v) return '';
+  if(t === 's'){
+    const i = parseInt(v.textContent, 10);
+    return shared[i] !== undefined ? shared[i] : '';
+  }
+  return v.textContent;
+}
+
+function renderAiResults(){
+  const wrap = document.getElementById('ai-results-wrap');
+  const tbody = document.getElementById('ai-results-tbody');
+  document.getElementById('ai-results-count').textContent = aiResults.length + '件読み込みました';
+  tbody.innerHTML = '';
+
+  aiResults.forEach((r, idx)=>{
+    const tr = document.createElement('tr');
+    if(r.dupExisting || r.dupInList) tr.className = 'dup-row';
+    const dupBadge = r.dupExisting
+      ? `<div class="dup-badge" title="${escapeHtml(r.dupExisting.by)}が一致">登録済みの可能性：${escapeHtml(r.dupExisting.name)}（${escapeHtml(r.dupExisting.by)}一致）</div>`
+      : (r.dupInList ? '<div class="dup-badge">この一覧内で重複しています</div>' : '');
+    tr.innerHTML = `
+      <td><div class="cell-name">${escapeHtml(r.company_name)}</div>${dupBadge}${r.source_note ? `<div class="ai-source-note">${escapeHtml(r.source_note)}</div>`:''}</td>
+      <td>${r.phone ? escapeHtml(r.phone) : '<span class="unassigned">—</span>'}</td>
+      <td>${r.email ? escapeHtml(r.email) : '<span class="unassigned">—</span>'}</td>
+      <td>${r.inquiry_form ? `<a href="${escapeHtml(r.inquiry_form)}" target="_blank" rel="noopener" style="color:var(--primary-deep); text-decoration:none; font-size:12px;">フォーム ↗</a>` : '<span class="unassigned">—</span>'}</td>
+      <td>${r.owner ? escapeHtml(ownerName(r.owner))
+            : (r.owner_text ? `<span class="unassigned" title="担当者一覧に一致する名前がありませんでした">未割当て（${escapeHtml(r.owner_text)}）</span>`
+                            : '<span class="unassigned">未割当て</span>')}</td>
+      <td>${statusPill(r.status)}${r.business ? `<div class="mail-meta">${escapeHtml(r.business)}</div>` : ''}</td>
+      <td>
+        <button class="ai-add-btn" id="ai-add-btn-${idx}" onclick="addAiResultToContacts(${idx})" ${r.added?'disabled':''}>
+          ${r.added ? '追加済み' : '新規クライアントに追加'}
+        </button>
+      </td>`;
+    tbody.appendChild(tr);
+  });
+
+  wrap.style.display = 'block';
+}
+
+function addAiResultToContacts(idx, silent){
+  const r = aiResults[idx];
+  if(!r || r.added) return;
+  contacts.unshift({
+    id: nextIds.contact++,
+    name: r.company_name,
+    email: r.email || '',
+    phone: r.phone || '',
+    inquiryForm: r.inquiry_form || '',
+    business: r.business || '',
+    revenue: r.revenue || '',
+    founded: r.founded || '',
+    listing: r.listing || '',
+    ticketTool: r.ticketTool || '',
+    owner: r.owner || null,
+    created: todayStr(),
+    status: r.status || '未対応',
+    statusUpdated: nowDateTimeStr(),
+    // メモ欄に書かれた内容があれば、そのまま会社のメモとして残す
+    notes: r.source_note
+      ? [{text: r.source_note, time: nowDateTimeStr(), author: ownerName(currentUser)}]
+      : [],
+  });
+  r.added = true;
+  const btn = document.getElementById('ai-add-btn-'+idx);
+  if(btn){ btn.disabled = true; btn.textContent = '追加済み'; }
+  if(!silent) toast(r.company_name + ' を新規クライアントに追加しました');
+  renderContacts(); renderHome();
+}
+
+function addAllAiResults(){
+  const pending = aiResults.filter(r=>!r.added);
+  if(pending.length === 0){ toast('追加できる項目がありません'); return; }
+
+  const dupCount = pending.filter(r=>r.dupExisting || r.dupInList).length;
+
+  // 重複を含む場合は、除外して追加するか、まとめて追加するかを確認する
+  const run = (skipDup)=>{
+    let count = 0;
+    aiResults.forEach((r, idx)=>{
+      if(r.added) return;
+      if(skipDup && (r.dupExisting || r.dupInList)) return;
+      addAiResultToContacts(idx, true);
+      count++;
+    });
+    renderAiResults();   // 除外した重複行の印を残したまま再描画
+    toast(count === 0 ? '追加した項目はありません' : `${count}件を新規クライアントに追加しました`);
+  };
+
+  if(dupCount > 0){
+    showConfirm(
+      `重複の可能性がある${dupCount}件が含まれています。どうしますか?`,
+      ()=>run(true),
+      {okLabel:`重複を除いて追加（${pending.length - dupCount}件）`, danger:false,
+       altLabel:`重複も含めて追加（${pending.length}件）`, onAlt:()=>run(false)}
+    );
+  } else {
+    run(false);
+  }
+}
+
+function openClientModal(){
+  document.getElementById('ncl-name').value='';
+  document.getElementById('ncl-industry').value='';
+  document.getElementById('ncl-email').value='';
+  document.getElementById('ncl-phone').value='';
+  document.getElementById('ncl-inquiry-form').value='';
+  document.getElementById('ncl-business').value='';
+  document.getElementById('ncl-founded').value='';
+  document.getElementById('ncl-ticket').value='';
+  document.getElementById('ncl-organizer').value='';
+  document.getElementById('ncl-eventscale').value='';
+  document.getElementById('ncl-line').value='';
+  document.getElementById('ncl-owner').value='';
+  document.getElementById('ncl-status').value='未対応';
+  openModal('client-modal');
+}
+function saveClient(){
+  const name = document.getElementById('ncl-name').value.trim();
+  if(!name){ toast('クライアント名を入力してください'); return; }
+  clients.unshift({
+    id: nextIds.client++,
+    name,
+    industry: document.getElementById('ncl-industry').value.trim(),
+    email: document.getElementById('ncl-email').value.trim(),
+    phone: document.getElementById('ncl-phone').value.trim(),
+    owner: document.getElementById('ncl-owner').value || null,
+    created: todayStr(),
+    status: document.getElementById('ncl-status').value,
+    statusUpdated: nowDateTimeStr(),
+    notes: [],
+    inquiryForm: document.getElementById('ncl-inquiry-form').value.trim(),
+    business: document.getElementById('ncl-business').value.trim(),
+    founded: document.getElementById('ncl-founded').value.trim(),
+    ticketTool: document.getElementById('ncl-ticket').value.trim(),
+    isOrganizer: document.getElementById('ncl-organizer').value,
+    eventScale: document.getElementById('ncl-eventscale').value,
+    lineOfficial: document.getElementById('ncl-line').value,
+    rank: document.getElementById('ncl-rank').value,
+  });
+  closeModal('client-modal');
+  toast('新規クライアントを追加しました');
+  renderClients(); renderHome();
+}
+function deleteClient(id){
+  const c = clients.find(x=>x.id===id);
+  if(!c) return;
+  const relatedCount = deals.filter(d=>d.clientId===id).length;
+  const msg = relatedCount > 0
+    ? `「${c.name}」を削除しますか?紐づく取引 ${relatedCount} 件も一緒に削除されます。この操作は元に戻せません。`
+    : `「${c.name}」を削除しますか?この操作は元に戻せません。`;
+  showConfirm(msg, ()=>{
+    clients = clients.filter(x=>x.id!==id);
+    deals = deals.filter(d=>d.clientId!==id);
+    closeModal('client-detail-modal');
+    toast(c.name + ' を削除しました');
+    renderClients(); renderDeals(); renderHome();
+  });
+}
+
+function populateClientSelect(){
+  const el = document.getElementById('nd-client');
+  const prev = el.value;
+  el.innerHTML = '';
+  if(clients.length===0){
+    el.innerHTML = '<option value="">先にクライアントを登録してください</option>';
+    return;
+  }
+  clients.slice().sort((a,b)=>a.name.localeCompare(b.name,'ja')).forEach(c=>{
+    const opt = document.createElement('option');
+    opt.value = c.id; opt.textContent = c.name;
+    el.appendChild(opt);
+  });
+  if(prev && clients.some(c=>String(c.id)===prev)) el.value = prev;
+}
+function openDealModal(){
+  populateClientSelect();
+  document.getElementById('nd-title').value='';
+  document.getElementById('nd-amount').value='';
+  document.getElementById('nd-owner').value=currentUser;
+  document.getElementById('nd-status').value='未対応';
+  openModal('deal-modal');
+}
+function saveDeal(){
+  const clientId = parseInt(document.getElementById('nd-client').value,10);
+  const clientRec = clients.find(c=>c.id===clientId);
+  if(!clientRec){ toast('クライアントを選択してください'); return; }
+  deals.unshift({
+    id: nextIds.deal++,
+    clientId: clientRec.id,
+    client: clientRec.name,
+    title: document.getElementById('nd-title').value.trim(),
+    amount: parseInt(document.getElementById('nd-amount').value,10) || 0,
+    owner: document.getElementById('nd-owner').value || null,
+    updated: todayStr(),
+    statusChangedAt: nowDateTimeStr(),
+    status: document.getElementById('nd-status').value,
+    notes: [],
+  });
+  closeModal('deal-modal');
+  toast('新規取引を追加しました');
+  renderDeals(); renderHome();
+}
+function deleteDeal(id){
+  const d = deals.find(x=>x.id===id);
+  if(!d) return;
+  showConfirm(`「${d.title || d.client}」の取引を削除しますか?この操作は元に戻せません。`, ()=>{
+    deals = deals.filter(x=>x.id!==id);
+    closeModal('deal-notes-modal');
+    toast('取引を削除しました');
+    renderDeals(); renderHome();
+  });
+}
+function deleteDealFromClient(dealId, clientId){
+  const d = deals.find(x=>x.id===dealId);
+  if(!d) return;
+  showConfirm(`「${d.title || d.client}」の取引を削除しますか?この操作は元に戻せません。`, ()=>{
+    deals = deals.filter(x=>x.id!==dealId);
+    toast('取引を削除しました');
+    renderDeals(); renderHome();
+    openClientDetail(clientId);
+  });
+}
+
+/* ---------- client detail (single source of truth, opened from any page) ---------- */
+let cdCurrentId = null;
+function openClientDetail(clientId){
+  const c = clients.find(x=>x.id===clientId);
+  if(!c) return;
+  cdCurrentId = clientId;
+  document.getElementById('cd-avatar').textContent = c.name ? c.name[0] : '?';
+  document.getElementById('cd-name-display').textContent = c.name;
+  document.getElementById('cd-created-display').textContent = '登録日: ' + fmtDate(c.created);
+  document.getElementById('cd-name').value = c.name;
+  document.getElementById('cd-industry').value = c.industry || '';
+  document.getElementById('cd-email').value = c.email || '';
+  document.getElementById('cd-phone').value = c.phone || '';
+  document.getElementById('cd-inquiry-form').value = c.inquiryForm || '';
+  document.getElementById('cd-business').value = c.business || '';
+  document.getElementById('cd-founded').value = c.founded || '';
+  document.getElementById('cd-ticket').value = c.ticketTool || '';
+  document.getElementById('cd-organizer').value = c.isOrganizer || '';
+  document.getElementById('cd-eventscale').value = c.eventScale || '';
+  document.getElementById('cd-line').value = c.lineOfficial || '';
+  document.getElementById('cd-rank').value = c.rank || '';
+  document.getElementById('cd-owner').value = c.owner || '';
+  document.getElementById('cd-status').value = c.status;
+  document.getElementById('cd-status-updated').textContent = c.statusUpdated ? 'ステータス変更日時: ' + c.statusUpdated : '';
+
+  renderStatusLog('cd-status-log', c.statusLog);
+  renderNotesList('cd-notes-list', c.notes);
+  document.getElementById('cd-note-input').value = '';
+
+  const relatedDeals = deals.filter(d=>d.clientId===clientId);
+  const listEl = document.getElementById('cd-deals-list');
+  if(relatedDeals.length===0){
+    listEl.innerHTML = '<div class="no-deals">このクライアントに紐づく取引はまだありません</div>';
+  } else {
+    listEl.innerHTML = relatedDeals.map(d=>`
+      <div class="deal-mini-row">
+        <div class="deal-mini-title">${escapeHtml(d.title||'(案件名未設定)')}</div>
+        <div class="deal-mini-amount">${fmtYen(d.amount||0)}</div>
+        <select onchange="updateDealStatus(${d.id}, this.value); openClientDetail(${clientId})" style="border:1px solid var(--border-strong);border-radius:6px;font-size:11px;font-weight:700;padding:3px 6px;">
+          ${STATUS_LIST.map(st=>`<option value="${st}" ${st===d.status?'selected':''}>${st}</option>`).join('')}
+        </select>
+        <span class="icon-btn" title="メモを見る" onclick="openDealNotes(${d.id})">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v13H8l-4 4z"/></svg>
+        </span>
+        <span class="icon-btn icon-btn-danger" title="削除" onclick="deleteDealFromClient(${d.id}, ${clientId})">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M9 7V5a2 2 0 012-2h2a2 2 0 012 2v2m-7 0v12a2 2 0 002 2h4a2 2 0 002-2V7"/></svg>
+        </span>
+      </div>`).join('');
+  }
+  openModal('client-detail-modal');
+}
+function addClientNote(){
+  const c = clients.find(x=>x.id===cdCurrentId);
+  if(!c) return;
+  const text = document.getElementById('cd-note-input').value.trim();
+  if(!text) return;
+  c.notes.push({text, time: nowDateTimeStr(), author: ownerName(currentUser)});
+  document.getElementById('cd-note-input').value = '';
+  renderNotesList('cd-notes-list', c.notes);
+}
+function saveClientDetail(){
+  const c = clients.find(x=>x.id===cdCurrentId);
+  if(!c) return;
+  const name = document.getElementById('cd-name').value.trim();
+  if(!name){ toast('クライアント名を入力してください'); return; }
+  c.name = name;
+  c.industry = document.getElementById('cd-industry').value.trim();
+  c.email = document.getElementById('cd-email').value.trim();
+  c.phone = document.getElementById('cd-phone').value.trim();
+  c.owner = document.getElementById('cd-owner').value || null;
+  c.inquiryForm = document.getElementById('cd-inquiry-form').value.trim();
+  c.business = document.getElementById('cd-business').value.trim();
+  c.founded = document.getElementById('cd-founded').value.trim();
+  c.ticketTool = document.getElementById('cd-ticket').value.trim();
+  c.isOrganizer = document.getElementById('cd-organizer').value;
+  c.eventScale = document.getElementById('cd-eventscale').value;
+  c.lineOfficial = document.getElementById('cd-line').value;
+  c.rank = document.getElementById('cd-rank').value;
+  const newStatus = document.getElementById('cd-status').value;
+  changeStatus(c, newStatus, 'record');
+  // keep deals' display name in sync since a client is a single source of truth
+  deals.forEach(d=>{ if(d.clientId===c.id) d.client = c.name; });
+  closeModal('client-detail-modal');
+  toast('クライアント情報を更新しました');
+  renderClients(); renderDeals(); renderHome();
+}
+
+/* ---------- contact detail (info + status + memo) ---------- */
+let kdCurrentId = null;
+function openContactDetail(contactId){
+  const c = contacts.find(x=>x.id===contactId);
+  if(!c) return;
+  kdCurrentId = contactId;
+  document.getElementById('kd-avatar').textContent = c.name ? c.name[0] : '?';
+  document.getElementById('kd-name-display').textContent = c.name;
+  document.getElementById('kd-created-display').textContent = '登録日: ' + fmtDate(c.created);
+  document.getElementById('kd-name').value = c.name;
+  document.getElementById('kd-email').value = c.email || '';
+  document.getElementById('kd-phone').value = c.phone || '';
+  document.getElementById('kd-inquiry-form').value = c.inquiryForm || '';
+  document.getElementById('kd-contact-name').value = c.contactName || '';
+  document.getElementById('kd-contact-phone').value = c.contactPhone || '';
+  document.getElementById('kd-contact-email').value = c.contactEmail || '';
+  document.getElementById('kd-business').value = c.business || '';
+  document.getElementById('kd-revenue').value = c.revenue || '';
+  document.getElementById('kd-founded').value = c.founded || '';
+  document.getElementById('kd-listing').value = c.listing || '';
+  document.getElementById('kd-ticket').value = c.ticketTool || '';
+  document.getElementById('kd-organizer').value = c.isOrganizer || '';
+  document.getElementById('kd-eventscale').value = c.eventScale || '';
+  document.getElementById('kd-line').value = c.lineOfficial || '';
+  document.getElementById('kd-rank').value = c.rank || '';
+  document.getElementById('kd-optout').checked = !!c.emailOptOut;
+  document.getElementById('kd-mail-meta').textContent = c.lastMailedAt
+    ? `最終送信: ${c.lastMailedAt}${c.lastCampaign ? '（' + c.lastCampaign + '）' : ''}`
+    : 'まだ配信リストに含めていません';
+  document.getElementById('kd-mailtag').value = c.mailTag || '';
+  document.getElementById('kd-owner').value = c.owner || '';
+  document.getElementById('kd-status').value = c.status;
+  document.getElementById('kd-status-updated').textContent = c.statusUpdated ? 'ステータス変更日時: ' + c.statusUpdated : '';
+
+  renderStatusLog('kd-status-log', c.statusLog);
+  if(!c.notes) c.notes = [];
+  renderNotesList('kd-notes-list', c.notes);
+  document.getElementById('kd-note-input').value = '';
+  openModal('contact-detail-modal');
+}
+function addContactNote(){
+  const c = contacts.find(x=>x.id===kdCurrentId);
+  if(!c) return;
+  const text = document.getElementById('kd-note-input').value.trim();
+  if(!text) return;
+  c.notes.push({text, time: nowDateTimeStr(), author: ownerName(currentUser)});
+  document.getElementById('kd-note-input').value = '';
+  renderNotesList('kd-notes-list', c.notes);
+}
+function saveContactDetail(){
+  const c = contacts.find(x=>x.id===kdCurrentId);
+  if(!c) return;
+  const name = document.getElementById('kd-name').value.trim();
+  if(!name){ toast('会社名を入力してください'); return; }
+  c.name = name;
+  c.email = document.getElementById('kd-email').value.trim();
+  c.phone = document.getElementById('kd-phone').value.trim();
+  c.inquiryForm = document.getElementById('kd-inquiry-form').value.trim();
+  c.contactName = document.getElementById('kd-contact-name').value.trim();
+  c.contactPhone = document.getElementById('kd-contact-phone').value.trim();
+  c.contactEmail = document.getElementById('kd-contact-email').value.trim();
+  c.business = document.getElementById('kd-business').value.trim();
+  c.revenue = document.getElementById('kd-revenue').value.trim();
+  c.founded = document.getElementById('kd-founded').value.trim();
+  c.listing = document.getElementById('kd-listing').value;
+  c.ticketTool = document.getElementById('kd-ticket').value.trim();
+  c.isOrganizer = document.getElementById('kd-organizer').value;
+  c.eventScale = document.getElementById('kd-eventscale').value;
+  c.lineOfficial = document.getElementById('kd-line').value;
+  c.rank = document.getElementById('kd-rank').value;
+  c.mailTag = document.getElementById('kd-mailtag').value.trim();
+  c.emailOptOut = document.getElementById('kd-optout').checked;
+  c.owner = document.getElementById('kd-owner').value || null;
+  const newStatus = document.getElementById('kd-status').value;
+  changeStatus(c, newStatus, 'record');
+  closeModal('contact-detail-modal');
+  toast('会社情報を更新しました');
+  renderContacts(); renderHome();
+}
+
+/* ---------- deal notes ---------- */
+let dnCurrentId = null;
+function openDealNotes(dealId){
+  const d = deals.find(x=>x.id===dealId);
+  if(!d) return;
+  dnCurrentId = dealId;
+  document.getElementById('dn-title-display').textContent = d.title || '(案件名未設定)';
+  document.getElementById('dn-client-display').textContent = d.client;
+  document.getElementById('dn-status-display').textContent =
+    `ステータス: ${d.status}　/　変更日時: ${d.statusChangedAt || fmtDate(d.updated)}`;
+  renderStatusLog('dn-status-log', d.statusLog);
+  if(!d.notes) d.notes = [];
+  renderNotesList('dn-notes-list', d.notes);
+  document.getElementById('dn-note-input').value = '';
+  openModal('deal-notes-modal');
+}
+function addDealNote(){
+  const d = deals.find(x=>x.id===dnCurrentId);
+  if(!d) return;
+  const text = document.getElementById('dn-note-input').value.trim();
+  if(!text) return;
+  d.notes.push({text, time: nowDateTimeStr(), author: ownerName(currentUser)});
+  document.getElementById('dn-note-input').value = '';
+  renderNotesList('dn-notes-list', d.notes);
+}
+
+function convertToClient(contactId){
+  const c = contacts.find(x=>x.id===contactId);
+  if(!c) return;
+  clients.unshift({
+    id: nextIds.client++,
+    name: c.name,
+    industry: '',
+    email: c.email,
+    phone: c.phone,
+    owner: c.owner,
+    created: todayStr(),
+    status: '未対応',
+    statusUpdated: nowDateTimeStr(),
+    notes: c.notes ? c.notes.slice() : [],
+    inquiryForm: c.inquiryForm || '',
+    business: c.business || '',
+    revenue: c.revenue || '',
+    founded: c.founded || '',
+    listing: c.listing || '',
+    ticketTool: c.ticketTool || '',
+    mailTag: c.mailTag || '',
+    statusLog: c.statusLog ? c.statusLog.slice() : [],
+  });
+  contacts = contacts.filter(x=>x.id!==contactId);
+  toast(c.name + ' をクライアントに変換しました');
+  renderContacts(); renderClients(); renderHome();
+  document.querySelector('.nav-item[data-page="clients"]').click();
+}
+
+function escapeHtml(str){
+  return String(str).replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+
+/* ---------- データ分析 ---------- */
+
+function todayISO(){
+  const d = new Date();
+  const p = n => String(n).padStart(2,'0');
+  return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`;
+}
+function pct(part, whole){ return whole > 0 ? Math.round((part/whole)*100) : 0; }
+
+/* 対象月のプルダウンを、記録のある月＋今月から作る */
+function fillMonthSelect(){
+  const sel = document.getElementById('an-month');
+  const months = new Set(Object.keys(dailyStats).map(d=>d.slice(0,7)));
+  months.add(todayISO().slice(0,7));
+  const list = Array.from(months).sort().reverse();
+  const cur = sel.value;
+  sel.innerHTML = list.map(m=>{
+    const [y, mo] = m.split('-');
+    return `<option value="${m}">${y}年${parseInt(mo,10)}月</option>`;
+  }).join('');
+  if(cur && list.includes(cur)) sel.value = cur;
+}
+
+/* 選択月の合計を出す */
+function analyticsAgg(ym){
+  const days = Object.keys(dailyStats).filter(d=>d.slice(0,7) === ym).sort();
+  const sum = {sent:0, opened:0, clicked:0, replied:0, inq:0, inqrep:0};
+  days.forEach(d=>{
+    const s = dailyStats[d] || {};
+    sum.sent += s.sent||0; sum.opened += s.opened||0; sum.clicked += s.clicked||0;
+    sum.replied += s.replied||0; sum.inq += s.inq||0; sum.inqrep += s.inqrep||0;
+  });
+  return {days, sum};
+}
+
+/* ドーナツ型のゲージ（円グラフ）。率を1つずつ見せる */
+function donutGauge(percent, label, sub){
+  const r = 42, circ = 2*Math.PI*r;
+  const off = circ * (1 - Math.min(percent,100)/100);
+  return `<div class="gauge">
+    <svg viewBox="0 0 100 100" role="img" aria-label="${escapeHtml(label)} ${percent}パーセント">
+      <circle cx="50" cy="50" r="${r}" fill="none" stroke="var(--border)" stroke-width="10"></circle>
+      <circle cx="50" cy="50" r="${r}" fill="none" stroke="var(--primary)" stroke-width="10"
+        stroke-linecap="round" stroke-dasharray="${circ.toFixed(1)}" stroke-dashoffset="${off.toFixed(1)}"
+        transform="rotate(-90 50 50)"></circle>
+      <text x="50" y="52" text-anchor="middle" class="gauge-num">${percent}%</text>
+    </svg>
+    <div class="gauge-label">${escapeHtml(label)}</div>
+    <div class="gauge-sub">${escapeHtml(sub)}</div>
+  </div>`;
+}
+
+/* 日別の縦棒グラフ */
+function barChart(days, pick){
+  if(!days.length) return '<div class="an-nodata">この月の記録はありません</div>';
+  const vals = days.map(d=>({d, v:(dailyStats[d]||{})[pick]||0}));
+  const max = Math.max(1, ...vals.map(x=>x.v));
+  return `<div class="bar-row">` + vals.map(x=>{
+    const h = Math.round((x.v/max)*100);
+    const day = x.d.slice(8,10);
+    return `<div class="bar-col" title="${escapeHtml(x.d)}：${x.v}件">
+      <div class="bar-val">${x.v || ''}</div>
+      <div class="bar-track"><div class="bar-fill" style="height:${h}%"></div></div>
+      <div class="bar-day">${day}</div>
+    </div>`;
+  }).join('') + `</div>`;
+}
+
+/* 選択月の記録がある日を、日付プルダウンに並べる */
+function fillDaySelect(ym){
+  const sel = document.getElementById('an-day');
+  const days = Object.keys(dailyStats).filter(d=>d.slice(0,7) === ym).sort();
+  const cur = sel.value;
+  sel.innerHTML = days.map(d=>{
+    const mo = parseInt(d.slice(5,7),10), day = parseInt(d.slice(8,10),10);
+    return `<option value="${d}">${mo}月${day}日</option>`;
+  }).join('');
+  if(cur && days.includes(cur)) sel.value = cur;
+  else if(days.length) sel.value = days[days.length-1]; // 既定は最新日
+}
+
+/* 選択日の メール率（開封・クリック・返信）をドーナツで表示 */
+function renderDayGauges(){
+  const box = document.getElementById('an-day-gauges');
+  const day = document.getElementById('an-day').value;
+  const s = day ? dailyStats[day] : null;
+  if(!s){
+    box.innerHTML = '<div class="an-nodata">この月の記録はありません</div>';
+    return;
+  }
+  const sent = s.sent || 0;
+  box.innerHTML =
+    donutGauge(pct(s.opened||0, sent), '開封率', `${s.opened||0} / ${sent}`) +
+    donutGauge(pct(s.clicked||0, sent), 'クリック率', `${s.clicked||0} / ${sent}`) +
+    donutGauge(pct(s.replied||0, sent), '返信率', `${s.replied||0} / ${sent}`);
+}
+
+function renderAnalytics(){
+  fillMonthSelect();
+  const ym = document.getElementById('an-month').value || todayISO().slice(0,7);
+  const {days, sum} = analyticsAgg(ym);
+
+  // メール
+  document.getElementById('an-mail-total').textContent = `送信 ${sum.sent}件`;
+  document.getElementById('an-mail-gauges').innerHTML =
+    donutGauge(pct(sum.opened, sum.sent), '開封率', `${sum.opened} / ${sum.sent}`) +
+    donutGauge(pct(sum.clicked, sum.sent), 'クリック率', `${sum.clicked} / ${sum.sent}`) +
+    donutGauge(pct(sum.replied, sum.sent), '返信率', `${sum.replied} / ${sum.sent}`);
+  fillDaySelect(ym);
+  renderDayGauges();
+  document.getElementById('an-mail-bars').innerHTML = barChart(days, 'sent');
+
+  // 問い合わせ
+  document.getElementById('an-inq-total').textContent = `お問い合わせ ${sum.inq}件`;
+  document.getElementById('an-inq-gauges').innerHTML =
+    donutGauge(pct(sum.inqrep, sum.inq), '返答率', `${sum.inqrep} / ${sum.inq}`);
+  document.getElementById('an-inq-bars').innerHTML = barChart(days, 'inq');
+
+  // 日別テーブル
+  const tbody = document.getElementById('an-table');
+  tbody.innerHTML = '';
+  document.getElementById('an-empty').style.display = days.length ? 'none' : 'block';
+  days.forEach(d=>{
+    const s = dailyStats[d] || {};
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="cell-name linkable" onclick="openDailyInput('${d}')">${escapeHtml(d)}</td>
+      <td class="num">${s.sent||0}</td>
+      <td class="num">${s.opened||0}</td>
+      <td class="num">${s.clicked||0}</td>
+      <td class="num">${s.replied||0}</td>
+      <td class="num">${s.inq||0}</td>
+      <td class="num">${s.inqrep||0}</td>
+      <td><span class="icon-btn" title="編集" onclick="openDailyInput('${d}')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/></svg>
+      </span></td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+let dlCurrentDate = null;
+function openDailyInput(date){
+  const day = date || todayISO();
+  dlCurrentDate = date || null;
+  const s = dailyStats[day] || {};
+  document.getElementById('daily-modal-title').textContent = date ? `${date} の実績` : '今日の実績を入力';
+  document.getElementById('dl-date').value = day;
+  document.getElementById('dl-sent').value    = s.sent    != null ? s.sent    : '';
+  document.getElementById('dl-opened').value  = s.opened  != null ? s.opened  : '';
+  document.getElementById('dl-clicked').value = s.clicked != null ? s.clicked : '';
+  document.getElementById('dl-replied').value = s.replied != null ? s.replied : '';
+  document.getElementById('dl-inq').value     = s.inq     != null ? s.inq     : '';
+  document.getElementById('dl-inqrep').value  = s.inqrep  != null ? s.inqrep  : '';
+  document.getElementById('dl-delete-btn').style.display = dailyStats[day] ? 'inline-flex' : 'none';
+  openModal('daily-modal');
+}
+function saveDaily(){
+  const day = document.getElementById('dl-date').value;
+  if(!day){ toast('日付を入力してください'); return; }
+  const num = id => { const v = parseInt(document.getElementById(id).value, 10); return isNaN(v) || v < 0 ? 0 : v; };
+  dailyStats[day] = {
+    sent: num('dl-sent'), opened: num('dl-opened'), clicked: num('dl-clicked'),
+    replied: num('dl-replied'), inq: num('dl-inq'), inqrep: num('dl-inqrep'),
+  };
+  // 入力した月を表示対象にしてから再描画
+  document.getElementById('an-month').value = day.slice(0,7);
+  closeModal('daily-modal');
+  renderAnalytics();
+  toast(`${day} の実績を保存しました`);
+}
+function deleteDaily(){
+  const day = document.getElementById('dl-date').value;
+  if(!dailyStats[day]){ closeModal('daily-modal'); return; }
+  showConfirm(`${day} の記録を削除しますか?`, ()=>{
+    delete dailyStats[day];
+    closeModal('daily-modal');
+    renderAnalytics();
+    toast('記録を削除しました');
+  });
+}
+
+function renderAll(){ renderHome(); renderContacts(); renderClients(); renderDeals(); }
+
+/* ---------- init ---------- */
+migrateStatuses();   // 初期データにも旧ステータスが含まれているため
+populateOwnerSelects();
+setupTabs('contacts-tabs','contacts',renderContacts);
+setupTabs('clients-tabs','clients',renderClients);
+setupTabs('deals-tabs','deals',renderDeals);
+
+['contacts-filter-owner','contacts-filter-status','contacts-filter-mail','contacts-filter-rank','contacts-search','contacts-sort'].forEach(id=>{
+  document.getElementById(id).addEventListener('input', renderContacts);
+});
+['clients-filter-owner','clients-filter-status','clients-filter-rank','clients-search','clients-sort'].forEach(id=>{
+  document.getElementById(id).addEventListener('input', renderClients);
+});
+['deals-filter-status','deals-filter-owner','deals-search'].forEach(id=>{
+  document.getElementById(id).addEventListener('input', renderDeals);
+});
+document.getElementById('an-month').addEventListener('change', renderAnalytics);
+document.getElementById('an-day').addEventListener('change', renderDayGauges);
+
+renderAll();
+
+/* ---------- 起動（Firebaseの読み込み → ログイン → 同期開始） ---------- */
+function showGateForm(){
+  document.getElementById('gate-boot').style.display = 'none';
+  document.getElementById('gate-form').style.display = 'block';
+  document.getElementById('gate-email').focus();
+}
+
+function bootFailed(){
+  const el = document.getElementById('gate-boot');
+  el.className = 'gate-boot error';
+  el.textContent = 'Firebaseに接続できませんでした。設定値が正しいか、通信が可能かをご確認ください。'
+                 + 'このファイルをパソコンで直接開いた場合は動作しません（Firebase Hosting などに配置してご利用ください）。';
+}
+
+window.addEventListener('fb-failed', bootFailed);
+
+window.addEventListener('fb-ready', ()=>{
+  window.FB.onAuth(user=>{
+    if(!user){ showGateForm(); return; }
+
+    // ログイン成功。アプリを表示して同期を始める
+    currentUserEmail = user.email || '';
+    document.getElementById('gate').style.display = 'none';
+    document.getElementById('app').style.display = 'flex';
+    const who = document.getElementById('signed-in-as');
+    if(who) who.textContent = currentUserEmail;
+
+    setSaveState('接続しています…', false);
+    startSync();
+
+    setInterval(tickSave, 600);
+    window.addEventListener('beforeunload', ()=>{ if(syncReady) pushData(); });
+    document.addEventListener('visibilitychange', ()=>{ if(document.hidden && syncReady) pushData(); });
+  });
+});
+
+// モジュールの読み込みが始まらない場合に備えた保険
+setTimeout(()=>{
+  if(!window.FB && !window.FB_ERROR) bootFailed();
+}, 12000);
+</script>
+</body>
+</html>
