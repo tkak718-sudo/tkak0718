@@ -1154,6 +1154,10 @@
       <p class="ai-desc" style="font-size:12px; color:var(--text-secondary); line-height:1.7;">Claude が <b>Web検索で各社の公式サイト・イベントページ・LINE等を実際に調べ</b>、<b>ランク（S/A/B/C）・イベント規模（小/中/大）・主催者（〇/×）・LINE公式アカウント（〇/×）</b>をまとめて判定して各社に反映し、根拠を各社のメモに残します（SSランクは手動）。1件ずつ調査するため件数が多いと時間がかかります。<br>APIキーはこの端末にのみ保存され、サーバー（Firestore）には送られません。</p>
       <div class="field"><label>Anthropic APIキー</label><input type="password" id="ai-judge-key" placeholder="sk-ant-..."></div>
       <label class="opt-line"><input type="checkbox" id="ai-judge-save-key" checked> このキーをこの端末に保存する</label>
+      <div style="display:flex; gap:8px; margin-top:6px;">
+        <button class="btn btn-sm" onclick="aiTestKey()" title="判定を実行せず、キーが有効かどうかだけを確認します">接続テスト</button>
+        <button class="btn btn-sm" onclick="aiClearKey()" title="この端末に保存したキーを消去して入力欄を空にします">保存キーを消去</button>
+      </div>
       <div class="field" style="margin-top:8px;"><label>対象</label><div class="detail-sub" id="ai-judge-target"></div></div>
       <div class="detail-section-label">進捗</div>
       <div class="log-box" id="ai-judge-log" style="max-height:220px; overflow:auto; white-space:pre-wrap; font-size:12px; font-family:monospace;"></div>
@@ -1777,6 +1781,44 @@ function aiJudgeTargetIds(section){
     const c = arr.find(x=>x.id===id) || {};
     return !c.rank && !c.eventScale && !c.isOrganizer && !c.lineOfficial;
   });
+}
+
+/* キーの有効性だけを最小リクエストで確認する（判定は実行しない） */
+async function aiTestKey(){
+  const key = document.getElementById('ai-judge-key').value.trim();
+  const logEl = document.getElementById('ai-judge-log');
+  const log = m => { logEl.textContent += m + '\n'; logEl.scrollTop = logEl.scrollHeight; };
+  if(!key){ toast('APIキーを入力してください'); return; }
+  log(`接続テスト中…（キー長 ${key.length}文字 / 先頭 ${key.slice(0,7)}… / 末尾 …${key.slice(-4)}）`);
+  try{
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-api-key': key,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true',
+      },
+      body: JSON.stringify({ model: 'claude-haiku-4-5', max_tokens: 8, messages: [{ role: 'user', content: 'ping' }] }),
+    });
+    if(res.ok){
+      log('OK：このキーは有効です。判定を実行できます。');
+      toast('接続OK：キーは有効です');
+    } else {
+      const t = await res.text();
+      log('NG：API ' + res.status + '：' + t.slice(0, 300));
+      if(res.status === 401) log('  → キー文字列が無効です。console.anthropic.com で新しいキーを作成し、欄を空にして貼り直してください。');
+    }
+  }catch(e){
+    log('通信エラー：' + e.message);
+  }
+}
+/* この端末に保存したキーを消去し、入力欄を空にする */
+function aiClearKey(){
+  localStorage.removeItem('anthropicApiKey');
+  const el = document.getElementById('ai-judge-key');
+  if(el) el.value = '';
+  toast('保存キーを消去しました。新しいキーを貼り直してください');
 }
 
 function openAiJudge(section){
