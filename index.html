@@ -894,8 +894,7 @@
             <option value="date-asc">作成日(古い順)</option>
             <option value="name-asc">担当者名(A→Z)</option>
           </select>
-          <button class="btn btn-sm" onclick="openAiRank('contacts')" title="事業内容などからAIがS/A/B/Cを判定します">AIでランク判定</button>
-          <button class="btn btn-sm" onclick="openAiEvent('contacts')" title="Web検索で主催者・イベント規模・LINE公式を判定します">AIでイベント判定</button>
+          <button class="btn btn-sm" onclick="openAiJudge('contacts')" title="Web検索でランク・イベント規模・主催者・LINE公式をまとめて判定します">AIで判定</button>
           <span class="clear-filters" onclick="clearFilters('contacts')">フィルターをクリア</span>
         </div>
 
@@ -965,8 +964,7 @@
             <option value="date-asc">作成日(古い順)</option>
             <option value="name-asc">担当者名(A→Z)</option>
           </select>
-          <button class="btn btn-sm" onclick="openAiRank('clients')" title="事業内容などからAIがS/A/B/Cを判定します">AIでランク判定</button>
-          <button class="btn btn-sm" onclick="openAiEvent('clients')" title="Web検索で主催者・イベント規模・LINE公式を判定します">AIでイベント判定</button>
+          <button class="btn btn-sm" onclick="openAiJudge('clients')" title="Web検索でランク・イベント規模・主催者・LINE公式をまとめて判定します">AIで判定</button>
           <span class="clear-filters" onclick="clearFilters('clients')">フィルターをクリア</span>
         </div>
 
@@ -1148,40 +1146,21 @@
   </div>
 </div>
 
-<!-- AIランク判定 Modal -->
-<div class="modal-overlay" id="ai-rank-modal">
+<!-- AI判定 Modal（ランク＋イベント属性を一括） -->
+<div class="modal-overlay" id="ai-judge-modal">
   <div class="modal">
-    <div class="modal-head"><h3>AIでランク判定</h3><span class="modal-close" onclick="closeModal('ai-rank-modal')">&times;</span></div>
+    <div class="modal-head"><h3>AIで判定</h3><span class="modal-close" onclick="closeModal('ai-judge-modal')">&times;</span></div>
     <div class="modal-body">
-      <p class="ai-desc" style="font-size:12px; color:var(--text-secondary); line-height:1.7;">各社の「事業内容」などをもとに Claude が <b>S / A / B / C</b> を判定し、理由を各社のメモに残します（SSは手動）。判断材料が乏しい会社は「判定なし」になります。<br>APIキーはこの端末にのみ保存され、サーバー（Firestore）には送られません。</p>
-      <div class="field"><label>Anthropic APIキー</label><input type="password" id="ai-api-key" placeholder="sk-ant-..."></div>
-      <label class="opt-line"><input type="checkbox" id="ai-save-key" checked> このキーをこの端末に保存する</label>
-      <div class="field" style="margin-top:8px;"><label>対象</label><div class="detail-sub" id="ai-rank-target"></div></div>
+      <p class="ai-desc" style="font-size:12px; color:var(--text-secondary); line-height:1.7;">Claude が <b>Web検索で各社の公式サイト・イベントページ・LINE等を実際に調べ</b>、<b>ランク（S/A/B/C）・イベント規模（小/中/大）・主催者（〇/×）・LINE公式アカウント（〇/×）</b>をまとめて判定して各社に反映し、根拠を各社のメモに残します（SSランクは手動）。1件ずつ調査するため件数が多いと時間がかかります。<br>APIキーはこの端末にのみ保存され、サーバー（Firestore）には送られません。</p>
+      <div class="field"><label>Anthropic APIキー</label><input type="password" id="ai-judge-key" placeholder="sk-ant-..."></div>
+      <label class="opt-line"><input type="checkbox" id="ai-judge-save-key" checked> このキーをこの端末に保存する</label>
+      <div class="field" style="margin-top:8px;"><label>対象</label><div class="detail-sub" id="ai-judge-target"></div></div>
       <div class="detail-section-label">進捗</div>
-      <div class="log-box" id="ai-rank-log" style="max-height:220px; overflow:auto; white-space:pre-wrap; font-size:12px; font-family:monospace;"></div>
+      <div class="log-box" id="ai-judge-log" style="max-height:220px; overflow:auto; white-space:pre-wrap; font-size:12px; font-family:monospace;"></div>
     </div>
     <div class="modal-foot">
-      <button class="btn" onclick="closeModal('ai-rank-modal')">閉じる</button>
-      <button class="btn btn-primary" id="ai-rank-run" onclick="runAiRank()">判定を開始</button>
-    </div>
-  </div>
-</div>
-
-<!-- AIイベント判定 Modal -->
-<div class="modal-overlay" id="ai-event-modal">
-  <div class="modal">
-    <div class="modal-head"><h3>AIでイベント判定</h3><span class="modal-close" onclick="closeModal('ai-event-modal')">&times;</span></div>
-    <div class="modal-body">
-      <p class="ai-desc" style="font-size:12px; color:var(--text-secondary); line-height:1.7;">Claude が <b>Web検索で各社の公式サイト・イベントページ・LINE等を実際に調べ</b>、<b>イベント規模（小/中/大）・主催者（〇/×）・LINE公式アカウント（〇/×）</b>を判定して各社に反映し、根拠をメモに残します。1件ずつ調査するため件数が多いと時間がかかります。<br>APIキーはこの端末にのみ保存され、サーバー（Firestore）には送られません。</p>
-      <div class="field"><label>Anthropic APIキー</label><input type="password" id="ai-event-key" placeholder="sk-ant-..."></div>
-      <label class="opt-line"><input type="checkbox" id="ai-event-save-key" checked> このキーをこの端末に保存する</label>
-      <div class="field" style="margin-top:8px;"><label>対象</label><div class="detail-sub" id="ai-event-target"></div></div>
-      <div class="detail-section-label">進捗</div>
-      <div class="log-box" id="ai-event-log" style="max-height:220px; overflow:auto; white-space:pre-wrap; font-size:12px; font-family:monospace;"></div>
-    </div>
-    <div class="modal-foot">
-      <button class="btn" onclick="closeModal('ai-event-modal')">閉じる</button>
-      <button class="btn btn-primary" id="ai-event-run" onclick="runAiEvent()">判定を開始</button>
+      <button class="btn" onclick="closeModal('ai-judge-modal')">閉じる</button>
+      <button class="btn btn-primary" id="ai-judge-run" onclick="runAiJudge()">判定を開始</button>
     </div>
   </div>
 </div>
@@ -1770,113 +1749,148 @@ A: いまは紙や別システムで運用していて、効率化ニーズが�
 B: チケット販売はあるが、LINE活用も物販も少ない企業。価値訴求が弱く優先度は下がる。
 C: 単発イベントのみで、顧客管理や継続接点がほぼない企業。`;
 
-let aiRankSection = null;
+/* AI出力の表記ゆれを吸収する正規化ヘルパー */
+function normMark(v){
+  if(v == null) return '';
+  const s = String(v).trim();
+  if(/^(〇|○|◯|●|◎|はい|有|あり|yes|true|1)$/i.test(s)) return '〇';
+  if(/^(×|✕|✖|╳|✗|✘|✗|なし|無|いいえ|no|false|0|-|—|ー)$/i.test(s)) return '×';
+  return '';
+}
+function normScale(v){
+  if(v == null) return '';
+  const s = String(v);
+  if(s.includes('大')) return '大（10,000人以上）';
+  if(s.includes('中')) return '中（500～10,000人）';
+  if(s.includes('小')) return '小（～499人）';
+  return '';
+}
 
-/* 対象ID：行が選択されていればそれ、無ければ「表示中で未ランクの行」 */
-function aiRankTargetIds(section){
+let aiJudgeSection = null;
+let aiRunning = false;   // 判定中は同期の受信上書きを止める（長時間実行での結果消失を防ぐ）
+
+/* 対象ID：選択があればそれ、無ければ「表示中でランク/規模/主催/LINEのいずれも未設定の行」 */
+function aiJudgeTargetIds(section){
   const arr = dataOf(section);
   if(selection[section].size > 0) return [...selection[section]];
   return visibleIds[section].filter(id=>{
-    const r = (arr.find(x=>x.id===id) || {}).rank;
-    return !r;
+    const c = arr.find(x=>x.id===id) || {};
+    return !c.rank && !c.eventScale && !c.isOrganizer && !c.lineOfficial;
   });
 }
 
-function openAiRank(section){
-  aiRankSection = section;
-  const ids = aiRankTargetIds(section);
-  const basis = selection[section].size > 0 ? '選択中の行' : '表示中で未ランクの行';
-  document.getElementById('ai-rank-target').textContent = `${SECTION_LABEL[section]}：${ids.length}件（${basis}）`;
-  document.getElementById('ai-rank-log').textContent = '';
-  document.getElementById('ai-api-key').value = localStorage.getItem('anthropicApiKey') || '';
-  document.getElementById('ai-rank-run').disabled = ids.length === 0;
-  openModal('ai-rank-modal');
+function openAiJudge(section){
+  aiJudgeSection = section;
+  const ids = aiJudgeTargetIds(section);
+  const basis = selection[section].size > 0 ? '選択中の行' : '表示中で未判定の行';
+  document.getElementById('ai-judge-target').textContent = `${SECTION_LABEL[section]}：${ids.length}件（${basis}）`;
+  document.getElementById('ai-judge-log').textContent = '';
+  document.getElementById('ai-judge-key').value = localStorage.getItem('anthropicApiKey') || '';
+  document.getElementById('ai-judge-run').disabled = ids.length === 0;
+  openModal('ai-judge-modal');
 }
 
-/* Claude API を呼んで JSON 配列 [{id, rank, reason}] を得る */
-async function aiClassify(apiKey, companies){
-  const sys = RANK_RUBRIC + '\n\n出力は JSON 配列のみ。各要素は {"id": 数値, "rank": "S"|"A"|"B"|"C"|"", "reason": "40字以内の日本語の理由"}。説明文やコードブロック記号を付けず、配列だけを返すこと。';
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true',
-    },
-    body: JSON.stringify({
-      model: AI_MODEL,
-      max_tokens: 2048,
-      system: sys,
-      messages: [{ role: 'user', content: '次の企業を評価してください:\n' + JSON.stringify(companies) }],
-    }),
-  });
-  if(!res.ok){
-    const t = await res.text();
-    throw new Error('API ' + res.status + '：' + t.slice(0, 200));
+/* Web検索つきで1社を調査し {rank,eventScale,isOrganizer,lineOfficial,lineInfo,reason} を得る */
+async function aiJudge(apiKey, company){
+  const sys = RANK_RUBRIC + '\n\n----\n\n' + EVENT_RUBRIC +
+    '\n\n【最終出力】上記すべてを踏まえ、最後に JSON オブジェクトのみを返す（単一オブジェクト・配列不可・説明文やコードブロック記号なし）。' +
+    '形式：{"rank":"S"|"A"|"B"|"C"|"","eventScale":"小"|"中"|"大"|"","isOrganizer":"〇"|"×"|"","lineOfficial":"〇"|"×"|"","lineInfo":"文字列","reason":"80字以内の日本語の根拠（参照した情報源も簡潔に）"}。' +
+    'eventScale は「小」「中」「大」の一文字でよい。〇×は全角の 〇 と × を用いること。';
+  let messages = [{ role: 'user', content: '次の企業を調べて判定してください:\n' + JSON.stringify(company) }];
+  for(let guard=0; guard<8; guard++){
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true',
+      },
+      body: JSON.stringify({
+        model: EVENT_MODEL,
+        max_tokens: 4096,
+        system: sys,
+        tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 5 }],
+        messages,
+      }),
+    });
+    if(!res.ok){
+      const t = await res.text();
+      throw new Error('API ' + res.status + '：' + t.slice(0, 300));
+    }
+    const data = await res.json();
+    // Web検索の途中で一時停止した場合は、その内容を積んで続行
+    if(data.stop_reason === 'pause_turn'){
+      messages.push({ role: 'assistant', content: data.content });
+      continue;
+    }
+    const text = (data.content || []).filter(b=>b.type==='text').map(b=>b.text).join('');
+    let t = text.trim().replace(/^```(?:json)?/i, '').replace(/```$/,'').trim();
+    const s = t.indexOf('{'), e = t.lastIndexOf('}');
+    if(s < 0 || e <= s) throw new Error('JSONが取得できませんでした: ' + text.slice(0, 120));
+    return JSON.parse(t.slice(s, e + 1));
   }
-  const data = await res.json();
-  const text = (data.content || []).filter(b=>b.type==='text').map(b=>b.text).join('');
-  let t = text.trim().replace(/^```(?:json)?/i, '').replace(/```$/,'').trim();
-  const s = t.indexOf('['), e = t.lastIndexOf(']');
-  if(s >= 0 && e > s) t = t.slice(s, e + 1);
-  const arr = JSON.parse(t);
-  return Array.isArray(arr) ? arr : [];
+  throw new Error('応答が完了しませんでした');
 }
 
-async function runAiRank(){
-  const section = aiRankSection;
-  const key = document.getElementById('ai-api-key').value.trim();
+async function runAiJudge(){
+  const section = aiJudgeSection;
+  const key = document.getElementById('ai-judge-key').value.trim();
   if(!key){ toast('APIキーを入力してください'); return; }
-  if(document.getElementById('ai-save-key').checked) localStorage.setItem('anthropicApiKey', key);
+  if(document.getElementById('ai-judge-save-key').checked) localStorage.setItem('anthropicApiKey', key);
   else localStorage.removeItem('anthropicApiKey');
 
-  const arr = dataOf(section);
-  const ids = aiRankTargetIds(section);
+  const ids = aiJudgeTargetIds(section);
   if(!ids.length){ toast('対象がありません'); return; }
 
-  const runBtn = document.getElementById('ai-rank-run');
+  const runBtn = document.getElementById('ai-judge-run');
   runBtn.disabled = true;
-  const logEl = document.getElementById('ai-rank-log');
+  const logEl = document.getElementById('ai-judge-log');
   const log = m => { logEl.textContent += m + '\n'; logEl.scrollTop = logEl.scrollHeight; };
-  log(`対象 ${ids.length}件を判定します…`);
+  log(`対象 ${ids.length}件をWeb検索で判定します（1件ずつ・時間がかかります）…`);
 
-  const BATCH = 10;
+  aiRunning = true;
   let done = 0, ok = 0;
-  for(let i=0; i<ids.length; i+=BATCH){
-    const batchIds = ids.slice(i, i + BATCH);
-    const companies = batchIds.map(id=>{
-      const c = arr.find(x=>x.id===id) || {};
-      return {
-        id: c.id, 会社名: c.name, 事業内容: c.business || '', 業種: c.industry || '',
-        売上規模: c.revenue || '', 上場: c.listing || '', 創業: c.founded || '',
-        メモ: (c.notes || []).map(n=>n.text).join(' / '),
-      };
-    });
+  for(const id of ids){
+    const arr = dataOf(section);            // 毎回取り直す（同期で配列が差し替わっても最新を掴む）
+    const c = arr.find(x=>x.id===id);
+    if(!c){ done++; continue; }
+    log(`○ ${c.name} を調査中…`);
+    const company = {
+      会社名: c.name, 事業内容: c.business || '', 業種: c.industry || '',
+      公式サイト: c.inquiryForm || '', 売上規模: c.revenue || '', 上場: c.listing || '',
+      メモ: (c.notes || []).map(n=>n.text).join(' / '),
+    };
     try{
-      const results = await aiClassify(key, companies);
-      results.forEach(r=>{
-        const c = arr.find(x=>x.id===r.id);
-        if(!c) return;
-        if(RANK_OPTIONS.includes(r.rank)){
-          c.rank = r.rank;
-          if(!c.notes) c.notes = [];
-          c.notes.push({ text: `【AI判定】${r.rank}：${r.reason || ''}`, time: nowDateTimeStr(), author: 'AI判定' });
-          ok++;
-          log(`  ${c.name} → ${r.rank}`);
-        } else {
-          log(`  ${c.name} → 判定なし（情報不足）`);
-        }
+      const r = await aiJudge(key, company);
+      const rank  = RANK_OPTIONS.includes(r.rank) ? r.rank : '';
+      const scale = normScale(r.eventScale);
+      const org   = normMark(r.isOrganizer);
+      const line  = normMark(r.lineOfficial);
+      const changed = [];
+      if(rank){  c.rank = rank;          changed.push('ランク:' + rank); }
+      if(scale){ c.eventScale = scale;   changed.push('規模:' + scale.charAt(0)); }
+      if(org){   c.isOrganizer = org;    changed.push('主催:' + org); }
+      if(line){  c.lineOfficial = line;  changed.push('LINE:' + line); }
+      if(r.lineInfo){ c.lineInfo = String(r.lineInfo); }
+      if(!c.notes) c.notes = [];
+      c.notes.push({
+        text: `【AI判定】ランク:${rank||'—'} / 規模:${scale||'—'} / 主催:${org||'—'} / LINE:${line||'—'}${r.lineInfo ? '（' + r.lineInfo + '）' : ''}｜${r.reason || ''}`,
+        time: nowDateTimeStr(), author: 'AI判定',
       });
+      ok++;
+      log(`  → ${changed.length ? changed.join(' / ') : '判定情報なし'}`);
     }catch(err){
-      log(`エラー: ${err.message}`);
+      log(`  エラー: ${err.message}`);
     }
-    done += batchIds.length;
+    done++;
     log(`進捗 ${done}/${ids.length}`);
     rerender(section);
+    try{ await pushData(); }catch(e){}    // 1件ごとに保存し、結果を確実に残す
   }
+  aiRunning = false;
   runBtn.disabled = false;
-  log(`完了：${ok}件にランクを付けました。`);
+  log(`完了：${ok}件を判定しました。`);
   toast(`AI判定完了：${ok}件`);
 }
 
@@ -1899,124 +1913,6 @@ const EVENT_RUBRIC = `あなたは企業リサーチのアシスタントです�
 
 【LINE公式アカウント】企業または主催イベントが LINE公式アカウントを保有・運用していれば「〇」、していなければ「×」、確認できなければ ""。
 - 「〇」の場合は lineInfo に「LINE公式アカウントのURL・アカウント名・LINE ID・公式サイト上の掲載有無」を分かる範囲で記録すること。`;
-
-let aiEventSection = null;
-
-/* 対象ID：選択があればそれ、無ければ「表示中でイベント規模が未設定の行」 */
-function aiEventTargetIds(section){
-  const arr = dataOf(section);
-  if(selection[section].size > 0) return [...selection[section]];
-  return visibleIds[section].filter(id=>{
-    const c = arr.find(x=>x.id===id) || {};
-    return !c.eventScale && !c.isOrganizer && !c.lineOfficial;
-  });
-}
-
-function openAiEvent(section){
-  aiEventSection = section;
-  const ids = aiEventTargetIds(section);
-  const basis = selection[section].size > 0 ? '選択中の行' : '表示中で未判定の行';
-  document.getElementById('ai-event-target').textContent = `${SECTION_LABEL[section]}：${ids.length}件（${basis}）`;
-  document.getElementById('ai-event-log').textContent = '';
-  document.getElementById('ai-event-key').value = localStorage.getItem('anthropicApiKey') || '';
-  document.getElementById('ai-event-run').disabled = ids.length === 0;
-  openModal('ai-event-modal');
-}
-
-/* Web検索つきで1社を調査し {id,eventScale,isOrganizer,lineOfficial,lineInfo,reason} を得る */
-async function aiEventClassify(apiKey, company){
-  const sys = EVENT_RUBRIC + '\n\n出力は JSON オブジェクトのみ（単一オブジェクト、配列不可）。形式は {"id":数値,"eventScale":"小（～499人）"|"中（500～10,000人）"|"大（10,000人以上）"|"","isOrganizer":"〇"|"×"|"","lineOfficial":"〇"|"×"|"","lineInfo":"文字列","reason":"70字以内の日本語の根拠（参照した情報源を簡潔に）"}。説明文やコードブロック記号を付けず、オブジェクトだけを最後に返すこと。';
-  let messages = [{ role: 'user', content: '次の企業を調べて判定してください:\n' + JSON.stringify(company) }];
-  let guard = 0;
-  while(true){
-    guard++;
-    if(guard > 8) break;
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true',
-      },
-      body: JSON.stringify({
-        model: EVENT_MODEL,
-        max_tokens: 4096,
-        system: sys,
-        tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 5 }],
-        messages,
-      }),
-    });
-    if(!res.ok){
-      const t = await res.text();
-      throw new Error('API ' + res.status + '：' + t.slice(0, 200));
-    }
-    const data = await res.json();
-    // Web検索の途中で一時停止した場合は、その内容を積んで続行
-    if(data.stop_reason === 'pause_turn'){
-      messages.push({ role: 'assistant', content: data.content });
-      continue;
-    }
-    const text = (data.content || []).filter(b=>b.type==='text').map(b=>b.text).join('');
-    let t = text.trim().replace(/^```(?:json)?/i, '').replace(/```$/,'').trim();
-    const s = t.indexOf('{'), e = t.lastIndexOf('}');
-    if(s >= 0 && e > s) t = t.slice(s, e + 1);
-    return JSON.parse(t);
-  }
-  throw new Error('応答が完了しませんでした');
-}
-
-async function runAiEvent(){
-  const section = aiEventSection;
-  const key = document.getElementById('ai-event-key').value.trim();
-  if(!key){ toast('APIキーを入力してください'); return; }
-  if(document.getElementById('ai-event-save-key').checked) localStorage.setItem('anthropicApiKey', key);
-  else localStorage.removeItem('anthropicApiKey');
-
-  const arr = dataOf(section);
-  const ids = aiEventTargetIds(section);
-  if(!ids.length){ toast('対象がありません'); return; }
-
-  const runBtn = document.getElementById('ai-event-run');
-  runBtn.disabled = true;
-  const logEl = document.getElementById('ai-event-log');
-  const log = m => { logEl.textContent += m + '\n'; logEl.scrollTop = logEl.scrollHeight; };
-  log(`対象 ${ids.length}件をWeb検索で判定します（1件ずつ・時間がかかります）…`);
-
-  let done = 0, ok = 0;
-  for(const id of ids){
-    const c = arr.find(x=>x.id===id);
-    if(!c){ done++; continue; }
-    log(`○ ${c.name} を調査中…`);
-    const company = {
-      id: c.id, 会社名: c.name, 事業内容: c.business || '', 業種: c.industry || '',
-      公式サイト: c.inquiryForm || '', メモ: (c.notes || []).map(n=>n.text).join(' / '),
-    };
-    try{
-      const r = await aiEventClassify(key, company);
-      let changed = [];
-      if(EVENT_SCALE_OPTIONS.includes(r.eventScale) && r.eventScale){ c.eventScale = r.eventScale; changed.push('規模:' + r.eventScale.charAt(0)); }
-      if(r.isOrganizer === '〇' || r.isOrganizer === '×'){ c.isOrganizer = r.isOrganizer; changed.push('主催:' + r.isOrganizer); }
-      if(r.lineOfficial === '〇' || r.lineOfficial === '×'){ c.lineOfficial = r.lineOfficial; changed.push('LINE:' + r.lineOfficial); }
-      if(r.lineInfo){ c.lineInfo = r.lineInfo; }
-      if(!c.notes) c.notes = [];
-      c.notes.push({
-        text: `【AIイベント判定】規模:${r.eventScale||'—'} / 主催:${r.isOrganizer||'—'} / LINE:${r.lineOfficial||'—'}${r.lineInfo ? '（' + r.lineInfo + '）' : ''}｜${r.reason || ''}`,
-        time: nowDateTimeStr(), author: 'AI判定',
-      });
-      ok++;
-      log(`  → ${changed.length ? changed.join(' / ') : '判定情報なし'}`);
-    }catch(err){
-      log(`  エラー: ${err.message}`);
-    }
-    done++;
-    log(`進捗 ${done}/${ids.length}`);
-    rerender(section);
-  }
-  runBtn.disabled = false;
-  log(`完了：${ok}件を判定しました。`);
-  toast(`AIイベント判定完了：${ok}件`);
-}
 
 let currentUser = SALES_REPS[0].id;
 
@@ -2167,7 +2063,7 @@ function startSync(){
     }
     const fromCache = snap.metadata.fromCache;
     const hasLocalEdit = snap.metadata.hasPendingWrites;
-    if(!hasLocalEdit) applyRemote(snap.data());   // 自分の書き込みの反響は無視する
+    if(!hasLocalEdit && !aiRunning) applyRemote(snap.data());   // 自分の書き込みの反響・AI判定中の上書きは無視する
     syncReady = true;
     setSaveState(fromCache ? 'オフライン（この端末に一時保存）' : '全員と同期済み', fromCache);
   }, err=>{
