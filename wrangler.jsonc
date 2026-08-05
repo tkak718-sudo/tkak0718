@@ -1,0 +1,22 @@
+{
+  // ============================================================
+  // クラウドバスケット売上レポート — Cloudflare Workers デプロイ設定
+  //
+  //  ・Worker名は Cloudflare 上の既存 Worker と一致させています
+  //  ・sales-report-deploy/ の中身（index.html）だけを配信します
+  //  ・手元から手動で出す場合:  npx wrangler deploy
+  //  ・GitHub連携（Workers Builds）を使う場合は Cloudflare の
+  //    Worker → Settings → Builds → Connect からこのリポジトリを接続し、
+  //    Deploy command に  npx wrangler deploy  を設定してください
+  // ============================================================
+  "$schema": "https://unpkg.com/wrangler/config-schema.json",
+  "name": "tight-term-cc1f",
+  "compatibility_date": "2025-04-01",
+  "assets": {
+    // 配信するフォルダ（この中の index.html が公開されます）
+    "directory": "./sales-report-deploy",
+    "html_handling": "auto-trailing-slash",
+    // 1ページ構成のため、どのURLで来ても index.html を返す
+    "not_found_handling": "single-page-application"
+  }
+}
