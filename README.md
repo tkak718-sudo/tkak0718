@@ -7,19 +7,38 @@
 
 ```
 crm-deploy/
-  index.html    アプリ本体。これ1つで完結
+  index.html      アプリ本体。これ1つで完結
+wrangler.jsonc    配信設定。crm-deploy/ の中身が公開URLの直下になる
+package.json      wrangler のバージョンを固定
 ```
-
-`crm-deploy/` は Cloudflare Workers のデプロイ用フォルダと同じ構成にしています。
 
 ## 更新のしかた
 
+`main` ブランチが公開中の内容です。**`main` を更新すれば自動で公開されます。**
+
+Cloudflare Workers の Workers Builds がこのリポジトリに繋がっており、`main` への
+プッシュを検知して `npx wrangler deploy` を実行します。ファイルを手元にダウンロード
+したりアップロードしたりする必要はありません。
+
 1. `crm-deploy/index.html` を編集する
-2. 同じファイルをデプロイ先の `crm-deploy` フォルダに上書き保存する
-3. これまでどおりの手順でデプロイする（Cloudflareダッシュボード、または `wrangler deploy`）
+2. `main` にプッシュする
+3. Cloudflare の「Deployments」タブに新しいバージョンが増えれば完了
 4. 公開URLをスーパーリロード（Ctrl+Shift+R / Cmd+Shift+R）して反映を確認する
 
 デプロイしても既存のクライアントデータはFirestore側にあるため消えません。
+
+### 手元からデプロイする場合
+
+自動デプロイを待たずに反映したいときは、リポジトリのルートで実行します。
+
+```
+npm install            # 初回のみ
+npx wrangler login     # 初回のみ
+npm run deploy
+```
+
+配信先の Worker 名は `wrangler.jsonc` の `name` で決まります。ここを変えると別の
+URLに新しい Worker が作られてしまうため、変更しないでください。
 
 ## 主な機能
 
