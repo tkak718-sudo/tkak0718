@@ -810,7 +810,7 @@
             <span class="ai-badge">Excel・スプレッドシート対応</span>
           </div>
           <div class="card-body ai-card-body">
-            <p class="ai-desc">Excelやスプレッドシートからコピーした表を貼り付けると、新規クライアントとして一括で取り込めます。別のチャットで企業検索した結果のCSVも、そのまま貼り付けて引き継げます。</p>
+            <p class="ai-desc">Excelやスプレッドシートからコピーした表を貼り付けると、新規クライアントとして一括で取り込めます。別のチャットで企業検索した結果のCSVも、そのまま貼り付けて引き継げます。<br><b>APIキーを使わずに判定を入れたいとき</b>は、一覧の「Excelに書き出す」で取り込み済みの会社を出し、「企業検索プロンプトをコピー」した指示と一緒に別のチャットへ渡して空欄を埋めてもらい、そのファイルをここに読み込ませてください。<b>登録済みの会社は増えずに更新されます</b>（空欄の列は元のまま残ります）。</p>
 
             <div class="ai-format-hint">
               <span class="ai-format-label">列の順番</span>
@@ -848,7 +848,7 @@
             <div id="ai-results-wrap" style="display:none">
               <div class="ai-results-head">
                 <span class="filter-label" id="ai-results-count">0件読み込みました</span>
-                <span class="clear-filters" onclick="addAllAiResults()">すべて新規クライアントに追加</span>
+                <span class="clear-filters" onclick="addAllAiResults()">すべて反映する（登録済みは更新）</span>
               </div>
               <div class="table-wrap ai-table-wrap">
                 <table>
@@ -896,6 +896,7 @@
             <option value="name-asc">担当者名(A→Z)</option>
           </select>
           <button class="btn btn-sm" onclick="openAiJudge('contacts')" title="Web検索でランク・イベント規模・主催者・LINE公式をまとめて判定します">AIで判定</button>
+          <button class="btn btn-sm" onclick="exportCompaniesXlsx('contacts')" title="取り込み済みの会社を、取り込みと同じ列構成のExcelに書き出します">Excelに書き出す</button>
           <span class="clear-filters" onclick="clearFilters('contacts')">フィルターをクリア</span>
         </div>
 
@@ -966,6 +967,7 @@
             <option value="name-asc">担当者名(A→Z)</option>
           </select>
           <button class="btn btn-sm" onclick="openAiJudge('clients')" title="Web検索でランク・イベント規模・主催者・LINE公式をまとめて判定します">AIで判定</button>
+          <button class="btn btn-sm" onclick="exportCompaniesXlsx('clients')" title="取り込み済みの会社を、取り込みと同じ列構成のExcelに書き出します">Excelに書き出す</button>
           <span class="clear-filters" onclick="clearFilters('clients')">フィルターをクリア</span>
         </div>
 
@@ -1631,6 +1633,7 @@ contact@sample.co.jp"></textarea>
     </div>
     <div class="modal-foot">
       <button class="btn" onclick="resolveConfirm(false)">キャンセル</button>
+      <button class="btn" id="confirm-alt2" style="display:none;" onclick="resolveConfirmAlt2()"></button>
       <button class="btn" id="confirm-alt" style="display:none;" onclick="resolveConfirmAlt()"></button>
       <button class="btn btn-primary" id="confirm-ok" style="background:var(--danger); border-color:var(--danger);" onclick="resolveConfirm(true)">削除する</button>
     </div>
@@ -1966,13 +1969,15 @@ const EVENT_RUBRIC = `あなたは企業リサーチのアシスタントです�
 【LINE公式アカウント】企業または主催イベントが LINE公式アカウントを保有・運用していれば「〇」、していなければ「×」、確認できなければ ""。
 - 「〇」の場合は lineInfo に「LINE公式アカウントのURL・アカウント名・LINE ID・公式サイト上の掲載有無」を分かる範囲で記録すること。`;
 
+/* 取り込み・書き出し・テンプレートで共通の列構成。ここが唯一の定義 */
+const IMPORT_COLUMNS = ['会社名','電話番号','メールアドレス','お問い合わせフォームURL','担当者',
+  'ステータス','事業内容','売上規模','創業年数','上場区分','チケットツール','メモ',
+  '業種','ランク','イベント規模','主催者','LINE公式','LINE公式アカウント情報','判定根拠'];
+
 /* ========== 企業検索プロンプト（別のチャットに渡して調査してもらうための指示文） ==========
    ランク・イベント規模の基準は上の RANK_RUBRIC / EVENT_RUBRIC をそのまま使う。
    基準を1か所で持つことで、アプリのAI判定と外部チャットの判定がずれないようにする。
    返ってきたCSVは「企業リストを貼り付けて一括登録」にそのまま貼れる。 */
-const SEARCH_PROMPT_COLUMNS = ['会社名','電話番号','メールアドレス','お問い合わせフォームURL','担当者',
-  'ステータス','事業内容','売上規模','創業年数','上場区分','チケットツール','メモ',
-  '業種','ランク','イベント規模','主催者','LINE公式','LINE公式アカウント情報','判定根拠'];
 
 function buildSearchPrompt(){
   // 各基準の冒頭にある役割の説明は、この指示文では重複するため取り除く
@@ -1996,8 +2001,8 @@ ${event}
 【出力形式】
 ・CSV（カンマ区切り・UTF-8）のみを出力する。前置きも解説もコードブロック記号も付けない。
 ・1行目は必ず次の見出し行にする：
-${SEARCH_PROMPT_COLUMNS.join(',')}
-・2行目以降が1社1行。列は必ずこの${SEARCH_PROMPT_COLUMNS.length}列・この順番で、余分な列を足さない。
+${IMPORT_COLUMNS.join(',')}
+・2行目以降が1社1行。列は必ずこの${IMPORT_COLUMNS.length}列・この順番で、余分な列を足さない。
 ・値にカンマ・引用符が含まれる場合はセル全体を " で囲み、中の " は "" と書く。
 ・セル内で改行しない（1社は必ず1行に収める）。
 
@@ -2017,8 +2022,13 @@ ${SEARCH_PROMPT_COLUMNS.join(',')}
 ・LINE公式アカウント情報：LINE公式が「〇」のとき、URL・アカウント名・LINE ID・公式サイトへの掲載有無を分かる範囲で。
 ・判定根拠：80字以内。何を見てそう判断したかを情報源とあわせて簡潔に。
 
+【取り込み済みの一覧を渡された場合】
+・アプリから書き出したExcel／CSV（この${IMPORT_COLUMNS.length}列）を渡されたときは、その行をそのまま使い、空欄になっている列だけを調べて埋める。
+・すでに値が入っている列は書き換えない。会社名は1文字も変えない（アプリ側で既存の会社と突き合わせるため）。
+・行を増やしたり減らしたり、並び順を変えたりしない。
+
 【調査する企業】
-（この下に会社名を1行1社で貼り付けてください）`;
+（この下に会社名を1行1社、または書き出したExcelの内容を貼り付けてください）`;
 }
 
 function copySearchPrompt(){
@@ -2274,6 +2284,7 @@ async function doLogin(ev){
 /* ---------- custom confirm modal (native confirm() is blocked in sandboxed artifact previews) ---------- */
 let pendingConfirmAction = null;
 let pendingConfirmAlt = null;
+let pendingConfirmAlt2 = null;
 /* opts: {okLabel, danger, altLabel, onAlt}
    altLabel/onAlt を渡すと、3つ目の選択肢ボタンが出る。省略時は削除向けの赤いボタン。 */
 function showConfirm(message, onConfirm, opts){
@@ -2295,23 +2306,31 @@ function showConfirm(message, onConfirm, opts){
     pendingConfirmAlt = null;
   }
 
+  // 3つめの選び方（取り込み時の「更新 / 追加 / すべて追加」のように候補が3つある場合）
+  const alt2 = document.getElementById('confirm-alt2');
+  if(opts.alt2Label && opts.onAlt2){
+    alt2.textContent = opts.alt2Label;
+    alt2.style.display = 'inline-flex';
+    pendingConfirmAlt2 = opts.onAlt2;
+  } else {
+    alt2.style.display = 'none';
+    pendingConfirmAlt2 = null;
+  }
+
   pendingConfirmAction = onConfirm;
   openModal('confirm-modal');
 }
-function resolveConfirm(result){
+/* 押されたボタンの処理だけを実行し、残りの候補は必ず捨てる */
+function resolveConfirmWith(action){
   closeModal('confirm-modal');
-  const action = pendingConfirmAction;
   pendingConfirmAction = null;
   pendingConfirmAlt = null;
-  if(result && action) action();
-}
-function resolveConfirmAlt(){
-  closeModal('confirm-modal');
-  const action = pendingConfirmAlt;
-  pendingConfirmAlt = null;
-  pendingConfirmAction = null;
+  pendingConfirmAlt2 = null;
   if(action) action();
 }
+function resolveConfirm(result){ resolveConfirmWith(result ? pendingConfirmAction : null); }
+function resolveConfirmAlt(){    resolveConfirmWith(pendingConfirmAlt); }
+function resolveConfirmAlt2(){   resolveConfirmWith(pendingConfirmAlt2); }
 
 function toast(msg){
   const t = document.getElementById('toast');
@@ -3407,11 +3426,13 @@ function findExistingMatch(row){
   const nk = normKey(row.company_name);
   const em = normKey(row.email);
   const ph = normPhone(row.phone);
-  const pool = contacts.concat(clients);
-  for(const c of pool){
-    if(nk && normKey(c.name) === nk) return {name:c.name, by:'会社名'};
-    if(em && c.email && normKey(c.email) === em) return {name:c.name, by:'メール'};
-    if(ph && c.phone && normPhone(c.phone) === ph) return {name:c.name, by:'電話番号'};
+  // 一致した会社を後から更新できるよう、どちらの一覧のどのidかまで返す
+  const pool = contacts.map(c=>['contacts', c]).concat(clients.map(c=>['clients', c]));
+  for(const [section, c] of pool){
+    const by = (nk && normKey(c.name) === nk)            ? '会社名'
+             : (em && c.email && normKey(c.email) === em) ? 'メール'
+             : (ph && c.phone && normPhone(c.phone) === ph) ? '電話番号' : '';
+    if(by) return {name:c.name, by, id:c.id, section};
   }
   return null;
 }
@@ -3492,6 +3513,9 @@ function parsePastedList(){
       owner: ownerIdFromName(ownerText),
       owner_text: ownerText,
       status: normalizeStatus((cells[5] || '').trim()),
+      // 空欄のステータスは「未対応」として新規登録するが、既存の更新では触らない。
+      // そのために、元の欄が空だったかどうかを残しておく
+      status_text: (cells[5] || '').trim(),
       business: (cells[6] || '').trim(),
       revenue: (cells[7] || '').trim(),
       founded: (cells[8] || '').trim(),
@@ -3533,7 +3557,7 @@ function parsePastedList(){
   showStatus(
     `${parsed.length}件を読み込みました。` +
     (skipped ? `（会社名が空の${skipped}行は除きました）` : '') +
-    (dupCount ? `重複の可能性が${dupCount}件あります（黄色の印）。内容をご確認ください。`
+    (dupCount ? `登録済みの可能性が${dupCount}件あります（黄色の印）。その行は追加ではなく既存の会社の更新になります。`
               : ' 内容を確認して新規クライアントに追加してください。'),
     dupCount ? 'warn' : 'ok'
   );
@@ -3627,53 +3651,104 @@ function sheetXml(rows){
 <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>${body}</sheetData></worksheet>`;
 }
 
-function downloadTemplateXlsx(){
+/* xlsxを組み立てて保存する。sheets = [{name, rows}]（rowsは文字列の二次元配列） */
+function downloadXlsx(fileName, sheets, okMessage){
   const enc = new TextEncoder();
-  const headers = ['会社名','電話番号','メールアドレス','お問い合わせフォームURL','担当者',
-                   'ステータス','事業内容','売上規模','創業年数','上場区分','チケットツール','メモ',
-                   '業種','ランク','イベント規模','主催者','LINE公式','LINE公式アカウント情報','判定根拠'];
-  const example = ['株式会社サンプル音楽','03-0000-0000','info@sample.co.jp','https://sample.co.jp/contact',
-                   '小熊 夢樹','送信済','音楽制作','10億円','25年','非上場','Zendesk','展示会で名刺交換',
-                   '音楽制作','S','大','〇','〇','https://lin.ee/xxxx',
-                   '公式サイトに年間20公演の主催実績とLINE公式の掲載あり'];
-
-  // 別シートに、担当者とステータスの入力候補を参考として置く
-  const ref = [['入力候補（参考）'], ['担当者'], ...SALES_REPS.map(r=>[r.name]),
-               [''], ['ステータス'], ...STATUS_LIST.map(s=>[s]),
-               [''], ['上場区分'], ...['上場','非上場','不明'].map(v=>[v]),
-               [''], ['ランク'], ...RANK_OPTIONS.map(v=>[v]),
-               [''], ['イベント規模'], ...EVENT_SCALE_OPTIONS.filter(Boolean).map(v=>[v]),
-               [''], ['主催者 / LINE公式'], ['〇'], ['×']];
+  const overrides = sheets.map((s, i)=>
+    `<Override PartName="/xl/worksheets/sheet${i+1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join('');
+  const sheetTags = sheets.map((s, i)=>`<sheet name="${xmlEsc(s.name)}" sheetId="${i+1}" r:id="rId${i+1}"/>`).join('');
+  const sheetRels = sheets.map((s, i)=>
+    `<Relationship Id="rId${i+1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i+1}.xml"/>`).join('');
 
   const files = [
     {name:'[Content_Types].xml', data: enc.encode(
       `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/worksheets/sheet2.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>`)},
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>${overrides}</Types>`)},
     {name:'_rels/.rels', data: enc.encode(
       `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`)},
     {name:'xl/workbook.xml', data: enc.encode(
       `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="入力" sheetId="1" r:id="rId1"/><sheet name="入力候補" sheetId="2" r:id="rId2"/></sheets></workbook>`)},
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>${sheetTags}</sheets></workbook>`)},
     {name:'xl/_rels/workbook.xml.rels', data: enc.encode(
       `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet2.xml"/></Relationships>`)},
-    {name:'xl/worksheets/sheet1.xml', data: enc.encode(sheetXml([headers, example]))},
-    {name:'xl/worksheets/sheet2.xml', data: enc.encode(sheetXml(ref))},
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${sheetRels}</Relationships>`)},
+    ...sheets.map((s, i)=>({name:`xl/worksheets/sheet${i+1}.xml`, data: enc.encode(sheetXml(s.rows))})),
   ];
 
   try{
     const blob = buildZip(files);
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = url; a.download = '新規クライアント_取り込みフォーマット.xlsx';
+    a.href = url; a.download = fileName;
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(()=>URL.revokeObjectURL(url), 1000);
-    toast('Excelテンプレートを保存しました');
+    toast(okMessage);
   } catch(e){
     console.error(e);
     toast('保存できませんでした');
   }
+}
+
+/* 取り込み・書き出し共通の「入力候補」シート */
+function referenceSheetRows(){
+  return [['入力候補（参考）'], ['担当者'], ...SALES_REPS.map(r=>[r.name]),
+          [''], ['ステータス'], ...STATUS_LIST.map(s=>[s]),
+          [''], ['上場区分'], ...['上場','非上場','不明'].map(v=>[v]),
+          [''], ['ランク'], ...RANK_OPTIONS.map(v=>[v]),
+          [''], ['イベント規模'], ...EVENT_SCALE_OPTIONS.filter(Boolean).map(v=>[v]),
+          [''], ['主催者 / LINE公式'], ['〇'], ['×']];
+}
+
+function downloadTemplateXlsx(){
+  const example = ['株式会社サンプル音楽','03-0000-0000','info@sample.co.jp','https://sample.co.jp/contact',
+                   '小熊 夢樹','送信済','音楽制作','10億円','25年','非上場','Zendesk','展示会で名刺交換',
+                   '音楽制作','S','大','〇','〇','https://lin.ee/xxxx',
+                   '公式サイトに年間20公演の主催実績とLINE公式の掲載あり'];
+  downloadXlsx('新規クライアント_取り込みフォーマット.xlsx', [
+    {name:'入力',     rows:[IMPORT_COLUMNS, example]},
+    {name:'入力候補', rows:referenceSheetRows()},
+  ], 'Excelテンプレートを保存しました');
+}
+
+/* ---------- 取り込み済みの会社をExcelに書き出す ----------
+   取り込みと同じ列構成で出すので、別のチャットで空欄の判定列を埋めてもらい、
+   そのまま「企業リストを貼り付けて一括登録」に戻して既存の会社を更新できる。 */
+
+/* メモは「セル内で改行しない」規約に合わせ、最新の1件だけを1行にして書き出す。
+   全件つなげると、戻したときに1つの長いメモとして積み上がってしまうため。 */
+function latestNoteText(c){
+  const notes = c.notes || [];
+  if(!notes.length) return '';
+  return String(notes[notes.length - 1].text || '').replace(/[\r\n]+/g, ' ').trim();
+}
+
+function companyToRow(c){
+  return [
+    c.name || '', c.phone || '', c.email || '', c.inquiryForm || '',
+    c.owner ? ownerName(c.owner) : '', c.status || '',
+    c.business || '', c.revenue || '', c.founded || '', c.listing || '', c.ticketTool || '',
+    latestNoteText(c),
+    c.industry || '', c.rank || '', c.eventScale || '',
+    c.isOrganizer || '', c.lineOfficial || '', c.lineInfo || '',
+    '',   // 判定根拠は書き出さない。調べ直した結果を入れてもらう欄として空けておく
+  ];
+}
+
+function exportCompaniesXlsx(section){
+  const arr = dataOf(section);
+  // 選択があればそれ、無ければ表示中のすべて（絞り込みをそのまま活かす）
+  const ids = selection[section].size > 0 ? [...selection[section]] : visibleIds[section];
+  const rows = ids.map(id=>arr.find(c=>c.id===id)).filter(Boolean).map(companyToRow);
+  if(!rows.length){ toast('書き出す会社がありません'); return; }
+
+  const d = new Date();
+  const pad = n => String(n).padStart(2, '0');
+  const stamp = `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}`;
+  downloadXlsx(`${SECTION_LABEL[section]}_取り込み済み_${stamp}.xlsx`, [
+    {name:'入力',     rows:[IMPORT_COLUMNS, ...rows]},
+    {name:'入力候補', rows:referenceSheetRows()},
+  ], `${rows.length}件をExcelに書き出しました`);
 }
 
 /* ---------- ファイルから読み込む（.xlsx / .csv） ----------
@@ -3841,8 +3916,13 @@ function renderAiResults(){
     const tr = document.createElement('tr');
     if(r.dupExisting || r.dupInList) tr.className = 'dup-row';
     const dupBadge = r.dupExisting
-      ? `<div class="dup-badge" title="${escapeHtml(r.dupExisting.by)}が一致">登録済みの可能性：${escapeHtml(r.dupExisting.name)}（${escapeHtml(r.dupExisting.by)}一致）</div>`
+      ? `<div class="dup-badge" title="${escapeHtml(r.dupExisting.by)}が一致">登録済み：${escapeHtml(r.dupExisting.name)}（${escapeHtml(r.dupExisting.by)}一致）／空欄以外の列で更新できます</div>`
       : (r.dupInList ? '<div class="dup-badge">この一覧内で重複しています</div>' : '');
+    // 既に登録されている会社は、増やさずに更新する
+    const isUpdate = !!r.dupExisting;
+    const btnLabel = r.added ? (r.updated ? '更新済み' : '追加済み')
+                             : (isUpdate ? '既存を更新' : '新規クライアントに追加');
+    const btnFn = isUpdate ? 'updateExistingFromResult' : 'addAiResultToContacts';
     tr.innerHTML = `
       <td><div class="cell-name">${escapeHtml(r.company_name)}</div>${dupBadge}${r.source_note ? `<div class="ai-source-note">${escapeHtml(r.source_note)}</div>`:''}</td>
       <td>${r.phone ? escapeHtml(r.phone) : '<span class="unassigned">—</span>'}</td>
@@ -3857,8 +3937,8 @@ function renderAiResults(){
                             : '<span class="unassigned">未割当て</span>')}</td>
       <td>${statusPill(r.status)}${r.business ? `<div class="mail-meta">${escapeHtml(r.business)}</div>` : ''}</td>
       <td>
-        <button class="ai-add-btn" id="ai-add-btn-${idx}" onclick="addAiResultToContacts(${idx})" ${r.added?'disabled':''}>
-          ${r.added ? '追加済み' : '新規クライアントに追加'}
+        <button class="ai-add-btn" id="ai-add-btn-${idx}" onclick="${btnFn}(${idx})" ${r.added?'disabled':''}>
+          ${btnLabel}
         </button>
       </td>`;
     tbody.appendChild(tr);
@@ -3905,34 +3985,113 @@ function addAiResultToContacts(idx, silent){
   renderContacts(); renderHome();
 }
 
+/* 行の値を既存の会社に上書きする。空欄の列は触らない。
+   書き出したExcelを判定だけ埋めて戻したときに、元の内容が消えないようにするため。 */
+function applyRowToCompany(c, r){
+  const changed = [];
+  const set = (key, value, label)=>{
+    if(!value || c[key] === value) return;
+    c[key] = value;
+    changed.push(label);
+  };
+  set('phone',        r.phone,        '電話番号');
+  set('email',        r.email,        'メールアドレス');
+  set('inquiryForm',  r.inquiry_form, 'お問い合わせフォーム');
+  set('business',     r.business,     '事業内容');
+  set('revenue',      r.revenue,      '売上規模');
+  set('founded',      r.founded,      '創業年数');
+  set('listing',      r.listing,      '上場区分');
+  set('ticketTool',   r.ticketTool,   'チケットツール');
+  set('industry',     r.industry,     '業種');
+  set('rank',         r.rank,         'ランク');
+  set('eventScale',   r.eventScale,   'イベント規模');
+  set('isOrganizer',  r.isOrganizer,  '主催者');
+  set('lineOfficial', r.lineOfficial, 'LINE公式');
+  set('lineInfo',     r.lineInfo,     'LINE公式アカウント情報');
+  if(r.owner && c.owner !== r.owner){ c.owner = r.owner; changed.push('担当者'); }
+  // ステータスは、ファイル側に実際に書かれていたときだけ動かす
+  if(r.status_text && c.status !== r.status){
+    c.status = r.status;
+    c.statusUpdated = nowDateTimeStr();
+    changed.push('ステータス');
+  }
+
+  // メモと判定根拠は、同じ文面が既にあれば足さない（同じファイルを戻しても積み上がらない）
+  if(!c.notes) c.notes = [];
+  const hasNote = text => c.notes.some(n=>n.text === text);
+  if(r.source_note && !hasNote(r.source_note)){
+    c.notes.push({text:r.source_note, time:nowDateTimeStr(), author:ownerName(currentUser)});
+    changed.push('メモ');
+  }
+  const reason = r.reason ? '【企業検索】' + r.reason : '';
+  if(reason && !hasNote(reason)){
+    c.notes.push({text:reason, time:nowDateTimeStr(), author:'企業検索'});
+    changed.push('判定根拠');
+  }
+  return changed;
+}
+
+/* 既存の会社に一致した行を、新規追加ではなく更新として反映する */
+function updateExistingFromResult(idx, silent){
+  const r = aiResults[idx];
+  if(!r || r.added || !r.dupExisting) return false;
+  const c = dataOf(r.dupExisting.section).find(x=>x.id === r.dupExisting.id);
+  if(!c){ if(!silent) toast('更新先の会社が見つかりませんでした'); return false; }
+
+  const changed = applyRowToCompany(c, r);
+  r.added = true;
+  r.updated = true;
+  r.changedFields = changed;
+  if(!silent){
+    renderAiResults();
+    renderContacts(); renderClients(); renderHome();
+    toast(changed.length ? `${c.name} を更新しました（${changed.join('・')}）`
+                         : `${c.name} は更新する項目がありませんでした`);
+  }
+  return true;
+}
+
 function addAllAiResults(){
   const pending = aiResults.filter(r=>!r.added);
   if(pending.length === 0){ toast('追加できる項目がありません'); return; }
 
-  const dupCount = pending.filter(r=>r.dupExisting || r.dupInList).length;
+  const dupExisting = pending.filter(r=>r.dupExisting);
+  const dupAny = pending.filter(r=>r.dupExisting || r.dupInList);
+  const freshCount = pending.length - dupAny.length;
 
-  // 重複を含む場合は、除外して追加するか、まとめて追加するかを確認する
-  const run = (skipDup)=>{
-    let count = 0;
+  /* mode: 'update' = 既存に一致した行は更新して残りを追加
+           'skip'   = 重複を飛ばして新規だけ追加
+           'addAll' = 重複も新しい会社として追加 */
+  const run = (mode)=>{
+    let added = 0, updated = 0;
     aiResults.forEach((r, idx)=>{
       if(r.added) return;
-      if(skipDup && (r.dupExisting || r.dupInList)) return;
+      if(mode === 'update' && r.dupExisting){
+        if(updateExistingFromResult(idx, true)) updated++;
+        return;
+      }
+      if(mode !== 'addAll' && (r.dupExisting || r.dupInList)) return;
       addAiResultToContacts(idx, true);
-      count++;
+      added++;
     });
     renderAiResults();   // 除外した重複行の印を残したまま再描画
-    toast(count === 0 ? '追加した項目はありません' : `${count}件を新規クライアントに追加しました`);
+    renderContacts(); renderClients(); renderHome();
+    const parts = [];
+    if(updated) parts.push(`${updated}件を更新`);
+    if(added)   parts.push(`${added}件を新規追加`);
+    toast(parts.length ? parts.join('・') + 'しました' : '反映した項目はありません');
   };
 
-  if(dupCount > 0){
+  if(dupAny.length > 0){
     showConfirm(
-      `重複の可能性がある${dupCount}件が含まれています。どうしますか?`,
-      ()=>run(true),
-      {okLabel:`重複を除いて追加（${pending.length - dupCount}件）`, danger:false,
-       altLabel:`重複も含めて追加（${pending.length}件）`, onAlt:()=>run(false)}
+      `既に登録されている可能性のある会社が${dupAny.length}件含まれています。どうしますか?`,
+      ()=>run('update'),
+      {okLabel:`既存${dupExisting.length}件を更新して、新規${freshCount}件を追加`, danger:false,
+       altLabel:`重複を除いて、新規${freshCount}件だけ追加`, onAlt:()=>run('skip'),
+       alt2Label:`すべて新しい会社として追加（${pending.length}件）`, onAlt2:()=>run('addAll')}
     );
   } else {
-    run(false);
+    run('skip');
   }
 }
 
