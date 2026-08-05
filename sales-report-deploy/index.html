@@ -1,0 +1,949 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>クラウドバスケット売上レポート</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%2316a34a'/><text x='16' y='22' font-family='Arial,Helvetica,sans-serif' font-size='16' font-weight='bold' fill='white' text-anchor='middle'>cb</text></svg>">
+<style>
+  :root{
+    --brand:#16a34a; --brand-deep:#15803d; --brand-ink:#0b4a2a;
+    --brand-soft:#e7f4ec; --brand-soft2:#f1f9f4;
+    --bg:#eef5f0; --panel:#ffffff; --panel-2:#f6faf7;
+    --line:#dce7e0; --line-soft:#e9f0ec;
+    --ink:#16241d; --muted:#5f7369; --faint:#8a9a92;
+    --good:#16a34a; --warn:#d97706; --crit:#dc2626; --info:#2563eb;
+    --shadow:0 1px 2px rgba(16,40,28,.04),0 1px 3px rgba(16,40,28,.05);
+    --shadow-lg:0 10px 30px rgba(16,40,28,.10);
+    --radius:14px; --radius-sm:9px; --sb-w:248px;
+    --sans:"Hiragino Kaku Gothic ProN","Hiragino Sans","Yu Gothic","YuGothic","Meiryo",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{
+      --brand:#34d17f; --brand-deep:#22c06e; --brand-ink:#bff0d3;
+      --brand-soft:#16281f; --brand-soft2:#131f19;
+      --bg:#0e1512; --panel:#141d18; --panel-2:#111814;
+      --line:#26332c; --line-soft:#1e2a24;
+      --ink:#e7f1ea; --muted:#9bb0a5; --faint:#6f857a;
+      --shadow:0 1px 2px rgba(0,0,0,.3); --shadow-lg:0 12px 34px rgba(0,0,0,.45);
+    }
+  }
+  :root[data-theme="light"]{
+    --brand:#16a34a; --brand-deep:#15803d; --brand-ink:#0b4a2a;
+    --brand-soft:#e7f4ec; --brand-soft2:#f1f9f4;
+    --bg:#eef5f0; --panel:#ffffff; --panel-2:#f6faf7;
+    --line:#dce7e0; --line-soft:#e9f0ec;
+    --ink:#16241d; --muted:#5f7369; --faint:#8a9a92;
+    --shadow:0 1px 2px rgba(16,40,28,.04),0 1px 3px rgba(16,40,28,.05);
+    --shadow-lg:0 10px 30px rgba(16,40,28,.10);
+  }
+  :root[data-theme="dark"]{
+    --brand:#34d17f; --brand-deep:#22c06e; --brand-ink:#bff0d3;
+    --brand-soft:#16281f; --brand-soft2:#131f19;
+    --bg:#0e1512; --panel:#141d18; --panel-2:#111814;
+    --line:#26332c; --line-soft:#1e2a24;
+    --ink:#e7f1ea; --muted:#9bb0a5; --faint:#6f857a;
+    --shadow:0 1px 2px rgba(0,0,0,.3); --shadow-lg:0 12px 34px rgba(0,0,0,.45);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{font-family:var(--sans);color:var(--ink);background:var(--bg);-webkit-font-smoothing:antialiased;line-height:1.55;font-size:14px}
+  h1,h2,h3,h4{margin:0;font-weight:700;text-wrap:balance;letter-spacing:.01em}
+  button{font-family:inherit}
+  .num{font-variant-numeric:tabular-nums}
+
+  #gate{position:fixed;inset:0;z-index:100;display:flex;align-items:center;justify-content:center;background:radial-gradient(1200px 600px at 50% -10%,var(--brand-soft),var(--bg));padding:20px}
+  .gate-card{width:100%;max-width:380px;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow-lg);padding:32px 28px;text-align:center}
+  .gate-card .logo{margin:0 auto 18px}
+  .gate-card h1{font-size:19px}
+  .gate-card p{color:var(--muted);margin:6px 0 22px;font-size:13px}
+  .gate-card input{width:100%;padding:12px 14px;border:1px solid var(--line);border-radius:var(--radius-sm);background:var(--panel-2);color:var(--ink);font-size:15px;text-align:center;letter-spacing:.15em}
+  .gate-card input:focus{outline:2px solid var(--brand);outline-offset:1px;border-color:transparent}
+  .gate-card button{margin-top:14px;width:100%;padding:12px;border:none;border-radius:var(--radius-sm);background:var(--brand);color:#fff;font-weight:700;font-size:15px;cursor:pointer}
+  .gate-card button:hover{background:var(--brand-deep)}
+  .gate-err{color:var(--crit);font-size:12.5px;margin-top:12px;min-height:16px}
+
+  #app{display:none;min-height:100vh}
+  #app.on{display:grid;grid-template-columns:var(--sb-w) 1fr}
+  .scrim{display:none}
+  .sidebar{position:sticky;top:0;height:100vh;background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;padding:18px 14px}
+  .brand{display:flex;gap:11px;align-items:center;padding:6px 8px 16px;border-bottom:1px solid var(--line-soft)}
+  .logo{width:38px;height:38px;border-radius:11px;background:linear-gradient(150deg,var(--brand),var(--brand-deep));display:grid;place-items:center;color:#fff;font-weight:800;font-size:15px;letter-spacing:-.03em;flex:none;box-shadow:0 2px 8px rgba(22,163,74,.35)}
+  .brand .bt{display:flex;flex-direction:column;line-height:1.25}
+  .brand .bt b{font-size:14px}
+  .brand .bt span{font-size:9.5px;letter-spacing:.16em;color:var(--faint);font-weight:700;text-transform:uppercase}
+  .nav{margin-top:14px;overflow:auto;flex:1;display:flex;flex-direction:column;gap:2px}
+  .nav::-webkit-scrollbar{width:8px}.nav::-webkit-scrollbar-thumb{background:var(--line);border-radius:8px}
+  .nav-cap{font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);font-weight:800;padding:16px 10px 6px;display:flex;justify-content:space-between;align-items:center}
+  .nav-cap .add{cursor:pointer;color:var(--muted);font-size:15px;line-height:1;border:none;background:none;padding:2px 5px;border-radius:6px}
+  .nav-cap .add:hover{background:var(--brand-soft);color:var(--brand-deep)}
+  .navitem{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:var(--radius-sm);color:var(--ink);cursor:pointer;border:none;background:none;width:100%;text-align:left;font-size:13.5px;font-weight:600;position:relative}
+  .navitem:hover{background:var(--panel-2)}
+  .navent{display:flex;align-items:center;gap:10px;flex:1;min-width:0}
+  .navitem .ic,.navent .ic{width:18px;flex:none;color:var(--muted);display:grid;place-items:center}
+  .navitem.on,.navitem.on:hover{background:var(--brand-soft);color:var(--brand-ink)}
+  .navitem.on .ic{color:var(--brand-deep)}
+  .navlabel{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .badge{font-size:11px;color:var(--muted);background:var(--panel-2);border:1px solid var(--line-soft);border-radius:20px;padding:1px 8px;font-weight:700}
+  .navitem.on .badge{color:var(--brand-deep)}
+  .ev-del{opacity:0;border:none;background:none;color:var(--faint);cursor:pointer;font-size:14px;padding:2px 4px;border-radius:6px;flex:none}
+  .navitem:hover .ev-del{opacity:1}.ev-del:hover{background:var(--crit);color:#fff}
+  .sb-foot{border-top:1px solid var(--line-soft);padding-top:12px;margin-top:10px}
+  .sync{display:flex;align-items:center;gap:7px;font-size:12px;font-weight:700;color:var(--brand-deep);padding:2px 6px 10px}
+  .sync.warn{color:var(--warn)}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--brand);box-shadow:0 0 0 3px var(--brand-soft);flex:none}
+  .sync.warn .dot{background:var(--warn);box-shadow:0 0 0 3px #f6ecd9}
+  .sb-btns{display:flex;gap:6px}
+  .sb-btns button{flex:1;padding:7px 4px;border:1px solid var(--line);background:var(--panel-2);color:var(--ink);border-radius:8px;font-size:11.5px;font-weight:700;cursor:pointer}
+  .sb-btns button:hover{border-color:var(--brand);color:var(--brand-deep)}
+  .sb-meta{font-size:10.5px;color:var(--faint);padding:10px 6px 2px;line-height:1.5}
+
+  main{min-width:0;display:flex;flex-direction:column}
+  .topbar{position:sticky;top:0;z-index:10;background:color-mix(in srgb,var(--bg) 82%,transparent);backdrop-filter:blur(8px);border-bottom:1px solid var(--line-soft);padding:15px 30px;display:flex;align-items:center;justify-content:space-between;gap:16px}
+  .topbar h1{font-size:18px}
+  .top-r{display:flex;align-items:center;gap:10px}
+  .pill{font-size:11.5px;font-weight:700;color:var(--brand-deep);background:var(--brand-soft);border:1px solid color-mix(in srgb,var(--brand) 25%,transparent);padding:4px 11px;border-radius:20px;white-space:nowrap}
+  .edit-pill{cursor:pointer;border:1px solid var(--line);background:var(--panel);color:var(--muted)}
+  .edit-pill.on{background:var(--brand);color:#fff;border-color:var(--brand)}
+  .theme-btn{border:1px solid var(--line);background:var(--panel);color:var(--muted);width:34px;height:34px;border-radius:9px;cursor:pointer;display:grid;place-items:center}
+  .theme-btn:hover{color:var(--brand-deep);border-color:var(--brand)}
+  .content{padding:26px 30px 60px;max-width:1180px;width:100%}
+  .greet h2{font-size:22px}.greet p{color:var(--muted);margin:3px 0 0;font-size:13px}
+
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin:22px 0}
+  .kpi{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:18px;box-shadow:var(--shadow);position:relative;overflow:hidden}
+  .kpi .lab{font-size:12px;color:var(--muted);font-weight:700}
+  .kpi .val{font-size:27px;font-weight:800;margin-top:8px;letter-spacing:-.02em}
+  .kpi .val small{font-size:14px;font-weight:700;color:var(--muted);margin-left:3px}
+  .kpi .sub{font-size:11.5px;color:var(--faint);margin-top:4px}
+  .kpi .kic{position:absolute;right:14px;top:14px;color:var(--brand);opacity:.85}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow)}
+  .panel-h{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 20px;border-bottom:1px solid var(--line-soft)}
+  .panel-h h3{font-size:15px;display:flex;align-items:center;gap:8px}
+  .panel-h .sub{font-size:12px;color:var(--faint);font-weight:600}
+  .panel-b{padding:6px 8px}
+  .btn{border:1px solid var(--line);background:var(--panel-2);color:var(--ink);border-radius:9px;padding:8px 14px;font-size:12.5px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:7px}
+  .btn:hover{border-color:var(--brand);color:var(--brand-deep)}
+  .btn-pri{background:var(--brand);border-color:var(--brand);color:#fff}
+  .btn-pri:hover{background:var(--brand-deep);border-color:var(--brand-deep);color:#fff}
+  .btn-danger{border:1px solid var(--line);background:var(--panel-2);color:var(--crit)}
+  .btn-danger:hover{background:var(--crit);border-color:var(--crit);color:#fff}
+  .btn-sm{padding:6px 10px;font-size:11.5px}
+
+  .ann{display:flex;flex-direction:column}
+  .ann-item{display:flex;gap:16px;padding:16px 12px;border-bottom:1px solid var(--line-soft);position:relative}
+  .ann-item:last-child{border-bottom:none}
+  .ann-date{flex:none;width:96px;font-size:12px;color:var(--muted);font-weight:700;padding-top:2px}
+  .ann-date .tag{display:inline-block;margin-top:6px;font-size:10px;padding:2px 8px;border-radius:20px;font-weight:800;letter-spacing:.04em}
+  .tag.notice{background:var(--brand-soft);color:var(--brand-deep)}
+  .tag.event{background:#eaf1ff;color:#2554c7}
+  .tag.alert{background:#fdeceb;color:#c73a2c}
+  @media (prefers-color-scheme:dark){.tag.event{background:#16223d;color:#8fb0ff}.tag.alert{background:#341b1a;color:#f19a90}}
+  :root[data-theme="dark"] .tag.event{background:#16223d;color:#8fb0ff}
+  :root[data-theme="dark"] .tag.alert{background:#341b1a;color:#f19a90}
+  .ann-body{flex:1;min-width:0}.ann-body b{font-size:14px;display:block;margin-bottom:3px}.ann-body p{margin:0;color:var(--muted);font-size:13px;white-space:pre-wrap}
+  .ann-del{opacity:0;position:absolute;right:8px;top:14px;border:none;background:none;color:var(--faint);cursor:pointer;font-size:15px;padding:3px 6px;border-radius:6px}
+  .ann-item:hover .ann-del{opacity:1}.ann-del:hover{background:var(--crit);color:#fff}
+
+  .tabs{display:flex;gap:4px;align-items:center;flex-wrap:wrap;margin-bottom:18px;border-bottom:1px solid var(--line)}
+  .tab{padding:9px 15px;border:1px solid transparent;border-bottom:none;border-radius:10px 10px 0 0;cursor:pointer;background:none;color:var(--muted);font-weight:700;font-size:13px;position:relative;top:1px}
+  .tab:hover{color:var(--ink);background:var(--panel-2)}
+  .tab.on{background:var(--panel);border-color:var(--line);color:var(--brand-deep)}
+  .tab.on::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:2px;background:var(--panel)}
+  .tab-add{padding:8px 12px;border:1px dashed var(--line);border-radius:9px;background:none;color:var(--muted);cursor:pointer;font-weight:700;font-size:12.5px}
+  .tab-add:hover{border-color:var(--brand);color:var(--brand-deep);background:var(--brand-soft)}
+  .ev-head{display:flex;justify-content:space-between;align-items:flex-end;gap:14px;flex-wrap:wrap;margin-bottom:4px}
+  .ev-head .meta{font-size:12.5px;color:var(--muted);margin-top:4px}
+  .ev-actions{display:flex;gap:8px}
+
+  .tbl-wrap{overflow-x:auto}
+  table{width:100%;border-collapse:collapse;font-size:13px;min-width:720px}
+  thead th{text-align:right;font-size:11px;letter-spacing:.03em;color:var(--muted);font-weight:800;text-transform:uppercase;padding:12px 14px;border-bottom:1px solid var(--line);white-space:nowrap;background:var(--panel-2)}
+  thead th:first-child,tbody td:first-child{text-align:left}
+  tbody td{padding:12px 14px;border-bottom:1px solid var(--line-soft);text-align:right;white-space:nowrap}
+  tbody tr:hover{background:var(--panel-2)}tbody tr:last-child td{border-bottom:none}
+  .pname{font-weight:700;display:flex;align-items:center;gap:10px}
+  .pav{width:26px;height:26px;border-radius:8px;display:grid;place-items:center;font-size:11px;font-weight:800;color:#fff;flex:none}
+  tfoot td{padding:13px 14px;font-weight:800;border-top:2px solid var(--line);text-align:right;background:var(--panel-2)}
+  tfoot td:first-child{text-align:left}
+  .share-bar{display:inline-block;height:6px;border-radius:4px;background:var(--brand);vertical-align:middle;margin-right:8px}
+  .rate{font-weight:700}.rate.hi{color:var(--good)}.rate.mid{color:var(--warn)}.rate.lo{color:var(--muted)}
+
+  .bars{display:flex;flex-direction:column;gap:14px;padding:18px 20px}
+  .bar-row{display:grid;grid-template-columns:150px 1fr auto;gap:12px;align-items:center}
+  .bar-row .bn{font-size:12.5px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .bar-track{height:26px;background:var(--panel-2);border-radius:7px;overflow:hidden;border:1px solid var(--line-soft)}
+  .bar-fill{height:100%;background:linear-gradient(90deg,var(--brand-deep),var(--brand));border-radius:7px;min-width:2px;transition:width .5s cubic-bezier(.2,.7,.3,1)}
+  .bar-val{font-size:12.5px;font-weight:800;min-width:96px;text-align:right}
+  .bar-fill.alt{background:linear-gradient(90deg,#0d7c8a,#22b8c4)}
+  .seg{display:inline-flex;border:1px solid var(--line);border-radius:9px;overflow:hidden}
+  .seg-b{border:none;background:var(--panel);color:var(--muted);padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer;border-right:1px solid var(--line)}
+  .seg-b:last-child{border-right:none}
+  .seg-b:hover{color:var(--brand-deep)}
+  .seg-b.on{background:var(--brand);color:#fff}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media(max-width:900px){.grid2{grid-template-columns:1fr}}
+  .empty{padding:46px 20px;text-align:center;color:var(--muted)}
+  .empty .ei{font-size:34px;margin-bottom:8px;opacity:.5}
+  .empty b{display:block;font-size:15px;color:var(--ink);margin-bottom:4px}
+  .empty p{margin:0 auto;max-width:340px;font-size:13px}
+
+  .modal-bg{position:fixed;inset:0;z-index:80;background:rgba(15,30,22,.45);display:none;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(2px)}
+  .modal-bg.on{display:flex}
+  .modal{width:100%;max-width:420px;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow-lg);padding:24px}
+  .modal h3{font-size:16px;margin-bottom:4px}
+  .modal p.mh{color:var(--muted);font-size:12.5px;margin:0 0 16px}
+  .modal label{font-size:12px;font-weight:700;color:var(--muted);display:block;margin:12px 0 5px}
+  .modal input,.modal textarea,.modal select{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:9px;background:var(--panel-2);color:var(--ink);font-size:14px;font-family:inherit}
+  .modal textarea{resize:vertical;min-height:70px}
+  .modal input:focus,.modal textarea:focus,.modal select:focus{outline:2px solid var(--brand);outline-offset:1px;border-color:transparent}
+  .modal-act{display:flex;gap:10px;justify-content:flex-end;margin-top:20px}
+  .toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(20px);z-index:90;background:var(--ink);color:var(--bg);padding:11px 20px;border-radius:10px;font-size:13px;font-weight:700;box-shadow:var(--shadow-lg);opacity:0;transition:.25s;pointer-events:none;max-width:90vw;text-align:center}
+  .toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+
+  .modal.wide{max-width:640px}
+  .modal-scroll{max-height:56vh;overflow:auto;margin:8px -4px 0;padding:2px 4px}
+  .led-row{display:flex;gap:8px;align-items:center;margin-bottom:8px}
+  .led-i{flex:1;min-width:0;padding:9px 11px;border:1px solid var(--line);border-radius:8px;background:var(--panel-2);color:var(--ink);font-size:13.5px;font-family:inherit}
+  .led-i:focus{outline:2px solid var(--brand);outline-offset:1px;border-color:transparent}
+  .led-del{flex:none;width:32px;height:32px;border:1px solid var(--line);background:var(--panel-2);color:var(--crit);border-radius:8px;cursor:pointer;font-size:16px;line-height:1}
+  .led-del:hover{background:var(--crit);border-color:var(--crit);color:#fff}
+  .led-add{margin-top:2px;border:1px dashed var(--line);background:none;color:var(--muted);border-radius:8px;padding:8px 12px;font-size:12.5px;font-weight:700;cursor:pointer;width:100%}
+  .led-add:hover{border-color:var(--brand);color:var(--brand-deep);background:var(--brand-soft)}
+  .led-card{border:1px solid var(--line);border-radius:10px;padding:12px 12px 4px;margin-bottom:10px;position:relative;background:var(--panel-2)}
+  .led-card .led-del{position:absolute;top:8px;right:8px;width:28px;height:28px;font-size:15px}
+  .led-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px 10px}
+  .led-grid .fld{display:flex;flex-direction:column;gap:3px;margin-bottom:8px}
+  .led-grid .fld.wide{grid-column:1/-1}
+  .led-grid label{margin:0;font-size:10.5px;font-weight:700;color:var(--muted)}
+  .ann-edit{opacity:0;position:absolute;right:36px;top:14px;border:none;background:none;color:var(--faint);cursor:pointer;font-size:14px;padding:3px 6px;border-radius:6px}
+  .ann-item:hover .ann-edit{opacity:1}.ann-edit:hover{background:var(--brand-soft);color:var(--brand-deep)}
+  .ord-row{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--line);border-radius:9px;background:var(--panel-2);margin-bottom:8px}
+  .ord-row .oi{flex:none;width:16px;text-align:center;color:var(--faint);font-size:12px;font-weight:800}
+  .ord-row .on{flex:1;min-width:0;font-weight:700;font-size:13.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .ord-btns{display:flex;gap:5px;flex:none}
+  .ord-btns button{width:31px;height:31px;border:1px solid var(--line);background:var(--panel);color:var(--muted);border-radius:7px;cursor:pointer;font-size:14px;line-height:1}
+  .ord-btns button:hover:not(:disabled){border-color:var(--brand);color:var(--brand-deep)}
+  .ord-btns button:disabled{opacity:.35;cursor:default}
+
+  @media(max-width:820px){
+    #app.on{grid-template-columns:1fr}
+    .sidebar{position:fixed;left:0;top:0;z-index:60;transform:translateX(-100%);transition:.25s;width:280px;box-shadow:var(--shadow-lg)}
+    .sidebar.open{transform:none}
+    .menu-btn{display:grid!important}
+    .scrim{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:55}.scrim.on{display:block}
+    .content{padding:20px 16px 50px}.topbar{padding:13px 16px}
+  }
+  .menu-btn{display:none;border:1px solid var(--line);background:var(--panel);color:var(--ink);width:34px;height:34px;border-radius:9px;cursor:pointer;place-items:center}
+  @media(prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+
+<div id="gate">
+  <div class="gate-card">
+    <div class="logo">cb</div>
+    <h1>クラウドバスケット売上レポート</h1>
+    <p>閲覧にはパスワードが必要です</p>
+    <input id="pw" type="password" autocomplete="off" placeholder="パスワード" aria-label="パスワード">
+    <button id="pwBtn">ログイン</button>
+    <div class="gate-err" id="pwErr"></div>
+  </div>
+</div>
+
+<div id="app">
+  <div class="scrim" id="scrim"></div>
+  <aside class="sidebar" id="sidebar">
+    <div class="brand"><div class="logo">cb</div><div class="bt"><span>Sales Report</span><b>クラウドバスケット</b></div></div>
+    <nav class="nav" id="nav"></nav>
+    <div class="sb-foot">
+      <div class="sync" id="syncBox"><span class="dot"></span><span id="syncTxt">接続中…</span></div>
+      <div class="sb-btns">
+        <button id="backupBtn">バックアップ</button>
+        <button id="restoreBtn">復元</button>
+        <button id="logoutBtn">ログアウト</button>
+      </div>
+      <div class="sb-meta">共有版 v1.0 ・ CrowdBasket<br>データは全端末とクラウドで同期されます</div>
+    </div>
+  </aside>
+  <main>
+    <div class="topbar">
+      <div style="display:flex;align-items:center;gap:12px">
+        <button class="menu-btn" id="menuBtn" aria-label="メニュー">☰</button>
+        <h1 id="pageTitle">ホーム</h1>
+      </div>
+      <div class="top-r">
+        <span class="pill" id="datePill"></span>
+        <button class="pill edit-pill" id="editBtn" title="編集モード">閲覧モード</button>
+        <button class="theme-btn" id="themeBtn" title="テーマ切替" aria-label="テーマ切替">◐</button>
+      </div>
+    </div>
+    <div class="content" id="view"></div>
+  </main>
+</div>
+
+<div class="modal-bg" id="modalBg"><div class="modal" id="modal"></div></div>
+<div class="toast" id="toast"></div>
+<input type="file" id="fileIn" accept=".csv,text/csv" style="display:none">
+<input type="file" id="restoreIn" accept=".json,application/json" style="display:none">
+
+<!-- ============================================================
+     Firebase 設定（CRMと同じプロジェクトを再利用・売上レポート専用ドキュメント）
+     公開前提の値です（秘密鍵ではありません）。アクセス制御はFirestoreルールで。
+     ============================================================ -->
+<script type="module">
+  const firebaseConfig = {
+    apiKey:            "AIzaSyCPVl5WKuGJGmphUBdF4KLZ578V8fRZVUI",
+    authDomain:        "cloud-firestore-d30ec.firebaseapp.com",
+    projectId:         "cloud-firestore-d30ec",
+    storageBucket:     "cloud-firestore-d30ec.firebasestorage.app",
+    messagingSenderId: "917417718363",
+    appId:             "1:917417718363:web:a6fbb7fc9ab323af95c57e"
+  };
+  const V = "10.12.0";
+  try{
+    const { initializeApp } = await import(`https://www.gstatic.com/firebasejs/${V}/firebase-app.js`);
+    const { getAuth, signInAnonymously, onAuthStateChanged } =
+      await import(`https://www.gstatic.com/firebasejs/${V}/firebase-auth.js`);
+    const { getFirestore, doc, onSnapshot, setDoc, enableIndexedDbPersistence } =
+      await import(`https://www.gstatic.com/firebasejs/${V}/firebase-firestore.js`);
+    const app  = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db   = getFirestore(app);
+    enableIndexedDbPersistence(db).catch(()=>{});
+    window.FB = {
+      auth, db,
+      ready:new Promise(res=>{ onAuthStateChanged(auth, u=>{ if(u) res(u); }); signInAnonymously(auth).catch(e=>{console.error(e);}); }),
+      docRef: ()=>doc(db, 'salesReport', 'main'),
+      watch: (ref, cb, err)=>onSnapshot(ref, {includeMetadataChanges:true}, cb, err),
+      write: (ref, data)=>setDoc(ref, data),
+    };
+    window.dispatchEvent(new Event('fb-ready'));
+  }catch(e){
+    console.error(e); window.FB_ERROR = e; window.dispatchEvent(new Event('fb-failed'));
+  }
+</script>
+
+<script>
+(function(){
+  "use strict";
+  var VIEW_PASSWORD = "crowdbasket";   // ★閲覧パスワード（全員で共有）
+  var EDIT_PASSWORD = "crowdbasketadmin"; // ★編集モードの管理パスワード（あなただけ）
+
+  // ★エクスポート補正：CSVの金額は「元売上−0.9%＋システム利用料330円」で書き出されているため、
+  //   決済1件ごとに元の総売上へ戻す（(金額−330)×(1+0.9%)＋330）。数値はここで調整可能。
+  var SYS_FEE  = 330;    // システム利用料（1決済あたり・円）
+  var FEE_RATE = 0.009;  // エクスポート時に控除される率（0.9%）
+
+  var state = defaults();
+  var route = {view:"home", eventId:null};
+  var editable = false;
+
+  // ---------- icons ----------
+  function ic(name){
+    var p={
+      home:'<path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/>',
+      report:'<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
+      ticket:'<path d="M3 8a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2 2 2 0 0 0 0 4 2 2 0 0 1-2 2H5a2 2 0 0 1-2-2 2 2 0 0 0 0-4Z"/><path d="M15 6v12"/>',
+      yen:'<path d="M7 4l5 7 5-7M12 11v9M8 14h8M8 17h8"/>',
+      bell:'<path d="M18 9a6 6 0 1 0-12 0c0 6-2 7-2 7h16s-2-1-2-7"/><path d="M10.3 20a2 2 0 0 0 3.4 0"/>',
+      chart:'<path d="M21 21H4a1 1 0 0 1-1-1V3"/><path d="M7 14l3-4 3 3 4-6"/>',
+      users:'<circle cx="9" cy="8" r="3.2"/><path d="M3.5 20a5.5 5.5 0 0 1 11 0"/><path d="M16 5.2a3.2 3.2 0 0 1 0 6.1M17 20a5.5 5.5 0 0 0-3-4.9"/>',
+      pipe:'<path d="M4 6h16M4 12h16M4 18h10"/>'
+    };
+    return '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">'+(p[name]||'')+'</svg>';
+  }
+
+  // ---------- seed / defaults ----------
+  // イベント構造: {id,name,date,venue,
+  //   ticket:{total,byProduct:[{k,v}],bySeat:[{k,v}]}|null,   ← チケット管理CSV
+  //   dateMap:{注文番号:'YYYY-MM-DD'}|null,                    ← チケット管理CSV（売上の日付紐付け用）
+  //   orderRaw:[{o,a,s}]|null,                                ← 注文管理CSV（o=注文ID,a=金額,s=決済状況）
+  //   sales:{total,count,daily:[{d,c,a}]}|null}               ← 事前集計（シード用フォールバック）
+  function defaults(){
+    return {
+      v:2,
+      announcements:[
+        {id:uid(),date:"2026-08-02",type:"notice",title:"チケット枚数・売上の集計に対応しました",body:"「チケット管理」CSVで席タイプ別の枚数、「注文管理」CSVで日・週・月別の売上（決済済みのみ）を集計します。イベント画面の「CSVを取込」から読み込めます。"},
+        {id:uid(),date:"2026-07-28",type:"event",title:"RISE201（8/29 後楽園ホール）の集計を掲載",body:"チケット451枚・売上¥3,729,837（決済済み164件）を反映しています。Eventタブからご確認ください。"},
+        {id:uid(),date:"2026-07-01",type:"notice",title:"共有レポートサイトを開設しました",body:"複数名でのリアルタイム閲覧に対応。Eventはサイドバーのタブから追加できます。"}
+      ],
+      events:[
+        {id:uid(),name:"RISE201 8/29 後楽園ホール",date:"2026-08-29",venue:"東京・後楽園ホール",
+          ticket:{total:451,
+            byProduct:[
+              {k:"【赤コーナー指定】8月29日(土) RISE201 東京後楽園ホール",v:255},
+              {k:"【青コーナー指定】8月29日(土) RISE201 東京後楽園ホール",v:184},
+              {k:"【レディースシート】8月29日(土) RISE201 東京後楽園ホール",v:12}
+            ],
+            bySeat:[{k:"S",v:162},{k:"A",v:160},{k:"RS",v:70},{k:"SRS",v:48},{k:"VIP（最前列）",v:11}]},
+          dateMap:null, orderRaw:null,
+          sales:{total:3729837,count:164,daily:[
+            {d:"2026-07-24",c:27,a:959060},{d:"2026-07-25",c:16,a:233639},{d:"2026-07-26",c:12,a:341897},
+            {d:"2026-07-27",c:28,a:678809},{d:"2026-07-28",c:20,a:265709},{d:"2026-07-29",c:16,a:383129},
+            {d:"2026-07-30",c:31,a:507932},{d:"2026-07-31",c:7,a:272801},{d:"2026-08-01",c:7,a:86861}
+          ]}}
+      ]
+    };
+  }
+  function uid(){return Math.random().toString(36).slice(2,9);}
+
+  // ---------- helpers ----------
+  function yen(n){return "¥"+Math.round(n).toLocaleString("ja-JP");}
+  function nf(n){return Math.round(n).toLocaleString("ja-JP");}
+  function fmtDate(d){var t=new Date(d+"T00:00:00");if(isNaN(t))return d;var w=["日","月","火","水","木","金","土"][t.getDay()];return t.getFullYear()+"年"+(t.getMonth()+1)+"月"+t.getDate()+"日("+w+")";}
+  function avatarColor(name){var h=0;for(var i=0;i<name.length;i++)h=name.charCodeAt(i)+((h<<5)-h);return "hsl("+(Math.abs(h)%360)+" 55% 42%)";}
+  function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];});}
+  function pad2(x){x=String(x);return x.length<2?"0"+x:x;}
+  function toISODate(s){if(!s)return null;var p=String(s).split(/[ T]/)[0].split(/[\/\-]/);if(p.length<3)return null;return p[0]+"-"+pad2(p[1])+"-"+pad2(p[2]);}
+  function mondayOf(ds){var d=new Date(ds+"T00:00:00");if(isNaN(d))return ds;var wd=(d.getDay()+6)%7;d.setDate(d.getDate()-wd);return d.getFullYear()+"-"+pad2(d.getMonth()+1)+"-"+pad2(d.getDate());}
+  function mdLabel(ds){var p=ds.split("-");return (+p[1])+"/"+(+p[2]);}
+  function fmtStamp(iso){var d=new Date(iso);if(isNaN(d))return "";return (d.getMonth()+1)+"/"+d.getDate()+" "+pad2(d.getHours())+":"+pad2(d.getMinutes());}
+  function wdayJ(ds){var d=new Date(ds+"T00:00:00");if(isNaN(d))return "";return "("+["日","月","火","水","木","金","土"][d.getDay()]+")";}
+  // ticket/sales 取得
+  function ticketOf(ev){return ev&&ev.ticket?ev.ticket:null;}
+  function ticketTotal(ev){var t=ticketOf(ev);return t?(t.total||0):0;}
+  function salesOf(ev){
+    if(ev&&ev.orderRaw&&ev.orderRaw.length){
+      var dm=ev.dateMap||{},total=0,count=0,day={};
+      ev.orderRaw.forEach(function(r){
+        if(r.s!=="決済済み")return; var amt=grossFromExport(r.a); total+=amt; count++;
+        var d=dm[r.o]||null; if(d){if(!day[d])day[d]={c:0,a:0};day[d].c++;day[d].a+=amt;}
+      });
+      var daily=Object.keys(day).sort().map(function(d){return {d:d,c:day[d].c,a:day[d].a};});
+      return {total:total,count:count,daily:daily};
+    }
+    return ev&&ev.sales?ev.sales:null;
+  }
+  function salesTotal(ev){var s=salesOf(ev);return s?(s.total||0):0;}
+  // CSVエクスポート金額 → 元の総売上（決済1件あたり）に戻す
+  function grossFromExport(a){a=+a||0;if(a<=0)return a;return Math.round((a-SYS_FEE)*(1+FEE_RATE)+SYS_FEE);}
+  // 日/週/月へ集計
+  function groupSales(daily,period){
+    daily=daily||[];
+    if(period==="day")return daily.map(function(x){return {label:mdLabel(x.d),sub:wdayJ(x.d),c:x.c,a:x.a};});
+    var m={};
+    daily.forEach(function(x){
+      var key,label,sub;
+      if(period==="month"){key=x.d.slice(0,7);var mp=key.split("-");label=(+mp[0])+"年"+(+mp[1])+"月";sub="";}
+      else{key=mondayOf(x.d);label=mdLabel(key)+"〜";sub="週";}
+      if(!m[key])m[key]={key:key,label:label,sub:sub,c:0,a:0};m[key].c+=x.c;m[key].a+=x.a;
+    });
+    return Object.keys(m).sort().map(function(k){return m[k];});
+  }
+
+  // ================= Firestore sync =================
+  var syncReady=false, applyingRemote=false, lastSaved="", fbOk=false;
+  function snapshot(){return JSON.stringify({v:1,announcements:state.announcements,events:state.events});}
+  function setSync(text,cls){var b=document.getElementById("syncBox"),t=document.getElementById("syncTxt");if(!t)return;t.textContent=text;b.className="sync"+(cls?" "+cls:"");}
+
+  function pushData(){
+    if(!fbOk)return;
+    var s=snapshot(); if(s===lastSaved)return;
+    try{
+      var d=JSON.parse(s);
+      window.FB.write(window.FB.docRef(),{announcements:d.announcements,events:d.events,v:1,updatedAt:new Date().toISOString()})
+        .then(function(){lastSaved=s;setSync("全員と同期済み");})
+        .catch(function(e){console.error(e);setSync("保存できません（権限/通信）","warn");});
+    }catch(e){console.error(e);}
+  }
+  function commit(){ // 編集を保存＝ローカル反映＋クラウド送信
+    save_local(); render();
+    if(fbOk) pushData();
+  }
+  function save_local(){try{localStorage.setItem("cb_salesreport_cache",snapshot());}catch(e){}}
+
+  function applyRemote(d){
+    applyingRemote=true;
+    try{
+      if(Array.isArray(d.announcements)) state.announcements=d.announcements;
+      if(Array.isArray(d.events)) state.events=d.events;
+      lastSaved=snapshot(); save_local(); render();
+    }finally{applyingRemote=false;}
+  }
+
+  function startSync(){
+    fbOk=true;
+    window.FB.ready.then(function(){
+      window.FB.watch(window.FB.docRef(), function(snap){
+        if(!snap.exists()){
+          // 初回：シードデータで作成（誰が開いても同一内容なので競合しても無害）
+          setSync("初期データを作成中…");
+          window.FB.write(window.FB.docRef(),{announcements:state.announcements,events:state.events,v:1,updatedAt:new Date().toISOString()})
+            .then(function(){lastSaved=snapshot();syncReady=true;setSync("全員と同期済み");})
+            .catch(function(e){console.error(e);setSync("接続できません（ルール未設定？）","warn");});
+          return;
+        }
+        var d=snap.data();
+        if(!applyingRemote) applyRemote(d);
+        syncReady=true;
+        var pending=snap.metadata.hasPendingWrites;
+        setSync(pending?"保存中…":"全員と同期済み");
+      }, function(err){console.error(err);setSync("接続エラー（ルールを確認）","warn");});
+    });
+  }
+  window.addEventListener("fb-ready",startSync);
+  window.addEventListener("fb-failed",function(){
+    fbOk=false; setSync("オフライン（この端末のみ）","warn");
+    try{var c=localStorage.getItem("cb_salesreport_cache");if(c){var d=JSON.parse(c);applyRemote(d);} }catch(e){}
+    render();
+  });
+
+  // ================= render =================
+  var elView=document.getElementById("view"), elTitle=document.getElementById("pageTitle");
+  function render(){
+    buildNav();
+    if(route.view==="home"){elTitle.textContent="ホーム";renderHome();}
+    else if(route.view==="report"){elTitle.textContent="データ分析";renderReport();}
+    else {elTitle.textContent="Event";renderPipeline();}
+    document.getElementById("datePill").textContent=fmtDate(new Date().toISOString().slice(0,10));
+    var eb=document.getElementById("editBtn");eb.textContent=editable?"編集モード ●":"閲覧モード";eb.classList.toggle("on",editable);
+  }
+
+  function buildNav(){
+    var nav=document.getElementById("nav");
+    var evs=state.events.map(function(ev){
+      var on=(route.view==="pipeline"&&route.eventId===ev.id);
+      return '<button class="navitem'+(on?' on':'')+'" data-ev="'+ev.id+'"><span class="navent"><span class="ic">'+ic("ticket")+'</span><span class="navlabel">'+esc(ev.name)+'</span></span><span class="badge num">'+nf(ticketTotal(ev))+'</span>'+(editable?'<button class="ev-del" data-del="'+ev.id+'" title="削除">×</button>':'')+'</button>';
+    }).join("");
+    nav.innerHTML=
+      '<button class="navitem'+(route.view==="home"?' on':'')+'" data-go="home"><span class="ic">'+ic("home")+'</span><span class="navlabel">ホーム</span></button>'+
+      '<div class="nav-cap">Event'+(editable?'<span style="display:flex;gap:2px"><button class="add" id="reorderEvTop" title="並び替え">⇅</button><button class="add" id="addEvTop" title="イベント追加">＋</button></span>':'')+'</div>'+
+      (evs||'<div class="sb-meta" style="padding:2px 10px">イベント未登録</div>')+
+      '<div class="nav-cap">レポート</div>'+
+      '<button class="navitem'+(route.view==="report"?' on':'')+'" data-go="report"><span class="ic">'+ic("report")+'</span><span class="navlabel">データ分析</span></button>';
+  }
+
+  function renderHome(){
+    var anns=state.announcements.slice().sort(function(a,b){return a.date<b.date?1:-1;});
+    var tagName={notice:"お知らせ",event:"イベント",alert:"重要"};
+    var items=anns.map(function(a){
+      return '<div class="ann-item"><div class="ann-date num">'+esc(a.date.replace(/-/g,"/"))+'<br><span class="tag '+esc(a.type)+'">'+(tagName[a.type]||"お知らせ")+'</span></div><div class="ann-body"><b>'+esc(a.title)+'</b><p>'+esc(a.body)+'</p></div>'+(editable?'<button class="ann-edit" data-annedit="'+a.id+'" title="編集">✎</button><button class="ann-del" data-anndel="'+a.id+'" title="削除">×</button>':'')+'</div>';
+    }).join("") || '<div class="empty"><div class="ei">'+ic("bell")+'</div><b>お知らせはありません</b><p>編集モードで「お知らせを追加」から投稿できます。</p></div>';
+    elView.innerHTML=
+      '<div class="greet"><h2>クラウドバスケット売上レポート</h2><p>チーム共有ダッシュボード ・ '+fmtDate(new Date().toISOString().slice(0,10))+' 時点</p></div>'+
+      '<div class="panel" style="margin-top:22px"><div class="panel-h"><h3>'+ic("bell")+' お知らせ</h3>'+(editable?'<button class="btn btn-sm" id="addAnn">＋ お知らせを追加</button>':'')+'</div><div class="panel-b"><div class="ann">'+items+'</div></div></div>';
+  }
+
+  function barList(items,fmt,accent){
+    var max=Math.max.apply(null,items.map(function(x){return x.v;}).concat([1]));
+    return '<div class="bars">'+items.map(function(x){
+      return '<div class="bar-row"><div class="bn" title="'+esc(x.k)+'">'+esc(x.k)+'</div>'+
+        '<div class="bar-track"><div class="bar-fill'+(accent?" alt":"")+'" style="width:'+(x.v/max*100)+'%"></div></div>'+
+        '<div class="bar-val num">'+fmt(x.v)+'</div></div>';
+    }).join("")+'</div>';
+  }
+  function renderPipeline(){
+    if((!route.eventId||!state.events.some(function(e){return e.id===route.eventId;}))&&state.events[0])route.eventId=state.events[0].id;
+    var tabs=state.events.map(function(ev){return '<button class="tab'+(ev.id===route.eventId?' on':'')+'" data-tab="'+ev.id+'">'+esc(ev.name)+'</button>';}).join("");
+    var ev=state.events.filter(function(e){return e.id===route.eventId;})[0];
+    var body;
+    if(!ev){
+      body='<div class="panel"><div class="empty"><div class="ei">'+ic("ticket")+'</div><b>イベントがありません</b><p>'+(editable?'「＋ タブを追加」でイベントを作成し、「チケット管理」「注文管理」CSVを取り込むと枚数と売上が表示されます。':'編集モードでイベントを追加できます。')+'</p></div></div>';
+    }else{
+      var tk=ticketOf(ev), sa=salesOf(ev);
+      var totalTk=tk?tk.total:0, totalAmt=sa?sa.total:0, cnt=sa?sa.count:0, avg=totalTk?totalAmt/totalTk:0;
+      var period=route.period||"day";
+
+      var tkEditBtn=editable?'<button class="btn btn-sm" data-edittk="'+ev.id+'">編集</button>':'';
+      // 席タイプ別
+      var seatPanel;
+      if(tk&&tk.bySeat&&tk.bySeat.length){
+        seatPanel='<div class="panel"><div class="panel-h"><h3>席タイプ別 枚数</h3>'+hRight('<span class="sub">合計 '+nf(totalTk)+' 枚</span>'+tkEditBtn)+'</div>'+barList(tk.bySeat.slice().sort(function(a,b){return b.v-a.v;}),function(v){return nf(v)+" 枚";})+'</div>';
+      }else if(editable){
+        seatPanel='<div class="panel"><div class="panel-h"><h3>席タイプ別 枚数</h3><button class="btn btn-sm" data-edittk="'+ev.id+'">＋ 手入力</button></div><div class="empty" style="padding:34px 20px"><b>チケット枚数データなし</b><p>「＋ 手入力」で席タイプ別の枚数を入力できます。CSV取込でも自動集計されます。</p></div></div>';
+      }else{
+        seatPanel=cardEmpty("チケット枚数データなし","「チケット管理」CSVを取り込むと席タイプ別の枚数が表示されます。");
+      }
+      // コーナー別（商品名）
+      var prodPanel;
+      if(tk&&tk.byProduct&&tk.byProduct.length){
+        prodPanel='<div class="panel"><div class="panel-h"><h3>コーナー・商品別 枚数</h3>'+hRight('<span class="sub">商品名ごと</span>'+tkEditBtn)+'</div>'+barList(tk.byProduct.slice().sort(function(a,b){return b.v-a.v;}),function(v){return nf(v)+" 枚";},true)+'</div>';
+      }else if(editable){
+        prodPanel='<div class="panel"><div class="panel-h"><h3>コーナー・商品別 枚数</h3><button class="btn btn-sm" data-edittk="'+ev.id+'">＋ 手入力</button></div><div class="empty" style="padding:34px 20px"><b>コーナー・商品別データなし</b><p>「＋ 手入力」で商品・コーナー別の枚数を入力できます。</p></div></div>';
+      }else{
+        prodPanel="";
+      }
+
+      // 売上推移
+      var salEditBtn=editable?'<button class="btn btn-sm" data-editsales="'+ev.id+'">編集</button>':'';
+      var salesPanel;
+      if(sa&&sa.daily&&sa.daily.length){
+        var g=groupSales(sa.daily,period);
+        var maxA=Math.max.apply(null,g.map(function(x){return x.a;}).concat([1]));
+        var rows=g.map(function(x){
+          return '<tr><td>'+esc(x.label)+(x.sub?' <span style="color:var(--faint);font-weight:600">'+esc(x.sub)+'</span>':'')+'</td>'+
+            '<td style="width:52%"><div class="bar-track" style="height:20px"><div class="bar-fill" style="width:'+(x.a/maxA*100)+'%"></div></div></td>'+
+            '<td class="num">'+nf(x.c)+'</td><td class="num"><b>'+yen(x.a)+'</b></td></tr>';
+        }).join("");
+        var seg='<div class="seg">'+["day","week","month"].map(function(p){var lb={day:"日別",week:"週別",month:"月別"}[p];return '<button class="seg-b'+(p===period?" on":"")+'" data-period="'+p+'">'+lb+'</button>';}).join("")+'</div>';
+        salesPanel='<div class="panel"><div class="panel-h"><h3>売上推移（決済済み）</h3>'+hRight(seg+salEditBtn)+'</div>'+
+          '<div class="tbl-wrap"><table><thead><tr><th>'+({day:"日",week:"週",month:"月"}[period])+'</th><th>売上</th><th>件数</th><th>金額</th></tr></thead><tbody>'+rows+
+          '</tbody><tfoot><tr><td>合計</td><td></td><td class="num">'+nf(cnt)+'</td><td class="num">'+yen(totalAmt)+'</td></tr></tfoot></table></div></div>';
+      } else if(sa){
+        salesPanel='<div class="panel"><div class="panel-h"><h3>売上（決済済み）</h3>'+hRight('<span class="sub">合計 '+yen(totalAmt)+' / '+nf(cnt)+'件</span>'+salEditBtn)+'</div><div class="empty" style="padding:30px"><b>日別の内訳がありません</b><p>日・週・月別に分けるには「編集」で日別データを入力するか、「チケット管理」CSV（購入日を含む）も取り込んでください。</p></div></div>';
+      } else if(editable){
+        salesPanel='<div class="panel"><div class="panel-h"><h3>売上推移（決済済み）</h3><button class="btn btn-sm" data-editsales="'+ev.id+'">＋ 手入力</button></div><div class="empty" style="padding:34px 20px"><b>売上データなし</b><p>「＋ 手入力」で日別の件数・金額を入力できます。CSV取込でも集計されます。</p></div></div>';
+      } else {
+        salesPanel=cardEmpty("売上データなし","「注文管理」CSVを取り込むと決済済み売上を日・週・月別に集計します。");
+      }
+
+      // 選手別
+      var plEditBtn=editable?'<button class="btn btn-sm" data-editplayers="'+ev.id+'">編集</button>':'';
+      var playerPanel;
+      if(ev.players&&ev.players.length){
+        var ps=ev.players.slice().sort(function(a,b){return (b.sales-a.sales)||(b.access-a.access);});
+        var pTot=ps.reduce(function(s,p){return s+(p.sales||0);},0);
+        var pTrs=ps.map(function(p){
+          var share=pTot?p.sales/pTot*100:0;
+          return '<tr><td><div class="pname"><span class="pav" style="background:'+avatarColor(p.n)+'">'+esc(String(p.n).slice(0,1))+'</span>'+esc(p.n)+(p.g?' <span style="color:var(--faint);font-weight:600;font-size:11px">'+esc(p.g)+'</span>':'')+'</div></td>'+
+            '<td class="num">'+nf(p.access)+'</td><td class="num">'+nf(p.clicks)+'</td><td class="num">'+nf(p.tickets)+'</td><td class="num">'+nf(p.count)+'</td><td class="num"><b>'+yen(p.sales)+'</b></td><td class="num">'+share.toFixed(1)+'%</td></tr>';
+        }).join("");
+        playerPanel='<div class="panel" style="margin-top:16px"><div class="panel-h"><h3>選手別 売上</h3>'+hRight('<span class="sub">広告コード別 ・ 売上の多い順</span>'+plEditBtn)+'</div><div class="tbl-wrap"><table><thead><tr><th>選手名</th><th>アクセス</th><th>クリック</th><th>枚数</th><th>件数</th><th>売上</th><th>構成比</th></tr></thead><tbody>'+pTrs+'</tbody><tfoot><tr><td>合計</td><td class="num">—</td><td class="num">—</td><td class="num">—</td><td class="num">—</td><td class="num">'+yen(pTot)+'</td><td class="num">100%</td></tr></tfoot></table></div></div>';
+      } else {
+        playerPanel='<div class="panel" style="margin-top:16px"><div class="panel-h"><h3>選手別 売上</h3>'+(editable?'<button class="btn btn-sm" data-editplayers="'+ev.id+'">＋ 手入力</button>':'')+'</div><div class="empty" style="padding:30px"><b>選手別データなし</b><p>'+(editable?'「＋ 手入力」で選手別（広告コード別）の数値を入力できます。「CSVを取込」でも自動集計されます。':'選手別データは未取込です。')+'</p></div></div>';
+      }
+
+      body=
+        '<div class="ev-head"><div><h2 style="font-size:19px">'+esc(ev.name)+'</h2><div class="meta">'+(ev.date?fmtDate(ev.date):"日付未設定")+(ev.venue?" ・ "+esc(ev.venue):"")+'</div>'+
+        ((ev.tkAt||ev.odAt||ev.plAt)?'<div class="meta" style="margin-top:2px;font-size:11.5px">最終取込 '+[ev.tkAt?'チケット '+fmtStamp(ev.tkAt):'',ev.odAt?'注文 '+fmtStamp(ev.odAt):'',ev.plAt?'選手 '+fmtStamp(ev.plAt):''].filter(Boolean).join(' / ')+'</div>':'')+'</div>'+
+        (editable?'<div class="ev-actions"><button class="btn" data-editev="'+ev.id+'">編集</button><button class="btn btn-pri" data-import="'+ev.id+'">'+ic("chart")+' CSVを取込</button><button class="btn btn-danger" data-del="'+ev.id+'">削除</button></div>':'')+'</div>'+
+        '<div class="kpis">'+kpi("総売上金",yen(totalAmt),"yen","決済済み")+kpi("チケット枚数",nf(totalTk)+'<small>枚</small>',"ticket","販売済み")+kpi("平均単価",yen(avg),"chart","売上÷枚数")+kpi("決済件数",nf(cnt)+'<small>件</small>',"pipe","注文数")+'</div>'+
+        salesPanel+
+        '<div class="grid2" style="margin-top:16px">'+seatPanel+prodPanel+'</div>'+
+        playerPanel+
+        '<div class="sb-meta" style="padding:14px 4px 0">※ 販売継続中は、最新のCSV（チケット管理／注文管理／選手別）を再度「CSVを取込」すれば最新の内容に更新されます（同じ注文・チケットは重複しません）。</div>';
+    }
+    elView.innerHTML='<div class="tabs">'+tabs+(editable?'<button class="tab-add" id="addTab">＋ タブを追加</button>'+(state.events.length>1?'<button class="tab-add" id="reorderTab">⇅ 並び替え</button>':''):'')+'</div>'+body;
+  }
+  function cardEmpty(title,desc){return '<div class="panel"><div class="empty"><div class="ei">'+ic("ticket")+'</div><b>'+esc(title)+'</b><p>'+esc(desc)+'</p></div></div>';}
+  function kpi(lab,val,icon,sub){return '<div class="kpi"><div class="kic">'+ic(icon)+'</div><div class="lab">'+esc(lab)+'</div><div class="val num">'+val+'</div>'+(sub?'<div class="sub">'+esc(sub)+'</div>':'')+'</div>';}
+  function hRight(inner){return '<div style="display:flex;gap:8px;align-items:center">'+inner+'</div>';}
+
+  // ---------- 手入力（リスト）エディタ用ヘルパー ----------
+  function pnum(s){return parseFloat(String(s==null?"":s).replace(/[^0-9.\-]/g,""))||0;}
+  function ledRow(cols,r){
+    r=r||{};
+    return '<div class="led-row">'+cols.map(function(c){
+      var v=(r[c.key]==null?"":r[c.key]);
+      var t=c.type==="date"?"date":(c.num?"number":"text");
+      return '<input class="led-i" data-k="'+c.key+'" type="'+t+'"'+(c.num?' inputmode="numeric"':'')+(c.flex?' style="flex:'+c.flex+'"':'')+' placeholder="'+esc(c.ph||"")+'" value="'+esc(v)+'">';
+    }).join("")+'<button type="button" class="led-del" title="削除">×</button></div>';
+  }
+  function ledCard(cols,r){
+    r=r||{};
+    return '<div class="led-card"><button type="button" class="led-del" title="削除">×</button><div class="led-grid">'+cols.map(function(c){
+      var v=(r[c.key]==null?"":r[c.key]);
+      return '<div class="fld'+(c.wide?" wide":"")+'"><label>'+esc(c.lab)+'</label><input class="led-i" data-k="'+c.key+'" type="'+(c.num?"number":"text")+'"'+(c.num?' inputmode="numeric"':'')+' value="'+esc(v)+'"></div>';
+    }).join("")+'</div></div>';
+  }
+  function ledRead(cont,sel,cols){
+    return [].slice.call(cont.querySelectorAll(sel)).map(function(row){
+      var o={};cols.forEach(function(c){var el=row.querySelector('[data-k="'+c.key+'"]');o[c.key]=el?el.value.trim():"";});return o;
+    });
+  }
+  function ledDelHandler(e){var d=e.target.closest(".led-del");if(d){e.preventDefault();var host=d.closest(".led-row,.led-card");if(host)host.remove();}}
+
+  function renderReport(){
+    var evs=state.events, grandTk=0,grandAmt=0,grandCnt=0;
+    evs.forEach(function(ev){grandTk+=ticketTotal(ev);var s=salesOf(ev);if(s){grandAmt+=s.total||0;grandCnt+=s.count||0;}});
+    var avg=grandTk?grandAmt/grandTk:0;
+    // イベント別売上
+    var evData=evs.map(function(ev){return {k:ev.name,v:salesTotal(ev)};}).sort(function(a,b){return b.v-a.v;});
+    var evBars=evData.length?barList(evData,function(v){return yen(v);}):'<div class="empty"><b>集計対象がありません</b></div>';
+    // 席タイプ別（全イベント合算）
+    var seatMap={};evs.forEach(function(ev){var t=ticketOf(ev);if(t&&t.bySeat)t.bySeat.forEach(function(s){seatMap[s.k]=(seatMap[s.k]||0)+s.v;});});
+    var seatData=Object.keys(seatMap).map(function(k){return {k:k,v:seatMap[k]};}).sort(function(a,b){return b.v-a.v;});
+    var seatBars=seatData.length?barList(seatData,function(v){return nf(v)+" 枚";},true):'<div class="empty"><b>チケットデータがありません</b></div>';
+    // 選手ランキング（全イベント合算）
+    var pm={};evs.forEach(function(ev){(ev.players||[]).forEach(function(p){if(!pm[p.n])pm[p.n]={k:p.n,v:0};pm[p.n].v+=(p.sales||0);});});
+    var pd=Object.keys(pm).map(function(k){return pm[k];}).filter(function(x){return x.v>0;}).sort(function(a,b){return b.v-a.v;}).slice(0,12);
+    var playerRank=pd.length?'<div class="panel" style="margin-top:16px"><div class="panel-h"><h3>選手別 売上ランキング</h3><span class="sub">全イベント合算 ・ 上位'+pd.length+'名</span></div>'+barList(pd,function(v){return yen(v);})+'</div>':'';
+    elView.innerHTML=
+      '<div class="greet"><h2>データ分析</h2><p>全イベント横断の集計 ・ '+evs.length+'イベント</p></div>'+
+      '<div class="kpis">'+kpi("総売上金",yen(grandAmt),"yen","決済済み合計")+kpi("総チケット枚数",nf(grandTk)+'<small>枚</small>',"ticket","全イベント合計")+kpi("平均単価",yen(avg),"chart","売上÷枚数")+kpi("イベント数",evs.length+'<small>件</small>',"pipe","登録済み")+'</div>'+
+      '<div class="grid2"><div class="panel"><div class="panel-h"><h3>イベント別 売上</h3><span class="sub">売上の多い順</span></div>'+evBars+'</div><div class="panel"><div class="panel-h"><h3>席タイプ別 枚数</h3><span class="sub">全イベント合算</span></div>'+seatBars+'</div></div>'+
+      playerRank;
+  }
+
+  // ================= interactions =================
+  document.addEventListener("click",function(e){
+    var t=e.target.closest("[data-go],[data-ev],[data-del],[data-tab],[data-import],[data-editev],[data-edittk],[data-editsales],[data-editplayers],[data-period],#addTab,#addEvTop,#reorderTab,#reorderEvTop,#addAnn,[data-anndel],[data-annedit]");
+    if(!t)return;
+    if(t.hasAttribute("data-period")){route.period=t.getAttribute("data-period");render();return;}
+    if(t.hasAttribute("data-del")){e.stopPropagation();delEvent(t.getAttribute("data-del"));return;}
+    if(t.hasAttribute("data-anndel")){delAnn(t.getAttribute("data-anndel"));return;}
+    if(t.hasAttribute("data-annedit")){editAnnModal(t.getAttribute("data-annedit"));return;}
+    if(t.hasAttribute("data-edittk")){editTicketModal(t.getAttribute("data-edittk"));return;}
+    if(t.hasAttribute("data-editsales")){editSalesModal(t.getAttribute("data-editsales"));return;}
+    if(t.hasAttribute("data-editplayers")){editPlayersModal(t.getAttribute("data-editplayers"));return;}
+    if(t.hasAttribute("data-go")){route.view=t.getAttribute("data-go");closeSidebar();render();return;}
+    if(t.hasAttribute("data-ev")){route.view="pipeline";route.eventId=t.getAttribute("data-ev");closeSidebar();render();return;}
+    if(t.hasAttribute("data-tab")){route.eventId=t.getAttribute("data-tab");render();return;}
+    if(t.id==="addTab"||t.id==="addEvTop"){addEventModal();return;}
+    if(t.id==="reorderTab"||t.id==="reorderEvTop"){reorderModal();return;}
+    if(t.hasAttribute("data-editev")){editEventModal(t.getAttribute("data-editev"));return;}
+    if(t.hasAttribute("data-import")){importFor=t.getAttribute("data-import");document.getElementById("fileIn").click();return;}
+    if(t.id==="addAnn"){addAnnModal();return;}
+  });
+
+  function requireEdit(){ if(!editable){toast("編集モードで操作してください");return false;} return true; }
+
+  function addEventModal(){
+    if(!requireEdit())return;
+    openModal('<h3>タブ（イベント）を追加</h3><p class="mh">EVENT名を入力してください。追加後、「チケット管理」「注文管理」CSVを取り込むと枚数と売上が表示されます。</p><label>EVENT名 <span style="color:var(--crit)">*</span></label><input id="m_name" placeholder="例）RISE201 8/29 後楽園ホール"><label>開催日</label><input id="m_date" type="date"><label>会場</label><input id="m_venue" placeholder="例）東京・後楽園ホール"><div class="modal-act"><button class="btn" data-close>キャンセル</button><button class="btn btn-pri" id="m_ok">追加する</button></div>',function(){document.getElementById("m_name").focus();});
+    document.getElementById("m_ok").onclick=function(){var name=document.getElementById("m_name").value.trim();if(!name){document.getElementById("m_name").focus();return;}var ev={id:uid(),name:name,date:document.getElementById("m_date").value,venue:document.getElementById("m_venue").value.trim(),ticket:null,dateMap:null,orderRaw:null,sales:null,players:null};state.events.unshift(ev);route.view="pipeline";route.eventId=ev.id;closeModal();commit();toast("イベント「"+name+"」を追加しました");};
+  }
+  function reorderModal(){
+    if(!requireEdit())return;
+    if(state.events.length<2){toast("並び替えるにはイベントが2件以上必要です");return;}
+    var ord=state.events.slice();
+    function draw(){
+      document.getElementById("ordCont").innerHTML=ord.map(function(ev,i){
+        return '<div class="ord-row"><span class="oi num">'+(i+1)+'</span><span class="on">'+esc(ev.name)+'</span><span class="ord-btns"><button type="button" data-mv="up" data-i="'+i+'"'+(i===0?" disabled":"")+' title="上へ">↑</button><button type="button" data-mv="down" data-i="'+i+'"'+(i===ord.length-1?" disabled":"")+' title="下へ">↓</button></span></div>';
+      }).join("");
+    }
+    openModal('<h3>イベントの並び替え</h3><p class="mh">サイドバーとタブに表示される順番を変更します。↑↓で移動し、保存すると全員に反映されます。</p><div class="modal-scroll"><div id="ordCont"></div></div><div class="modal-act"><button class="btn" data-close>キャンセル</button><button class="btn btn-pri" id="ordok">保存</button></div>');
+    var cont=document.getElementById("ordCont");
+    draw();
+    cont.addEventListener("click",function(e){
+      var btn=e.target.closest("[data-mv]");if(!btn)return;
+      var i=+btn.getAttribute("data-i"),j=btn.getAttribute("data-mv")==="up"?i-1:i+1;
+      if(j<0||j>=ord.length)return;
+      var tmp=ord[i];ord[i]=ord[j];ord[j]=tmp;draw();
+    });
+    document.getElementById("ordok").onclick=function(){state.events=ord;closeModal();commit();toast("並び順を保存しました");};
+  }
+  function editEventModal(id){
+    if(!requireEdit())return;
+    var ev=state.events.filter(function(e){return e.id===id;})[0];if(!ev)return;
+    openModal('<h3>イベントを編集</h3><p class="mh">名称・開催日・会場を変更できます。</p><label>EVENT名</label><input id="m_name" value="'+esc(ev.name)+'"><label>開催日</label><input id="m_date" type="date" value="'+esc(ev.date||"")+'"><label>会場</label><input id="m_venue" value="'+esc(ev.venue||"")+'"><div class="modal-act"><button class="btn" data-close>キャンセル</button><button class="btn btn-pri" id="m_ok">保存</button></div>');
+    document.getElementById("m_ok").onclick=function(){ev.name=document.getElementById("m_name").value.trim()||ev.name;ev.date=document.getElementById("m_date").value;ev.venue=document.getElementById("m_venue").value.trim();closeModal();commit();toast("保存しました");};
+  }
+  function delEvent(id){if(!requireEdit())return;var ev=state.events.filter(function(e){return e.id===id;})[0];if(!ev)return;if(!confirm("イベント「"+ev.name+"」を削除しますか？\n取り込んだ集計データも削除されます。"))return;state.events=state.events.filter(function(e){return e.id!==id;});if(route.eventId===id)route.eventId=state.events[0]?state.events[0].id:null;commit();toast("削除しました");}
+
+  function addAnnModal(){
+    if(!requireEdit())return;
+    var today=new Date().toISOString().slice(0,10);
+    openModal('<h3>お知らせを追加</h3><p class="mh">ホーム画面に表示されます。</p><label>種別</label><select id="a_type"><option value="notice">お知らせ</option><option value="event">イベント</option><option value="alert">重要</option></select><label>日付</label><input id="a_date" type="date" value="'+today+'"><label>タイトル <span style="color:var(--crit)">*</span></label><input id="a_title" placeholder="例）8月度レポートを公開しました"><label>本文</label><textarea id="a_body" placeholder="内容を入力"></textarea><div class="modal-act"><button class="btn" data-close>キャンセル</button><button class="btn btn-pri" id="a_ok">投稿する</button></div>',function(){document.getElementById("a_title").focus();});
+    document.getElementById("a_ok").onclick=function(){var title=document.getElementById("a_title").value.trim();if(!title){document.getElementById("a_title").focus();return;}state.announcements.push({id:uid(),date:document.getElementById("a_date").value||new Date().toISOString().slice(0,10),type:document.getElementById("a_type").value,title:title,body:document.getElementById("a_body").value.trim()});closeModal();commit();toast("お知らせを追加しました");};
+  }
+  function delAnn(id){if(!requireEdit())return;if(!confirm("このお知らせを削除しますか？"))return;state.announcements=state.announcements.filter(function(a){return a.id!==id;});commit();toast("削除しました");}
+  function editAnnModal(id){
+    if(!requireEdit())return;
+    var a=state.announcements.filter(function(x){return x.id===id;})[0];if(!a)return;
+    openModal('<h3>お知らせを編集</h3><p class="mh">ホーム画面の表示を更新します。</p><label>種別</label><select id="a_type"><option value="notice">お知らせ</option><option value="event">イベント</option><option value="alert">重要</option></select><label>日付</label><input id="a_date" type="date" value="'+esc(a.date||"")+'"><label>タイトル <span style="color:var(--crit)">*</span></label><input id="a_title" value="'+esc(a.title||"")+'"><label>本文</label><textarea id="a_body">'+esc(a.body||"")+'</textarea><div class="modal-act"><button class="btn" data-close>キャンセル</button><button class="btn btn-pri" id="a_ok">保存</button></div>',function(){document.getElementById("a_type").value=a.type||"notice";document.getElementById("a_title").focus();});
+    document.getElementById("a_ok").onclick=function(){var title=document.getElementById("a_title").value.trim();if(!title){document.getElementById("a_title").focus();return;}a.type=document.getElementById("a_type").value;a.date=document.getElementById("a_date").value||a.date;a.title=title;a.body=document.getElementById("a_body").value.trim();closeModal();commit();toast("お知らせを更新しました");};
+  }
+
+  // ---------- データ手入力（チケット枚数 / 売上 / 選手別）----------
+  function editTicketModal(id){
+    if(!requireEdit())return;
+    var ev=state.events.filter(function(e){return e.id===id;})[0];if(!ev)return;
+    var tk=ev.ticket||{bySeat:[],byProduct:[]};
+    var seatCols=[{key:"k",ph:"席タイプ（例：S）",flex:"2"},{key:"v",ph:"枚数",num:true,flex:"1"}];
+    var prodCols=[{key:"k",ph:"商品・コーナー名",flex:"2"},{key:"v",ph:"枚数",num:true,flex:"1"}];
+    var seatRows=(tk.bySeat||[]).map(function(x){return {k:x.k,v:x.v};});
+    var prodRows=(tk.byProduct||[]).map(function(x){return {k:x.k,v:x.v};});
+    openModal(
+      '<h3>チケット枚数を編集</h3><p class="mh">席タイプ別・コーナー商品別の枚数を手入力できます。合計は自動で計算されます。</p>'+
+      '<div class="modal-scroll">'+
+        '<label>席タイプ別</label><div id="seatCont">'+(seatRows.length?seatRows.map(function(r){return ledRow(seatCols,r);}).join(""):ledRow(seatCols,{}))+'</div>'+
+        '<button type="button" class="led-add" id="seatAdd">＋ 席タイプを追加</button>'+
+        '<label style="margin-top:14px">コーナー・商品別</label><div id="prodCont">'+(prodRows.length?prodRows.map(function(r){return ledRow(prodCols,r);}).join(""):"")+'</div>'+
+        '<button type="button" class="led-add" id="prodAdd">＋ 商品・コーナーを追加</button>'+
+      '</div>'+
+      '<div class="modal-act"><button class="btn" data-close>キャンセル</button><button class="btn btn-pri" id="tkok">保存</button></div>'
+    );
+    var seatCont=document.getElementById("seatCont"),prodCont=document.getElementById("prodCont");
+    seatCont.addEventListener("click",ledDelHandler);prodCont.addEventListener("click",ledDelHandler);
+    document.getElementById("seatAdd").onclick=function(){seatCont.insertAdjacentHTML("beforeend",ledRow(seatCols,{}));};
+    document.getElementById("prodAdd").onclick=function(){prodCont.insertAdjacentHTML("beforeend",ledRow(prodCols,{}));};
+    document.getElementById("tkok").onclick=function(){
+      var bySeat=ledRead(seatCont,".led-row",seatCols).map(function(r){return {k:r.k,v:pnum(r.v)};}).filter(function(x){return x.k;});
+      var byProduct=ledRead(prodCont,".led-row",prodCols).map(function(r){return {k:r.k,v:pnum(r.v)};}).filter(function(x){return x.k;});
+      if(!bySeat.length&&!byProduct.length){ev.ticket=null;ev.tkAt=new Date().toISOString();closeModal();commit();toast("チケット枚数をクリアしました");return;}
+      var total=bySeat.length?bySeat.reduce(function(s,x){return s+x.v;},0):byProduct.reduce(function(s,x){return s+x.v;},0);
+      ev.ticket={total:total,byProduct:byProduct,bySeat:bySeat};ev.tkAt=new Date().toISOString();
+      closeModal();commit();toast("チケット枚数を保存しました（合計 "+nf(total)+" 枚）");
+    };
+  }
+  function editSalesModal(id){
+    if(!requireEdit())return;
+    var ev=state.events.filter(function(e){return e.id===id;})[0];if(!ev)return;
+    var sa=salesOf(ev)||{daily:[]};
+    var cols=[{key:"d",ph:"日付",type:"date",flex:"1.3"},{key:"c",ph:"件数",num:true,flex:".9"},{key:"a",ph:"金額(円)",num:true,flex:"1.3"}];
+    var rows=(sa.daily||[]).map(function(x){return {d:x.d,c:x.c,a:x.a};});
+    var note=(ev.orderRaw&&ev.orderRaw.length)?'<p class="mh" style="color:var(--warn)">※ 現在はCSV取込の注文明細から集計中です。ここで保存すると手入力の日別データに置き換わります。</p>':"";
+    openModal(
+      '<h3>売上（日別）を編集</h3><p class="mh">日付・件数・金額を手入力できます。合計と決済件数は自動計算されます。</p>'+note+
+      '<div class="modal-scroll"><div id="salCont">'+(rows.length?rows.map(function(r){return ledRow(cols,r);}).join(""):ledRow(cols,{}))+'</div>'+
+      '<button type="button" class="led-add" id="salAdd">＋ 日付を追加</button></div>'+
+      '<div class="modal-act"><button class="btn" data-close>キャンセル</button><button class="btn btn-pri" id="salok">保存</button></div>'
+    );
+    var salCont=document.getElementById("salCont");
+    salCont.addEventListener("click",ledDelHandler);
+    document.getElementById("salAdd").onclick=function(){salCont.insertAdjacentHTML("beforeend",ledRow(cols,{}));};
+    document.getElementById("salok").onclick=function(){
+      var daily=ledRead(salCont,".led-row",cols).map(function(r){return {d:toISODate(r.d)||r.d,c:pnum(r.c),a:pnum(r.a)};}).filter(function(x){return x.d;});
+      daily.sort(function(a,b){return a.d<b.d?-1:a.d>b.d?1:0;});
+      if(!daily.length){ev.sales=null;ev.orderRaw=null;ev.odAt=new Date().toISOString();closeModal();commit();toast("売上データをクリアしました");return;}
+      var total=daily.reduce(function(s,x){return s+x.a;},0),count=daily.reduce(function(s,x){return s+x.c;},0);
+      ev.sales={total:total,count:count,daily:daily};ev.orderRaw=null;ev.odAt=new Date().toISOString();
+      closeModal();commit();toast("売上を保存しました（"+yen(total)+" / "+nf(count)+"件）");
+    };
+  }
+  function editPlayersModal(id){
+    if(!requireEdit())return;
+    var ev=state.events.filter(function(e){return e.id===id;})[0];if(!ev)return;
+    var cols=[{key:"n",lab:"選手名（広告コード）",wide:true},{key:"g",lab:"グループ",wide:true},{key:"access",lab:"アクセス",num:true},{key:"clicks",lab:"クリック",num:true},{key:"tickets",lab:"枚数",num:true},{key:"count",lab:"件数",num:true},{key:"sales",lab:"売上(円)",num:true}];
+    var rows=(ev.players||[]).map(function(p){return {n:p.n,g:p.g,access:p.access,clicks:p.clicks,tickets:p.tickets,count:p.count,sales:p.sales};});
+    openModal(
+      '<h3>選手別データを編集</h3><p class="mh">広告コード（選手）ごとの数値を手入力できます。売上の多い順に自動で並び替わります。</p>'+
+      '<div class="modal-scroll"><div id="plCont">'+(rows.length?rows.map(function(r){return ledCard(cols,r);}).join(""):ledCard(cols,{}))+'</div>'+
+      '<button type="button" class="led-add" id="plAdd">＋ 選手を追加</button></div>'+
+      '<div class="modal-act"><button class="btn" data-close>キャンセル</button><button class="btn btn-pri" id="plok">保存</button></div>',
+      null, true
+    );
+    var plCont=document.getElementById("plCont");
+    plCont.addEventListener("click",ledDelHandler);
+    document.getElementById("plAdd").onclick=function(){plCont.insertAdjacentHTML("beforeend",ledCard(cols,{}));};
+    document.getElementById("plok").onclick=function(){
+      var players=ledRead(plCont,".led-card",cols).map(function(r){return {n:r.n,g:r.g,access:pnum(r.access),clicks:pnum(r.clicks),tickets:pnum(r.tickets),count:pnum(r.count),sales:pnum(r.sales)};}).filter(function(p){return p.n;});
+      ev.players=players.length?players:null;ev.plAt=new Date().toISOString();
+      closeModal();commit();toast(players.length?("選手別データを保存しました（"+nf(players.length)+"名）"):"選手別データをクリアしました");
+    };
+  }
+
+  // ---------- CSV import（チケット管理 / 注文管理 を自動判定）----------
+  var importFor=null;
+  document.getElementById("fileIn").addEventListener("change",function(e){
+    var f=e.target.files[0];e.target.value="";if(!f||!importFor)return;
+    var rd=new FileReader();
+    rd.onload=function(){
+      var buf=rd.result,text;
+      try{text=new TextDecoder("utf-8",{fatal:true}).decode(buf);}catch(err){try{text=new TextDecoder("shift_jis").decode(buf);}catch(e2){text=new TextDecoder().decode(buf);}}
+      var tbl=parseTable(text);
+      if(tbl.error){toast(tbl.error);return;}
+      var ev=state.events.filter(function(x){return x.id===importFor;})[0];if(!ev)return;
+      var kind=detectKind(tbl.head);
+      if(kind==="ticket"){var r=importTickets(ev,tbl);if(r.error){toast(r.error);return;}commit();toast(r.prev!=null?("チケット枚数を更新："+nf(r.prev)+" → "+nf(r.total)+" 枚"):("チケット管理を取込：合計 "+nf(r.total)+" 枚"));}
+      else if(kind==="order"){var r2=importOrders(ev,tbl);if(r2.error){toast(r2.error);return;}commit();toast(r2.prev!=null?("売上を更新："+yen(r2.prevT)+" → "+yen(r2.total)+"（決済 "+nf(r2.count)+"件）"):("注文管理を取込：決済済み "+nf(r2.count)+" 件 / "+yen(r2.total)));}
+      else if(kind==="player"){var r3=importPlayers(ev,tbl);if(r3.error){toast(r3.error);return;}commit();toast((r3.prev!=null?"選手別データを更新：":"選手別を取込：")+nf(r3.rows)+"件（売上あり "+nf(r3.withSales)+"名）");}
+      else toast("対応していないCSVです（チケット管理／注文管理／選手別のいずれかを選んでください）");
+    };
+    rd.readAsArrayBuffer(f);
+  });
+  function idxer(head){return function(names){for(var i=0;i<head.length;i++){var h=String(head[i]).replace(/\s/g,"");for(var j=0;j<names.length;j++)if(h===names[j])return i;}return -1;};}
+  function detectKind(head){
+    var ix=idxer(head);
+    if(ix(["商品名"])>=0&&ix(["オブジェクト名"])>=0&&ix(["注文番号"])>=0)return "ticket";
+    if(ix(["注文ID"])>=0&&ix(["金額"])>=0&&ix(["決済状況"])>=0)return "order";
+    if(ix(["広告コード"])>=0&&ix(["購入金額"])>=0)return "player";
+    return null;
+  }
+  function importPlayers(ev,tbl){
+    var ix=idxer(tbl.head);
+    var iN=ix(["広告コード"]),iG=ix(["グループ名"]),iM=ix(["パートナー名"]),iA=ix(["アクセス数"]),iC=ix(["クリック数"]),iT=ix(["購入商品数"]),iCt=ix(["購入件数"]),iS=ix(["購入金額"]);
+    if(iN<0||iS<0)return {error:"選手データの列（広告コード/購入金額）が見つかりません"};
+    var agg={},order=[];
+    tbl.rows.forEach(function(c){
+      var n=(c[iN]||"").trim(); if(!n)return;
+      var num=function(i){return i>=0?(parseFloat(String(c[i]||"").replace(/[^0-9.\-]/g,""))||0):0;};
+      if(!agg[n]){agg[n]={n:n,g:iG>=0?(c[iG]||"").trim():"",access:0,clicks:0,tickets:0,count:0,sales:0};order.push(n);}
+      var a=agg[n];a.access+=num(iA);a.clicks+=num(iC);a.tickets+=num(iT);a.count+=num(iCt);a.sales+=num(iS);
+    });
+    var players=order.map(function(n){return agg[n];});
+    if(!players.length)return {error:"選手データの行がありません"};
+    var prev=ev.players?ev.players.length:null;
+    var withSales=players.filter(function(p){return p.sales>0;}).length;
+    ev.players=players; ev.plAt=new Date().toISOString();
+    return {rows:players.length,withSales:withSales,prev:prev};
+  }
+  function importTickets(ev,tbl){
+    var ix=idxer(tbl.head);
+    var iP=ix(["商品名"]),iS=ix(["オブジェクト名"]),iO=ix(["注文番号"]),iD=ix(["購入期間"]);
+    if(iP<0||iS<0)return {error:"チケット管理の列（商品名/オブジェクト名）が見つかりません"};
+    var byP={},byS={},total=0,dateMap={};
+    tbl.rows.forEach(function(c){
+      var p=(c[iP]||"").trim(); if(!p)return;
+      var s=(c[iS]||"").trim()||"(未設定)";
+      byP[p]=(byP[p]||0)+1; byS[s]=(byS[s]||0)+1; total++;
+      if(iO>=0){var o=(c[iO]||"").trim(); if(o&&!dateMap[o]&&iD>=0){var d=toISODate(c[iD]); if(d)dateMap[o]=d;}}
+    });
+    if(!total)return {error:"チケットのデータ行がありません"};
+    var prev=ev.ticket?ev.ticket.total:null;
+    ev.ticket={total:total,byProduct:mapToArr(byP),bySeat:mapToArr(byS)};
+    ev.dateMap=dateMap; ev.tkAt=new Date().toISOString();
+    return {total:total,prev:prev};
+  }
+  function importOrders(ev,tbl){
+    var ix=idxer(tbl.head);
+    var iO=ix(["注文ID"]),iA=ix(["金額"]),iS=ix(["決済状況"]);
+    if(iO<0||iA<0||iS<0)return {error:"注文管理の列（注文ID/金額/決済状況）が見つかりません"};
+    var raw=[],total=0,count=0;
+    tbl.rows.forEach(function(c){
+      var o=(c[iO]||"").trim(); if(!o)return;
+      var a=parseFloat(String(c[iA]||"").replace(/[^0-9.\-]/g,""))||0;
+      var s=(c[iS]||"").trim();
+      raw.push({o:o,a:a,s:s});
+      if(s==="決済済み"){total+=grossFromExport(a);count++;}
+    });
+    if(!raw.length)return {error:"注文のデータ行がありません"};
+    var ps=salesOf(ev); var prevC=ps?ps.count:null, prevT=ps?ps.total:null;
+    ev.orderRaw=raw; ev.odAt=new Date().toISOString();
+    return {total:total,count:count,prev:prevC,prevT:prevT};
+  }
+  function mapToArr(m){return Object.keys(m).map(function(k){return {k:k,v:m[k]};});}
+  function parseTable(text){
+    text=text.replace(/^﻿/,"");
+    var lines=text.split(/\r?\n/).filter(function(l){return l.trim()!=="";});
+    if(lines.length<2)return {error:"CSVにデータがありません"};
+    var head=splitLine(lines[0]);
+    var rows=[];for(var i=1;i<lines.length;i++){var c=splitLine(lines[i]);if(c.length>=2)rows.push(c);}
+    return {head:head,rows:rows};
+  }
+  function splitLine(line){var out=[],cur="",q=false;for(var i=0;i<line.length;i++){var ch=line[i];if(q){if(ch==='"'){if(line[i+1]==='"'){cur+='"';i++;}else q=false;}else cur+=ch;}else{if(ch==='"')q=true;else if(ch===","){out.push(cur);cur="";}else cur+=ch;}}out.push(cur);return out;}
+
+  // ---------- backup / restore ----------
+  document.getElementById("backupBtn").onclick=function(){var blob=new Blob([JSON.stringify({announcements:state.announcements,events:state.events},null,2)],{type:"application/json"});var a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="crowdbasket-sales-"+new Date().toISOString().slice(0,10)+".json";a.click();setTimeout(function(){URL.revokeObjectURL(a.href);},500);toast("バックアップを書き出しました");};
+  document.getElementById("restoreBtn").onclick=function(){if(!editable){toast("復元は編集モードで行えます");return;}document.getElementById("restoreIn").click();};
+  document.getElementById("restoreIn").addEventListener("change",function(e){var f=e.target.files[0];e.target.value="";if(!f)return;var rd=new FileReader();rd.onload=function(){try{var s=JSON.parse(rd.result);if(!s.events)throw 0;if(Array.isArray(s.announcements))state.announcements=s.announcements;state.events=s.events;route={view:"home",eventId:null};commit();toast("復元しました（全員に反映されます）");}catch(err){toast("ファイルを読み込めませんでした");}};rd.readAsText(f);});
+  document.getElementById("logoutBtn").onclick=function(){sessionStorage.removeItem("cb_sr_unlocked");location.reload();};
+
+  // ---------- edit mode ----------
+  document.getElementById("editBtn").onclick=function(){
+    if(editable){editable=false;render();toast("閲覧モードに戻りました");return;}
+    openModal('<h3>編集モードに切り替え</h3><p class="mh">管理パスワードを入力してください。編集内容は閲覧中の全員にリアルタイムで反映されます。</p><label>管理パスワード</label><input id="ep" type="password" autocomplete="off" placeholder="管理パスワード"><div class="gate-err" id="eperr" style="text-align:left"></div><div class="modal-act"><button class="btn" data-close>キャンセル</button><button class="btn btn-pri" id="epok">編集モードにする</button></div>',function(){document.getElementById("ep").focus();});
+    var go=function(){if(document.getElementById("ep").value===EDIT_PASSWORD){editable=true;closeModal();render();toast("編集モードになりました");}else{document.getElementById("eperr").textContent="パスワードが正しくありません";document.getElementById("ep").value="";}};
+    document.getElementById("epok").onclick=go;
+    document.getElementById("ep").addEventListener("keydown",function(e){if(e.key==="Enter")go();});
+  };
+
+  // ---------- modal / toast / theme / sidebar ----------
+  var mb=document.getElementById("modalBg"),md=document.getElementById("modal");
+  function openModal(html,after,wide){md.className="modal"+(wide?" wide":"");md.innerHTML=html;mb.classList.add("on");if(after)after();}
+  function closeModal(){mb.classList.remove("on");}
+  mb.addEventListener("click",function(e){if(e.target===mb||e.target.hasAttribute("data-close"))closeModal();});
+  document.addEventListener("keydown",function(e){if(e.key==="Escape")closeModal();});
+  var tEl=document.getElementById("toast"),tT;
+  function toast(m){tEl.textContent=m;tEl.classList.add("on");clearTimeout(tT);tT=setTimeout(function(){tEl.classList.remove("on");},2600);}
+  document.getElementById("themeBtn").onclick=function(){var cur=document.documentElement.getAttribute("data-theme");var next=cur==="dark"?"light":cur==="light"?"dark":(matchMedia("(prefers-color-scheme:dark)").matches?"light":"dark");document.documentElement.setAttribute("data-theme",next);};
+  function closeSidebar(){document.getElementById("sidebar").classList.remove("open");document.getElementById("scrim").classList.remove("on");}
+  document.getElementById("menuBtn").onclick=function(){document.getElementById("sidebar").classList.toggle("open");document.getElementById("scrim").classList.toggle("on");};
+  document.getElementById("scrim").onclick=closeSidebar;
+
+  // ---------- gate ----------
+  function unlock(){document.getElementById("gate").style.display="none";document.getElementById("app").classList.add("on");render();}
+  function tryPw(){var v=document.getElementById("pw").value;if(v===VIEW_PASSWORD){sessionStorage.setItem("cb_sr_unlocked","1");unlock();}else{document.getElementById("pwErr").textContent="パスワードが正しくありません";document.getElementById("pw").value="";document.getElementById("pw").focus();}}
+  document.getElementById("pwBtn").onclick=tryPw;
+  document.getElementById("pw").addEventListener("keydown",function(e){if(e.key==="Enter")tryPw();});
+  if(sessionStorage.getItem("cb_sr_unlocked")==="1")unlock();else document.getElementById("pw").focus();
+
+  // 起動時：キャッシュがあれば即描画（同期到着で上書き）
+  try{var c=localStorage.getItem("cb_salesreport_cache");if(c){var d=JSON.parse(c);if(d&&d.events){state.announcements=d.announcements||state.announcements;state.events=d.events||state.events;}}}catch(e){}
+})();
+</script>
+</body>
+</html>
