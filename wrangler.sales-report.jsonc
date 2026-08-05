@@ -1,0 +1,26 @@
+{
+  // ============================================================
+  // クラウドバスケット売上レポート — Cloudflare Workers デプロイ設定
+  //
+  //  ※ CRM（crowdbasket-crm）とファイル名を分けてあります。
+  //     CRM側はリポジトリ直下の wrangler.jsonc を使うため、
+  //     こちらは wrangler.sales-report.jsonc という別名にして
+  //     同じリポジトリに同居させています。上書き・衝突しません。
+  //
+  //  デプロイ（設定ファイルを -c で明示すること）:
+  //     npx wrangler deploy -c wrangler.sales-report.jsonc
+  //
+  //  Cloudflare の Workers Builds もこのコマンドを使います
+  //  （tight-term-cc1f → Settings → Build → Deploy command）
+  // ============================================================
+  "$schema": "https://unpkg.com/wrangler/config-schema.json",
+  "name": "tight-term-cc1f",
+  "compatibility_date": "2026-08-01",
+  "assets": {
+    // 配信するフォルダ（この中の index.html が公開されます）
+    "directory": "./sales-report-deploy",
+    "html_handling": "auto-trailing-slash",
+    // 1ページ構成のため、どのURLで来ても index.html を返す
+    "not_found_handling": "single-page-application"
+  }
+}
