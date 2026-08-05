@@ -1,0 +1,12 @@
+{
+  "name": "crowdbasket-crm",
+  "private": true,
+  "description": "crowdbasket-CRM。crm-deploy/index.html を Cloudflare Workers に配信する",
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "dev": "wrangler dev"
+  },
+  "devDependencies": {
+    "wrangler": "^4.118.0"
+  }
+}
