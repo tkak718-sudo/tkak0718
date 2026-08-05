@@ -810,12 +810,12 @@
             <span class="ai-badge">Excel・スプレッドシート対応</span>
           </div>
           <div class="card-body ai-card-body">
-            <p class="ai-desc">Excelやスプレッドシートからコピーした表を貼り付けると、新規クライアントとして一括で取り込めます。</p>
+            <p class="ai-desc">Excelやスプレッドシートからコピーした表を貼り付けると、新規クライアントとして一括で取り込めます。別のチャットで企業検索した結果のCSVも、そのまま貼り付けて引き継げます。</p>
 
             <div class="ai-format-hint">
               <span class="ai-format-label">列の順番</span>
-              <code>会社名 → 電話番号 → メールアドレス → お問い合わせフォームURL → 担当者 → ステータス → 事業内容 → 売上規模 → 創業年数 → 上場区分 → チケットツール → メモ</code>
-              <span class="ai-format-note">会社名だけでも取り込めます。後ろの列は空欄で構いません。1行目が見出しの場合は自動で読み飛ばします。フォーマットは下の「Excelテンプレートを保存」から取得できます。</span>
+              <code>会社名 → 電話番号 → メールアドレス → お問い合わせフォームURL → 担当者 → ステータス → 事業内容 → 売上規模 → 創業年数 → 上場区分 → チケットツール → メモ → 業種 → ランク → イベント規模 → 主催者 → LINE公式 → LINE公式アカウント情報 → 判定根拠</code>
+              <span class="ai-format-note">会社名だけでも取り込めます。後ろの列は空欄で構いません。12列までの古い形式もそのまま読めます。1行目が見出しの場合は自動で読み飛ばします。フォーマットは下の「Excelテンプレートを保存」から取得できます。</span>
             </div>
 
             <div class="ai-file-row">
@@ -830,7 +830,7 @@
 
             <div class="ai-or">または、下の欄に直接貼り付け</div>
 
-            <textarea id="paste-input" class="ai-paste-area" spellcheck="false" placeholder="株式会社サンプル音楽	03-0000-0000	info@sample.co.jp	https://sample.co.jp/contact	小熊 夢樹	送信済	音楽制作	10億円	25年	非上場	Zendesk	展示会で名刺交換
+            <textarea id="paste-input" class="ai-paste-area" spellcheck="false" placeholder="株式会社サンプル音楽	03-0000-0000	info@sample.co.jp	https://sample.co.jp/contact	小熊 夢樹	送信済	音楽制作	10億円	25年	非上場	Zendesk	展示会で名刺交換	音楽制作	S	大	〇	〇	https://lin.ee/xxxx	公式サイトに年間20公演の主催実績とLINE公式の掲載あり
 合同会社テスト	06-0000-0000	info@test.co.jp
 株式会社サード"></textarea>
 
@@ -841,6 +841,7 @@
               </button>
               <button class="btn" onclick="clearPastedList()">クリア</button>
               <button class="btn" onclick="downloadTemplateXlsx()" title="この列構成のExcelフォーマットを保存します">Excelテンプレートを保存</button>
+              <button class="btn" onclick="copySearchPrompt()" title="別のチャットに貼るだけで、この列構成のCSVを返してもらえる調査指示をコピーします">企業検索プロンプトをコピー</button>
             </div>
             <div id="ai-status" class="ai-status" style="display:none"></div>
 
@@ -852,7 +853,7 @@
               <div class="table-wrap ai-table-wrap">
                 <table>
                   <thead><tr>
-                    <th>会社名</th><th>電話番号</th><th>メールアドレス</th><th>お問い合わせ</th><th>担当者</th><th>ステータス</th><th></th>
+                    <th>会社名</th><th>電話番号</th><th>メールアドレス</th><th>お問い合わせ</th><th>ランク</th><th>規模</th><th>主催</th><th>LINE</th><th>担当者</th><th>ステータス</th><th></th>
                   </tr></thead>
                   <tbody id="ai-results-tbody"></tbody>
                 </table>
@@ -1913,6 +1914,65 @@ const EVENT_RUBRIC = `あなたは企業リサーチのアシスタントです�
 
 【LINE公式アカウント】企業または主催イベントが LINE公式アカウントを保有・運用していれば「〇」、していなければ「×」、確認できなければ ""。
 - 「〇」の場合は lineInfo に「LINE公式アカウントのURL・アカウント名・LINE ID・公式サイト上の掲載有無」を分かる範囲で記録すること。`;
+
+/* ========== 企業検索プロンプト（別のチャットに渡して調査してもらうための指示文） ==========
+   ランク・イベント規模の基準は上の RANK_RUBRIC / EVENT_RUBRIC をそのまま使う。
+   基準を1か所で持つことで、アプリのAI判定と外部チャットの判定がずれないようにする。
+   返ってきたCSVは「企業リストを貼り付けて一括登録」にそのまま貼れる。 */
+const SEARCH_PROMPT_COLUMNS = ['会社名','電話番号','メールアドレス','お問い合わせフォームURL','担当者',
+  'ステータス','事業内容','売上規模','創業年数','上場区分','チケットツール','メモ',
+  '業種','ランク','イベント規模','主催者','LINE公式','LINE公式アカウント情報','判定根拠'];
+
+function buildSearchPrompt(){
+  // 各基準の冒頭にある役割の説明は、この指示文では重複するため取り除く
+  const rank  = RANK_RUBRIC.replace(/^あなたは営業リードを評価するアシスタントです。/, '').trim();
+  const event = EVENT_RUBRIC.replace(/^あなたは企業リサーチのアシスタントです。/, '')
+                            .replace('web_search ツールを使って', 'web検索で').trim();
+
+  return `あなたは営業リードの調査アシスタントです。以下に渡す企業について web検索で実際に調べ、最後に CSV だけを出力してください。
+
+【調査手順】
+1. 1社ずつ、公式サイト・イベントページ・チケット販売ページ・SNS・LINE公式アカウントを確認する。
+2. 確認できた事実だけを書く。推測で埋めない。確認できなかった項目は空欄にする。
+3. 会社名は渡されたものをそのまま使う（正式名称に勝手に直さない）。重複判定に使うため。
+
+【ランクの基準】
+${rank}
+
+【イベント規模・主催者・LINE公式の基準】
+${event}
+
+【出力形式】
+・CSV（カンマ区切り・UTF-8）のみを出力する。前置きも解説もコードブロック記号も付けない。
+・1行目は必ず次の見出し行にする：
+${SEARCH_PROMPT_COLUMNS.join(',')}
+・2行目以降が1社1行。列は必ずこの${SEARCH_PROMPT_COLUMNS.length}列・この順番で、余分な列を足さない。
+・値にカンマ・引用符が含まれる場合はセル全体を " で囲み、中の " は "" と書く。
+・セル内で改行しない（1社は必ず1行に収める）。
+
+【各列の書き方】
+・会社名：必須。ここが空の行は取り込めない。
+・電話番号／メールアドレス／お問い合わせフォームURL：公式サイトに記載があるものだけ書く。
+・担当者／ステータス：空欄でよい（空欄は「未対応」として取り込まれる）。
+・事業内容：何をしている会社かを一文で。
+・売上規模：「10億円」のように単位まで書く。創業年数：「25年」のように書く。
+・上場区分：「上場」「非上場」「不明」のいずれか。
+・チケットツール：使っているチケット販売ツール・プレイガイド名（チケットぴあ／イープラス／自社サイト等）。
+・メモ：営業の役に立つ事実を短く。
+・業種：「音楽制作」「劇場運営」のような短い言葉で。
+・ランク：${RANK_OPTIONS.filter(r=>r!=='SS').join(' / ')}。SSは手動運用なので出力しない。判断材料が乏しければ空欄。
+・イベント規模：「小」「中」「大」の一文字。不明なら空欄。
+・主催者／LINE公式：全角の「〇」または「×」。確認できなければ空欄。
+・LINE公式アカウント情報：LINE公式が「〇」のとき、URL・アカウント名・LINE ID・公式サイトへの掲載有無を分かる範囲で。
+・判定根拠：80字以内。何を見てそう判断したかを情報源とあわせて簡潔に。
+
+【調査する企業】
+（この下に会社名を1行1社で貼り付けてください）`;
+}
+
+function copySearchPrompt(){
+  copyText(buildSearchPrompt(), '企業検索プロンプト');
+}
 
 let currentUser = SALES_REPS[0].id;
 
@@ -3333,6 +3393,13 @@ function normalizeListing(text){
   return '';
 }
 
+/* ランクの表記ゆれを吸収する。一覧にない文字列は空欄（勝手に決めない） */
+function normalizeRank(text){
+  if(!text) return '';
+  const key = text.replace(/[\s　]/g, '').toUpperCase();
+  return RANK_OPTIONS.includes(key) ? key : '';
+}
+
 /* 1行目が見出し行かどうかを判定する */
 function looksLikeHeader(cells){
   const head = (cells[0] || '').replace(/\s/g, '').toLowerCase();
@@ -3380,6 +3447,14 @@ function parsePastedList(){
       listing: normalizeListing((cells[9] || '').trim()),
       ticketTool: (cells[10] || '').trim(),
       source_note: (cells[11] || '').trim(),
+      // 13列目以降は企業検索の判定結果。古い12列の貼り付けでは単に空欄になる
+      industry: (cells[12] || '').trim(),
+      rank: normalizeRank((cells[13] || '').trim()),
+      eventScale: normScale((cells[14] || '').trim()),
+      isOrganizer: normMark((cells[15] || '').trim()),
+      lineOfficial: normMark((cells[16] || '').trim()),
+      lineInfo: (cells[17] || '').trim(),
+      reason: (cells[18] || '').trim(),
       added: false,
     });
   });
@@ -3504,14 +3579,20 @@ function sheetXml(rows){
 function downloadTemplateXlsx(){
   const enc = new TextEncoder();
   const headers = ['会社名','電話番号','メールアドレス','お問い合わせフォームURL','担当者',
-                   'ステータス','事業内容','売上規模','創業年数','上場区分','チケットツール','メモ'];
+                   'ステータス','事業内容','売上規模','創業年数','上場区分','チケットツール','メモ',
+                   '業種','ランク','イベント規模','主催者','LINE公式','LINE公式アカウント情報','判定根拠'];
   const example = ['株式会社サンプル音楽','03-0000-0000','info@sample.co.jp','https://sample.co.jp/contact',
-                   '小熊 夢樹','送信済','音楽制作','10億円','25年','非上場','Zendesk','展示会で名刺交換'];
+                   '小熊 夢樹','送信済','音楽制作','10億円','25年','非上場','Zendesk','展示会で名刺交換',
+                   '音楽制作','S','大','〇','〇','https://lin.ee/xxxx',
+                   '公式サイトに年間20公演の主催実績とLINE公式の掲載あり'];
 
   // 別シートに、担当者とステータスの入力候補を参考として置く
   const ref = [['入力候補（参考）'], ['担当者'], ...SALES_REPS.map(r=>[r.name]),
                [''], ['ステータス'], ...STATUS_LIST.map(s=>[s]),
-               [''], ['上場区分'], ...['上場','非上場','不明'].map(v=>[v])];
+               [''], ['上場区分'], ...['上場','非上場','不明'].map(v=>[v]),
+               [''], ['ランク'], ...RANK_OPTIONS.map(v=>[v]),
+               [''], ['イベント規模'], ...EVENT_SCALE_OPTIONS.filter(Boolean).map(v=>[v]),
+               [''], ['主催者 / LINE公式'], ['〇'], ['×']];
 
   const files = [
     {name:'[Content_Types].xml', data: enc.encode(
@@ -3716,6 +3797,10 @@ function renderAiResults(){
       <td>${r.phone ? escapeHtml(r.phone) : '<span class="unassigned">—</span>'}</td>
       <td>${r.email ? escapeHtml(r.email) : '<span class="unassigned">—</span>'}</td>
       <td>${r.inquiry_form ? `<a href="${escapeHtml(r.inquiry_form)}" target="_blank" rel="noopener" style="color:var(--primary-deep); text-decoration:none; font-size:12px;">フォーム ↗</a>` : '<span class="unassigned">—</span>'}</td>
+      <td>${r.rank ? rankBadge(r.rank) : '<span class="unassigned">—</span>'}</td>
+      <td>${scaleCell(r.eventScale)}</td>
+      <td>${markCell(r.isOrganizer)}</td>
+      <td>${markCell(r.lineOfficial)}</td>
       <td>${r.owner ? escapeHtml(ownerName(r.owner))
             : (r.owner_text ? `<span class="unassigned" title="担当者一覧に一致する名前がありませんでした">未割当て（${escapeHtml(r.owner_text)}）</span>`
                             : '<span class="unassigned">未割当て</span>')}</td>
@@ -3734,25 +3819,33 @@ function renderAiResults(){
 function addAiResultToContacts(idx, silent){
   const r = aiResults[idx];
   if(!r || r.added) return;
+  // メモ欄に書かれた内容と、企業検索の判定根拠を、それぞれメモとして残す
+  const notes = [];
+  if(r.source_note) notes.push({text: r.source_note, time: nowDateTimeStr(), author: ownerName(currentUser)});
+  if(r.reason) notes.push({text: '【企業検索】' + r.reason, time: nowDateTimeStr(), author: '企業検索'});
+
   contacts.unshift({
     id: nextIds.contact++,
     name: r.company_name,
     email: r.email || '',
     phone: r.phone || '',
     inquiryForm: r.inquiry_form || '',
+    industry: r.industry || '',
     business: r.business || '',
     revenue: r.revenue || '',
     founded: r.founded || '',
     listing: r.listing || '',
     ticketTool: r.ticketTool || '',
+    rank: r.rank || '',
+    eventScale: r.eventScale || '',
+    isOrganizer: r.isOrganizer || '',
+    lineOfficial: r.lineOfficial || '',
+    lineInfo: r.lineInfo || '',
     owner: r.owner || null,
     created: todayStr(),
     status: r.status || '未対応',
     statusUpdated: nowDateTimeStr(),
-    // メモ欄に書かれた内容があれば、そのまま会社のメモとして残す
-    notes: r.source_note
-      ? [{text: r.source_note, time: nowDateTimeStr(), author: ownerName(currentUser)}]
-      : [],
+    notes,
   });
   r.added = true;
   const btn = document.getElementById('ai-add-btn-'+idx);
