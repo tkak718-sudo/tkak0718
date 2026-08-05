@@ -331,6 +331,11 @@
   var VIEW_PASSWORD = "crowdbasket";   // ★閲覧パスワード（全員で共有）
   var EDIT_PASSWORD = "crowdbasketadmin"; // ★編集モードの管理パスワード（あなただけ）
 
+  // ★エクスポート補正：CSVの金額は「元売上−0.9%＋システム利用料330円」で書き出されているため、
+  //   決済1件ごとに元の総売上へ戻す（(金額−330)×(1+0.9%)＋330）。数値はここで調整可能。
+  var SYS_FEE  = 330;    // システム利用料（1決済あたり・円）
+  var FEE_RATE = 0.009;  // エクスポート時に控除される率（0.9%）
+
   var state = defaults();
   var route = {view:"home", eventId:null};
   var editable = false;
@@ -403,7 +408,7 @@
     if(ev&&ev.orderRaw&&ev.orderRaw.length){
       var dm=ev.dateMap||{},total=0,count=0,day={};
       ev.orderRaw.forEach(function(r){
-        if(r.s!=="決済済み")return; var amt=+r.a||0; total+=amt; count++;
+        if(r.s!=="決済済み")return; var amt=grossFromExport(r.a); total+=amt; count++;
         var d=dm[r.o]||null; if(d){if(!day[d])day[d]={c:0,a:0};day[d].c++;day[d].a+=amt;}
       });
       var daily=Object.keys(day).sort().map(function(d){return {d:d,c:day[d].c,a:day[d].a};});
@@ -412,6 +417,8 @@
     return ev&&ev.sales?ev.sales:null;
   }
   function salesTotal(ev){var s=salesOf(ev);return s?(s.total||0):0;}
+  // CSVエクスポート金額 → 元の総売上（決済1件あたり）に戻す
+  function grossFromExport(a){a=+a||0;if(a<=0)return a;return Math.round((a-SYS_FEE)*(1+FEE_RATE)+SYS_FEE);}
   // 日/週/月へ集計
   function groupSales(daily,period){
     daily=daily||[];
@@ -881,7 +888,7 @@
       var a=parseFloat(String(c[iA]||"").replace(/[^0-9.\-]/g,""))||0;
       var s=(c[iS]||"").trim();
       raw.push({o:o,a:a,s:s});
-      if(s==="決済済み"){total+=a;count++;}
+      if(s==="決済済み"){total+=grossFromExport(a);count++;}
     });
     if(!raw.length)return {error:"注文のデータ行がありません"};
     var ps=salesOf(ev); var prevC=ps?ps.count:null, prevT=ps?ps.total:null;
