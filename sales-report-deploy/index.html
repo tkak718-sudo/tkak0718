@@ -146,6 +146,46 @@
   .ann-del{opacity:0;position:absolute;right:8px;top:14px;border:none;background:none;color:var(--faint);cursor:pointer;font-size:15px;padding:3px 6px;border-radius:6px}
   .ann-item:hover .ann-del{opacity:1}.ann-del:hover{background:var(--crit);color:#fff}
 
+  /* ---- タスク管理（案件別・全員編集可） ---- */
+  .sec-h{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:22px 0 12px}
+  .sec-h h3{font-size:15px;display:flex;align-items:center;gap:8px}
+  .prj{border:1px solid var(--line);border-radius:var(--radius);background:var(--panel);box-shadow:var(--shadow);margin-bottom:14px;overflow:hidden}
+  .prj-h{display:flex;align-items:center;gap:10px;padding:13px 16px;border-bottom:1px solid var(--line-soft);background:var(--panel-2);flex-wrap:wrap}
+  .prj-h h4{font-size:14.5px;flex:1;min-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .prj-acts{display:flex;gap:6px;flex:none;align-items:center}
+  .iconbtn{border:1px solid var(--line);background:var(--panel);color:var(--muted);width:30px;height:30px;border-radius:8px;cursor:pointer;font-size:13px;line-height:1;flex:none}
+  .iconbtn:hover{border-color:var(--brand);color:var(--brand-deep)}
+  .iconbtn.dgr:hover{background:var(--crit);border-color:var(--crit);color:#fff}
+  .tsk{display:flex;gap:12px;padding:13px 16px;border-bottom:1px solid var(--line-soft);align-items:flex-start}
+  .tsk:last-child{border-bottom:none}
+  .tsk:hover{background:var(--panel-2)}
+  .tsk-main{flex:1;min-width:0}
+  .tsk-t{font-weight:700;font-size:13.5px;word-break:break-word}
+  .tsk.done .tsk-t{text-decoration:line-through;color:var(--faint)}
+  .tsk-d{margin:5px 0 0;color:var(--muted);font-size:12.5px;white-space:pre-wrap;word-break:break-word}
+  .tsk-meta{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px}
+  .chip{font-size:10.5px;font-weight:800;padding:3px 10px;border-radius:20px;border:1px solid transparent;letter-spacing:.02em;line-height:1.5;white-space:nowrap}
+  button.chip{cursor:pointer;font-family:inherit}
+  .chip.own-ly{background:#eaf1ff;color:#2554c7}
+  .chip.own-ac{background:var(--brand-soft);color:var(--brand-deep)}
+  .chip.own-bo{background:#f3ecff;color:#6b3fc7}
+  .chip.st-todo{background:var(--panel);color:var(--muted);border-color:var(--line)}
+  .chip.st-doing{background:#fdf0da;color:#b45309}
+  .chip.st-done{background:var(--brand-soft);color:var(--brand-deep)}
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme="light"]) .chip.own-ly{background:#16223d;color:#8fb0ff}
+    :root:not([data-theme="light"]) .chip.own-bo{background:#241a3d;color:#c3a8ff}
+    :root:not([data-theme="light"]) .chip.st-doing{background:#3a2a12;color:#f0bf7a}
+  }
+  :root[data-theme="dark"] .chip.own-ly{background:#16223d;color:#8fb0ff}
+  :root[data-theme="dark"] .chip.own-bo{background:#241a3d;color:#c3a8ff}
+  :root[data-theme="dark"] .chip.st-doing{background:#3a2a12;color:#f0bf7a}
+  .sch{font-size:11.5px;color:var(--muted);font-weight:700}
+  .sch.over{color:var(--crit)}
+  .sch-in{display:flex;gap:8px;align-items:center}
+  .sch-in input{min-width:0}
+  .anyone{font-size:11px;font-weight:700;color:var(--brand-deep);background:var(--brand-soft);border-radius:20px;padding:2px 10px;white-space:nowrap}
+
   .tabs{display:flex;gap:4px;align-items:center;flex-wrap:wrap;margin-bottom:18px;border-bottom:1px solid var(--line)}
   .tab{padding:9px 15px;border:1px solid transparent;border-bottom:none;border-radius:10px 10px 0 0;cursor:pointer;background:none;color:var(--muted);font-weight:700;font-size:13px;position:relative;top:1px}
   .tab:hover{color:var(--ink);background:var(--panel-2)}
@@ -340,6 +380,12 @@
   var route = {view:"home", eventId:null};
   var editable = false;
 
+  // ★タスク管理（ホーム画面）は編集モード不要＝誰でも編集できます
+  var OWNERS   = ["LINEヤフー社","AC社","両社"];
+  var STATUSES = ["未着手","進行中","完了"];
+  var OWNER_CLS= {"LINEヤフー社":"own-ly","AC社":"own-ac","両社":"own-bo"};
+  var ST_CLS   = {"未着手":"st-todo","進行中":"st-doing","完了":"st-done"};
+
   // ---------- icons ----------
   function ic(name){
     var p={
@@ -361,9 +407,11 @@
   //   dateMap:{注文番号:'YYYY-MM-DD'}|null,                    ← チケット管理CSV（売上の日付紐付け用）
   //   orderRaw:[{o,a,s}]|null,                                ← 注文管理CSV（o=注文ID,a=金額,s=決済状況）
   //   sales:{total,count,daily:[{d,c,a}]}|null}               ← 事前集計（シード用フォールバック）
+  // タスク管理: projects=[{id,name,tasks:[{id,title,detail,owner,status,start,due}]}]
   function defaults(){
     return {
       v:2,
+      projects:[],
       announcements:[
         {id:uid(),date:"2026-08-02",type:"notice",title:"チケット枚数・売上の集計に対応しました",body:"「チケット管理」CSVで席タイプ別の枚数、「注文管理」CSVで日・週・月別の売上（決済済みのみ）を集計します。イベント画面の「CSVを取込」から読み込めます。"},
         {id:uid(),date:"2026-07-28",type:"event",title:"RISE201（8/29 後楽園ホール）の集計を掲載",body:"チケット451枚・売上¥3,729,837（決済済み164件）を反映しています。Eventタブからご確認ください。"},
@@ -401,6 +449,30 @@
   function mdLabel(ds){var p=ds.split("-");return (+p[1])+"/"+(+p[2]);}
   function fmtStamp(iso){var d=new Date(iso);if(isNaN(d))return "";return (d.getMonth()+1)+"/"+d.getDate()+" "+pad2(d.getHours())+":"+pad2(d.getMinutes());}
   function wdayJ(ds){var d=new Date(ds+"T00:00:00");if(isNaN(d))return "";return "("+["日","月","火","水","木","金","土"][d.getDay()]+")";}
+  function todayISO(){return new Date().toISOString().slice(0,10);}
+  // タスク用
+  function ensureProjects(){
+    if(!Array.isArray(state.projects))state.projects=[];
+    state.projects.forEach(function(p){if(!Array.isArray(p.tasks))p.tasks=[];});
+  }
+  function findPrj(id){return state.projects.filter(function(p){return p.id===id;})[0];}
+  function findTask(pid,tid){var p=findPrj(pid);if(!p)return null;return (p.tasks||[]).filter(function(t){return t.id===tid;})[0]||null;}
+  function mdw(ds){var p=String(ds).split("-");return (+p[1])+"/"+(+p[2])+wdayJ(ds);}
+  function schLabel(t){
+    if(t.start&&t.due)return mdw(t.start)+" 〜 "+mdw(t.due);
+    if(t.due)return "期限 "+mdw(t.due);
+    if(t.start)return mdw(t.start)+" 〜";
+    return "";
+  }
+  function isOverdue(t){return !!t.due&&t.status!=="完了"&&t.due<todayISO();}
+  function sortTasks(ts){
+    return ts.slice().sort(function(a,b){
+      var ad=a.status==="完了"?1:0, bd=b.status==="完了"?1:0;
+      if(ad!==bd)return ad-bd;
+      var ak=a.due||a.start||"9999-12-31", bk=b.due||b.start||"9999-12-31";
+      return ak<bk?-1:ak>bk?1:0;
+    });
+  }
   // ticket/sales 取得
   function ticketOf(ev){return ev&&ev.ticket?ev.ticket:null;}
   function ticketTotal(ev){var t=ticketOf(ev);return t?(t.total||0):0;}
@@ -435,7 +507,7 @@
 
   // ================= Firestore sync =================
   var syncReady=false, applyingRemote=false, lastSaved="", fbOk=false;
-  function snapshot(){return JSON.stringify({v:1,announcements:state.announcements,events:state.events});}
+  function snapshot(){ensureProjects();return JSON.stringify({v:1,announcements:state.announcements,events:state.events,projects:state.projects});}
   function setSync(text,cls){var b=document.getElementById("syncBox"),t=document.getElementById("syncTxt");if(!t)return;t.textContent=text;b.className="sync"+(cls?" "+cls:"");}
 
   function pushData(){
@@ -443,7 +515,7 @@
     var s=snapshot(); if(s===lastSaved)return;
     try{
       var d=JSON.parse(s);
-      window.FB.write(window.FB.docRef(),{announcements:d.announcements,events:d.events,v:1,updatedAt:new Date().toISOString()})
+      window.FB.write(window.FB.docRef(),{announcements:d.announcements,events:d.events,projects:d.projects||[],v:1,updatedAt:new Date().toISOString()})
         .then(function(){lastSaved=s;setSync("全員と同期済み");})
         .catch(function(e){console.error(e);setSync("保存できません（権限/通信）","warn");});
     }catch(e){console.error(e);}
@@ -459,6 +531,8 @@
     try{
       if(Array.isArray(d.announcements)) state.announcements=d.announcements;
       if(Array.isArray(d.events)) state.events=d.events;
+      if(Array.isArray(d.projects)) state.projects=d.projects;
+      ensureProjects();
       lastSaved=snapshot(); save_local(); render();
     }finally{applyingRemote=false;}
   }
@@ -470,7 +544,7 @@
         if(!snap.exists()){
           // 初回：シードデータで作成（誰が開いても同一内容なので競合しても無害）
           setSync("初期データを作成中…");
-          window.FB.write(window.FB.docRef(),{announcements:state.announcements,events:state.events,v:1,updatedAt:new Date().toISOString()})
+          window.FB.write(window.FB.docRef(),{announcements:state.announcements,events:state.events,projects:state.projects,v:1,updatedAt:new Date().toISOString()})
             .then(function(){lastSaved=snapshot();syncReady=true;setSync("全員と同期済み");})
             .catch(function(e){console.error(e);setSync("接続できません（ルール未設定？）","warn");});
           return;
@@ -516,14 +590,62 @@
   }
 
   function renderHome(){
+    ensureProjects();
     var anns=state.announcements.slice().sort(function(a,b){return a.date<b.date?1:-1;});
     var tagName={notice:"お知らせ",event:"イベント",alert:"重要"};
     var items=anns.map(function(a){
       return '<div class="ann-item"><div class="ann-date num">'+esc(a.date.replace(/-/g,"/"))+'<br><span class="tag '+esc(a.type)+'">'+(tagName[a.type]||"お知らせ")+'</span></div><div class="ann-body"><b>'+esc(a.title)+'</b><p>'+esc(a.body)+'</p></div>'+(editable?'<button class="ann-edit" data-annedit="'+a.id+'" title="編集">✎</button><button class="ann-del" data-anndel="'+a.id+'" title="削除">×</button>':'')+'</div>';
     }).join("") || '<div class="empty"><div class="ei">'+ic("bell")+'</div><b>お知らせはありません</b><p>編集モードで「お知らせを追加」から投稿できます。</p></div>';
+
+    // ---- タスク管理（案件別）----
+    var all=0,open=0,over=0;
+    state.projects.forEach(function(p){p.tasks.forEach(function(t){all++;if(t.status!=="完了")open++;if(isOverdue(t))over++;});});
+    var board=state.projects.length
+      ? state.projects.map(projectHTML).join("")
+      : '<div class="panel"><div class="empty"><div class="ei">'+ic("pipe")+'</div><b>案件がまだありません</b><p>「＋ 案件を追加」で案件を作成し、その中にタスクを登録してください。</p></div></div>';
+
     elView.innerHTML=
-      '<div class="greet"><h2>クラウドバスケット売上レポート</h2><p>チーム共有ダッシュボード ・ '+fmtDate(new Date().toISOString().slice(0,10))+' 時点</p></div>'+
-      '<div class="panel" style="margin-top:22px"><div class="panel-h"><h3>'+ic("bell")+' お知らせ</h3>'+(editable?'<button class="btn btn-sm" id="addAnn">＋ お知らせを追加</button>':'')+'</div><div class="panel-b"><div class="ann">'+items+'</div></div></div>';
+      '<div class="greet"><h2>タスク管理</h2><p>案件別のタスク進捗 ・ '+fmtDate(todayISO())+' 時点</p></div>'+
+      '<div class="kpis">'+
+        kpi("案件数",nf(state.projects.length)+'<small>件</small>',"pipe","登録済み")+
+        kpi("未完了タスク",nf(open)+'<small>件</small>',"ticket","全"+nf(all)+"件中")+
+        kpi("期限超過",nf(over)+'<small>件</small>',"bell",over?"対応が必要です":"遅延なし")+
+      '</div>'+
+      '<div class="sec-h"><h3>'+ic("pipe")+' 案件別タスク <span class="anyone">全員が編集できます</span></h3><button class="btn btn-pri btn-sm" id="addPrj">＋ 案件を追加</button></div>'+
+      board+
+      '<div class="panel" style="margin-top:26px"><div class="panel-h"><h3>'+ic("bell")+' お知らせ</h3>'+(editable?'<button class="btn btn-sm" id="addAnn">＋ お知らせを追加</button>':'')+'</div><div class="panel-b"><div class="ann">'+items+'</div></div></div>';
+  }
+
+  function projectHTML(p){
+    var ts=sortTasks(p.tasks);
+    var open=ts.filter(function(t){return t.status!=="完了";}).length;
+    var rows=ts.length
+      ? ts.map(function(t){return taskHTML(p,t);}).join("")
+      : '<div class="empty" style="padding:26px 16px"><b>タスクはありません</b><p>「＋ タスク登録」から追加できます。</p></div>';
+    return '<div class="prj"><div class="prj-h"><h4>'+esc(p.name)+'</h4>'+
+      '<span class="badge num">未完了 '+nf(open)+' / '+nf(ts.length)+'</span>'+
+      '<span class="prj-acts">'+
+        '<button class="btn btn-sm" data-addtask="'+p.id+'">＋ タスク登録</button>'+
+        '<button class="iconbtn" data-editprj="'+p.id+'" title="案件名を編集">✎</button>'+
+        '<button class="iconbtn dgr" data-delprj="'+p.id+'" title="案件を削除">×</button>'+
+      '</span></div>'+rows+'</div>';
+  }
+  function taskHTML(p,t){
+    var key=p.id+":"+t.id, sch=schLabel(t);
+    return '<div class="tsk'+(t.status==="完了"?" done":"")+'">'+
+      '<div class="tsk-main">'+
+        '<div class="tsk-t">'+esc(t.title)+'</div>'+
+        (t.detail?'<p class="tsk-d">'+esc(t.detail)+'</p>':'')+
+        '<div class="tsk-meta">'+
+          '<button class="chip '+(ST_CLS[t.status]||"st-todo")+'" data-cycle="'+key+'" title="クリックで状態を切り替え">'+esc(t.status||"未着手")+'</button>'+
+          '<span class="chip '+(OWNER_CLS[t.owner]||"st-todo")+'">'+esc(t.owner||"担当未設定")+'</span>'+
+          (sch?'<span class="sch'+(isOverdue(t)?" over":"")+'">'+esc(sch)+(isOverdue(t)?" ・ 期限超過":"")+'</span>':'')+
+        '</div>'+
+      '</div>'+
+      '<span class="prj-acts">'+
+        '<button class="iconbtn" data-edittask="'+key+'" title="編集">✎</button>'+
+        '<button class="iconbtn dgr" data-deltask="'+key+'" title="削除">×</button>'+
+      '</span></div>';
   }
 
   function barList(items,fmt,accent){
@@ -669,8 +791,16 @@
 
   // ================= interactions =================
   document.addEventListener("click",function(e){
-    var t=e.target.closest("[data-go],[data-ev],[data-del],[data-tab],[data-import],[data-editev],[data-edittk],[data-editsales],[data-editplayers],[data-period],#addTab,#addEvTop,#reorderTab,#reorderEvTop,#addAnn,[data-anndel],[data-annedit]");
+    var t=e.target.closest("[data-go],[data-ev],[data-del],[data-tab],[data-import],[data-editev],[data-edittk],[data-editsales],[data-editplayers],[data-period],#addTab,#addEvTop,#reorderTab,#reorderEvTop,#addAnn,[data-anndel],[data-annedit],#addPrj,[data-addtask],[data-editprj],[data-delprj],[data-edittask],[data-deltask],[data-cycle]");
     if(!t)return;
+    // --- タスク管理（編集モード不要）---
+    if(t.id==="addPrj"){addProjectModal();return;}
+    if(t.hasAttribute("data-editprj")){editProjectModal(t.getAttribute("data-editprj"));return;}
+    if(t.hasAttribute("data-delprj")){delProject(t.getAttribute("data-delprj"));return;}
+    if(t.hasAttribute("data-addtask")){taskModal(t.getAttribute("data-addtask"),null);return;}
+    if(t.hasAttribute("data-edittask")){var ek=t.getAttribute("data-edittask").split(":");taskModal(ek[0],ek[1]);return;}
+    if(t.hasAttribute("data-deltask")){var dk=t.getAttribute("data-deltask").split(":");delTask(dk[0],dk[1]);return;}
+    if(t.hasAttribute("data-cycle")){var ck=t.getAttribute("data-cycle").split(":");cycleStatus(ck[0],ck[1]);return;}
     if(t.hasAttribute("data-period")){route.period=t.getAttribute("data-period");render();return;}
     if(t.hasAttribute("data-del")){e.stopPropagation();delEvent(t.getAttribute("data-del"));return;}
     if(t.hasAttribute("data-anndel")){delAnn(t.getAttribute("data-anndel"));return;}
@@ -689,6 +819,79 @@
   });
 
   function requireEdit(){ if(!editable){toast("編集モードで操作してください");return false;} return true; }
+
+  // ================= タスク管理（案件・タスク／全員編集可） =================
+  function addProjectModal(){
+    openModal('<h3>案件を追加</h3><p class="mh">案件ごとにタスクをまとめて管理します。登録内容は閲覧中の全員にリアルタイムで反映されます。</p>'+
+      '<label>案件名 <span style="color:var(--crit)">*</span></label><input id="p_name" placeholder="例）RISE201 チケット販促">'+
+      '<div class="modal-act"><button class="btn" data-close>キャンセル</button><button class="btn btn-pri" id="p_ok">追加する</button></div>',
+      function(){var i=document.getElementById("p_name");i.focus();i.addEventListener("keydown",function(e){if(e.key==="Enter")document.getElementById("p_ok").click();});});
+    document.getElementById("p_ok").onclick=function(){
+      var n=document.getElementById("p_name").value.trim();
+      if(!n){document.getElementById("p_name").focus();return;}
+      ensureProjects(); state.projects.push({id:uid(),name:n,tasks:[]});
+      closeModal();commit();toast("案件「"+n+"」を追加しました");
+    };
+  }
+  function editProjectModal(id){
+    var p=findPrj(id);if(!p)return;
+    openModal('<h3>案件名を編集</h3><p class="mh">案件名を変更します。タスクはそのまま残ります。</p>'+
+      '<label>案件名</label><input id="p_name" value="'+esc(p.name)+'">'+
+      '<div class="modal-act"><button class="btn" data-close>キャンセル</button><button class="btn btn-pri" id="p_ok">保存</button></div>',
+      function(){document.getElementById("p_name").focus();});
+    document.getElementById("p_ok").onclick=function(){
+      p.name=document.getElementById("p_name").value.trim()||p.name;
+      closeModal();commit();toast("保存しました");
+    };
+  }
+  function delProject(id){
+    var p=findPrj(id);if(!p)return;
+    if(!confirm("案件「"+p.name+"」を削除しますか？\n中のタスク"+p.tasks.length+"件もすべて削除されます。"))return;
+    state.projects=state.projects.filter(function(x){return x.id!==id;});
+    commit();toast("案件を削除しました");
+  }
+  function taskModal(pid,tid){
+    var p=findPrj(pid);if(!p)return;
+    var t=tid?findTask(pid,tid):null;
+    var opts=function(list,cur){return list.map(function(v){return '<option value="'+esc(v)+'"'+(v===cur?' selected':'')+'>'+esc(v)+'</option>';}).join("");};
+    openModal('<h3>'+(t?"タスクを編集":"タスクを登録")+'</h3><p class="mh">案件「'+esc(p.name)+'」のタスクです。</p>'+
+      '<label>タイトル <span style="color:var(--crit)">*</span></label><input id="t_title" value="'+esc(t?t.title:"")+'" placeholder="例）8月度の販促バナーを入稿">'+
+      '<label>詳細</label><textarea id="t_detail" placeholder="内容・補足を入力">'+esc(t?(t.detail||""):"")+'</textarea>'+
+      '<label>担当</label><select id="t_owner">'+opts(OWNERS,t?t.owner:OWNERS[0])+'</select>'+
+      '<label>ステータス</label><select id="t_status">'+opts(STATUSES,t?t.status:STATUSES[0])+'</select>'+
+      '<label>スケジュール（開始日 〜 期限）</label>'+
+      '<div class="sch-in"><input id="t_start" type="date" value="'+esc(t?(t.start||""):"")+'"><span style="color:var(--muted);font-weight:700">〜</span><input id="t_due" type="date" value="'+esc(t?(t.due||""):"")+'"></div>'+
+      '<div class="modal-act"><button class="btn" data-close>キャンセル</button><button class="btn btn-pri" id="t_ok">'+(t?"保存":"登録する")+'</button></div>',
+      function(){document.getElementById("t_title").focus();});
+    document.getElementById("t_ok").onclick=function(){
+      var title=document.getElementById("t_title").value.trim();
+      if(!title){document.getElementById("t_title").focus();return;}
+      var o={
+        title:title,
+        detail:document.getElementById("t_detail").value.trim(),
+        owner:document.getElementById("t_owner").value,
+        status:document.getElementById("t_status").value,
+        start:document.getElementById("t_start").value||"",
+        due:document.getElementById("t_due").value||""
+      };
+      if(o.start&&o.due&&o.start>o.due){toast("開始日が期限より後になっています");return;}
+      if(t){for(var k in o)t[k]=o[k];}
+      else{o.id=uid();p.tasks.push(o);}
+      closeModal();commit();toast(t?"タスクを保存しました":"タスクを登録しました");
+    };
+  }
+  function delTask(pid,tid){
+    var p=findPrj(pid),t=findTask(pid,tid);if(!p||!t)return;
+    if(!confirm("タスク「"+t.title+"」を削除しますか？"))return;
+    p.tasks=p.tasks.filter(function(x){return x.id!==tid;});
+    commit();toast("タスクを削除しました");
+  }
+  function cycleStatus(pid,tid){
+    var t=findTask(pid,tid);if(!t)return;
+    var i=STATUSES.indexOf(t.status);
+    t.status=STATUSES[(i<0?0:i+1)%STATUSES.length];
+    commit();toast("「"+t.title+"」→ "+t.status);
+  }
 
   function addEventModal(){
     if(!requireEdit())return;
@@ -907,9 +1110,9 @@
   function splitLine(line){var out=[],cur="",q=false;for(var i=0;i<line.length;i++){var ch=line[i];if(q){if(ch==='"'){if(line[i+1]==='"'){cur+='"';i++;}else q=false;}else cur+=ch;}else{if(ch==='"')q=true;else if(ch===","){out.push(cur);cur="";}else cur+=ch;}}out.push(cur);return out;}
 
   // ---------- backup / restore ----------
-  document.getElementById("backupBtn").onclick=function(){var blob=new Blob([JSON.stringify({announcements:state.announcements,events:state.events},null,2)],{type:"application/json"});var a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="crowdbasket-sales-"+new Date().toISOString().slice(0,10)+".json";a.click();setTimeout(function(){URL.revokeObjectURL(a.href);},500);toast("バックアップを書き出しました");};
+  document.getElementById("backupBtn").onclick=function(){ensureProjects();var blob=new Blob([JSON.stringify({announcements:state.announcements,events:state.events,projects:state.projects},null,2)],{type:"application/json"});var a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="crowdbasket-sales-"+new Date().toISOString().slice(0,10)+".json";a.click();setTimeout(function(){URL.revokeObjectURL(a.href);},500);toast("バックアップを書き出しました");};
   document.getElementById("restoreBtn").onclick=function(){if(!editable){toast("復元は編集モードで行えます");return;}document.getElementById("restoreIn").click();};
-  document.getElementById("restoreIn").addEventListener("change",function(e){var f=e.target.files[0];e.target.value="";if(!f)return;var rd=new FileReader();rd.onload=function(){try{var s=JSON.parse(rd.result);if(!s.events)throw 0;if(Array.isArray(s.announcements))state.announcements=s.announcements;state.events=s.events;route={view:"home",eventId:null};commit();toast("復元しました（全員に反映されます）");}catch(err){toast("ファイルを読み込めませんでした");}};rd.readAsText(f);});
+  document.getElementById("restoreIn").addEventListener("change",function(e){var f=e.target.files[0];e.target.value="";if(!f)return;var rd=new FileReader();rd.onload=function(){try{var s=JSON.parse(rd.result);if(!s.events)throw 0;if(Array.isArray(s.announcements))state.announcements=s.announcements;if(Array.isArray(s.projects))state.projects=s.projects;ensureProjects();state.events=s.events;route={view:"home",eventId:null};commit();toast("復元しました（全員に反映されます）");}catch(err){toast("ファイルを読み込めませんでした");}};rd.readAsText(f);});
   document.getElementById("logoutBtn").onclick=function(){sessionStorage.removeItem("cb_sr_unlocked");location.reload();};
 
   // ---------- edit mode ----------
@@ -942,7 +1145,8 @@
   if(sessionStorage.getItem("cb_sr_unlocked")==="1")unlock();else document.getElementById("pw").focus();
 
   // 起動時：キャッシュがあれば即描画（同期到着で上書き）
-  try{var c=localStorage.getItem("cb_salesreport_cache");if(c){var d=JSON.parse(c);if(d&&d.events){state.announcements=d.announcements||state.announcements;state.events=d.events||state.events;}}}catch(e){}
+  try{var c=localStorage.getItem("cb_salesreport_cache");if(c){var d=JSON.parse(c);if(d&&d.events){state.announcements=d.announcements||state.announcements;state.events=d.events||state.events;if(Array.isArray(d.projects))state.projects=d.projects;}}}catch(e){}
+  ensureProjects();
 })();
 </script>
 </body>
