@@ -1152,15 +1152,19 @@
   <div class="modal">
     <div class="modal-head"><h3>AIで判定</h3><span class="modal-close" onclick="closeModal('ai-judge-modal')">&times;</span></div>
     <div class="modal-body">
-      <p class="ai-desc" style="font-size:12px; color:var(--text-secondary); line-height:1.7;">Claude が <b>Web検索で各社の公式サイト・イベントページ・LINE等を実際に調べ</b>、<b>ランク（S/A/B/C）・イベント規模（小/中/大）・主催者（〇/×）・LINE公式アカウント（〇/×）</b>をまとめて判定して各社に反映し、根拠を各社のメモに残します（SSランクは手動）。1件ずつ調査するため件数が多いと時間がかかります。<br>APIキーはこの端末にのみ保存され、サーバー（Firestore）には送られません。</p>
+      <p class="ai-desc" style="font-size:12px; color:var(--text-secondary); line-height:1.7;">Claude が <b>Web検索で各社の公式サイト・イベントページ・LINE等を実際に調べ</b>、<b>ランク（S/A/B/C）・イベント規模（小/中/大）・主催者（〇/×）・LINE公式アカウント（〇/×）</b>をまとめて判定して各社に反映し、根拠を各社のメモに残します（SSランクは手動）。すでに取り込んだ会社にもまとめてかけられます。1件ずつ調査するため件数が多いと時間がかかりますが、途中で「中止」でき、判定済みのぶんはそのまま残ります。<br>APIキーはこの端末にのみ保存され、サーバー（Firestore）には送られません。</p>
       <div class="field"><label>Anthropic APIキー</label><input type="password" id="ai-judge-key" placeholder="sk-ant-..."></div>
       <label class="opt-line"><input type="checkbox" id="ai-judge-save-key" checked> このキーをこの端末に保存する</label>
-      <div class="field" style="margin-top:8px;"><label>対象</label><div class="detail-sub" id="ai-judge-target"></div></div>
+      <div class="field" style="margin-top:8px;"><label>対象</label>
+        <select id="ai-judge-scope" onchange="refreshAiJudgeTarget()"></select>
+        <div class="detail-sub" id="ai-judge-target" style="margin-top:6px;"></div>
+      </div>
       <div class="detail-section-label">進捗</div>
       <div class="log-box" id="ai-judge-log" style="max-height:220px; overflow:auto; white-space:pre-wrap; font-size:12px; font-family:monospace;"></div>
     </div>
     <div class="modal-foot">
       <button class="btn" onclick="closeModal('ai-judge-modal')">閉じる</button>
+      <button class="btn" id="ai-judge-stop" onclick="stopAiJudge()" style="display:none">中止</button>
       <button class="btn btn-primary" id="ai-judge-run" onclick="runAiJudge()">判定を開始</button>
     </div>
   </div>
@@ -1769,26 +1773,52 @@ function normScale(v){
 
 let aiJudgeSection = null;
 let aiRunning = false;   // 判定中は同期の受信上書きを止める（長時間実行での結果消失を防ぐ）
+let aiAbort = false;     // 中止ボタンが押されたか（次の1件に進む前に見る）
 
-/* 対象ID：選択があればそれ、無ければ「表示中でランク/規模/主催/LINEのいずれも未設定の行」 */
-function aiJudgeTargetIds(section){
+/* 対象ID。3通りの選び方から選べる。
+   selected = チェックを入れた行 / unjudged = ランク・規模・主催・LINEに未設定が残る行 / all = 表示中すべて。
+   取り込みで一部だけ埋まった会社も unjudged に含める（4つ全部空の行だけを拾うと取りこぼす） */
+function aiJudgeScopeIds(section, scope){
+  if(scope === 'selected') return [...selection[section]];
+  const ids = visibleIds[section];
+  if(scope === 'all') return ids.slice();
   const arr = dataOf(section);
-  if(selection[section].size > 0) return [...selection[section]];
-  return visibleIds[section].filter(id=>{
+  return ids.filter(id=>{
     const c = arr.find(x=>x.id===id) || {};
-    return !c.rank && !c.eventScale && !c.isOrganizer && !c.lineOfficial;
+    return !c.rank || !c.eventScale || !c.isOrganizer || !c.lineOfficial;
   });
 }
 
 function openAiJudge(section){
+  // 実行中に開き直したときは、進行中の内容をそのまま見せる（設定を作り直さない）
+  if(aiRunning){ openModal('ai-judge-modal'); return; }
+
   aiJudgeSection = section;
-  const ids = aiJudgeTargetIds(section);
-  const basis = selection[section].size > 0 ? '選択中の行' : '表示中で未判定の行';
-  document.getElementById('ai-judge-target').textContent = `${SECTION_LABEL[section]}：${ids.length}件（${basis}）`;
+  const sel = document.getElementById('ai-judge-scope');
+  const count = s => aiJudgeScopeIds(section, s).length;
+
+  // 選択中の行があるときは、それを既定にする
+  const opts = [];
+  if(selection[section].size > 0) opts.push(['selected', `選択中の会社だけ（${count('selected')}件）`]);
+  opts.push(['unjudged', `未判定の項目が残る会社（${count('unjudged')}件）`]);
+  opts.push(['all', `表示中のすべて（${count('all')}件・判定済みも上書き）`]);
+  sel.innerHTML = opts.map(([v, label])=>`<option value="${v}">${escapeHtml(label)}</option>`).join('');
+  sel.value = opts[0][0];
+  sel.disabled = false;
+
   document.getElementById('ai-judge-log').textContent = '';
   document.getElementById('ai-judge-key').value = localStorage.getItem('anthropicApiKey') || '';
-  document.getElementById('ai-judge-run').disabled = ids.length === 0;
+  document.getElementById('ai-judge-stop').style.display = 'none';
+  refreshAiJudgeTarget();
   openModal('ai-judge-modal');
+}
+
+/* 対象の選び方を変えたときに、件数と開始ボタンの状態を合わせる */
+function refreshAiJudgeTarget(){
+  const ids = aiJudgeScopeIds(aiJudgeSection, document.getElementById('ai-judge-scope').value);
+  document.getElementById('ai-judge-target').textContent =
+    `${SECTION_LABEL[aiJudgeSection]}：${ids.length}件を判定します`;
+  document.getElementById('ai-judge-run').disabled = ids.length === 0;
 }
 
 /* Web検索つきで1社を調査し {rank,eventScale,isOrganizer,lineOfficial,lineInfo,reason} を得る */
@@ -1841,18 +1871,25 @@ async function runAiJudge(){
   if(document.getElementById('ai-judge-save-key').checked) localStorage.setItem('anthropicApiKey', key);
   else localStorage.removeItem('anthropicApiKey');
 
-  const ids = aiJudgeTargetIds(section);
+  const scopeEl = document.getElementById('ai-judge-scope');
+  const ids = aiJudgeScopeIds(section, scopeEl.value);
   if(!ids.length){ toast('対象がありません'); return; }
 
   const runBtn = document.getElementById('ai-judge-run');
+  const stopBtn = document.getElementById('ai-judge-stop');
   runBtn.disabled = true;
+  scopeEl.disabled = true;
+  stopBtn.style.display = '';
+  stopBtn.disabled = false;
+  aiAbort = false;
   const logEl = document.getElementById('ai-judge-log');
   const log = m => { logEl.textContent += m + '\n'; logEl.scrollTop = logEl.scrollHeight; };
   log(`対象 ${ids.length}件をWeb検索で判定します（1件ずつ・時間がかかります）…`);
 
   aiRunning = true;
-  let done = 0, ok = 0;
+  let done = 0, ok = 0, ng = 0, stopped = false;
   for(const id of ids){
+    if(aiAbort){ stopped = true; log(`中止しました（${done}/${ids.length}件まで処理済み）`); break; }
     const arr = dataOf(section);            // 毎回取り直す（同期で配列が差し替わっても最新を掴む）
     const c = arr.find(x=>x.id===id);
     if(!c){ done++; continue; }
@@ -1882,6 +1919,7 @@ async function runAiJudge(){
       ok++;
       log(`  → ${changed.length ? changed.join(' / ') : '判定情報なし'}`);
     }catch(err){
+      ng++;
       log(`  エラー: ${err.message}`);
     }
     done++;
@@ -1890,9 +1928,22 @@ async function runAiJudge(){
     try{ await pushData(); }catch(e){}    // 1件ごとに保存し、結果を確実に残す
   }
   aiRunning = false;
+  aiAbort = false;
   runBtn.disabled = false;
-  log(`完了：${ok}件を判定しました。`);
-  toast(`AI判定完了：${ok}件`);
+  document.getElementById('ai-judge-scope').disabled = false;
+  document.getElementById('ai-judge-stop').style.display = 'none';
+  refreshAiJudgeTarget();               // 判定が済んだぶん、残りの件数を出し直す
+  const summary = `${ok}件を判定しました` + (ng ? `（${ng}件は失敗）` : '');
+  log((stopped ? '中止時点：' : '完了：') + summary + '。');
+  toast((stopped ? 'AI判定を中止：' : 'AI判定完了：') + summary);
+}
+
+/* 実行中の中止。API呼び出しの途中では止められないため、いま調査中の1件が終わってから止める */
+function stopAiJudge(){
+  if(!aiRunning) return;
+  aiAbort = true;
+  document.getElementById('ai-judge-stop').disabled = true;
+  toast('いま調査中の1件が終わり次第、中止します');
 }
 
 /* ========== AIによるイベント属性の自動判定（Web検索つき・Claude API） ========== */
