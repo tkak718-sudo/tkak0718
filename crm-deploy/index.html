@@ -813,9 +813,11 @@
             <p class="ai-desc">Excelやスプレッドシートからコピーした表を貼り付けると、新規クライアントとして一括で取り込めます。</p>
 
             <div class="ai-format-hint">
-              <span class="ai-format-label">列の順番</span>
+              <span class="ai-format-label">列の順番（基本情報）</span>
               <code>会社名 → 電話番号 → メールアドレス → お問い合わせフォームURL → 担当者 → ステータス → 事業内容 → 売上規模 → 創業年数 → 上場区分 → チケットツール → メモ</code>
-              <span class="ai-format-note">会社名だけでも取り込めます。後ろの列は空欄で構いません。1行目が見出しの場合は自動で読み飛ばします。フォーマットは下の「Excelテンプレートを保存」から取得できます。</span>
+              <span class="ai-format-label" style="margin-top:8px;">つづき（AI判定結果）</span>
+              <code>業種 → ランク → イベント規模 → 主催者 → LINE公式 → LINE公式アカウント情報 → 判定根拠</code>
+              <span class="ai-format-note">会社名だけでも取り込めます。後ろの列は空欄で構いません。1行目が見出しの場合は自動で読み飛ばします。13列目以降はAI判定結果の取り込み用で、無くてもこれまで通り読み込めます。フォーマットは下の「Excelテンプレートを保存」から取得できます。</span>
             </div>
 
             <div class="ai-file-row">
@@ -830,7 +832,7 @@
 
             <div class="ai-or">または、下の欄に直接貼り付け</div>
 
-            <textarea id="paste-input" class="ai-paste-area" spellcheck="false" placeholder="株式会社サンプル音楽	03-0000-0000	info@sample.co.jp	https://sample.co.jp/contact	小熊 夢樹	送信済	音楽制作	10億円	25年	非上場	Zendesk	展示会で名刺交換
+            <textarea id="paste-input" class="ai-paste-area" spellcheck="false" placeholder="株式会社サンプル音楽	03-0000-0000	info@sample.co.jp	https://sample.co.jp/contact	小熊 夢樹	送信済	音楽制作	10億円	25年	非上場	Zendesk	展示会で名刺交換	音楽・エンタメ	A	中	〇	〇	@sample-music / https://lin.ee/xxxx	自主公演を年6本主催、動員は年間約3,000人
 合同会社テスト	06-0000-0000	info@test.co.jp
 株式会社サード"></textarea>
 
@@ -841,6 +843,7 @@
               </button>
               <button class="btn" onclick="clearPastedList()">クリア</button>
               <button class="btn" onclick="downloadTemplateXlsx()" title="この列構成のExcelフォーマットを保存します">Excelテンプレートを保存</button>
+              <button class="btn" onclick="copyResearchPrompt()" title="Claude に企業調査させてCSVで出力させるための指示文をコピーします">AI調査用の指示文をコピー</button>
             </div>
             <div id="ai-status" class="ai-status" style="display:none"></div>
 
@@ -852,7 +855,9 @@
               <div class="table-wrap ai-table-wrap">
                 <table>
                   <thead><tr>
-                    <th>会社名</th><th>電話番号</th><th>メールアドレス</th><th>お問い合わせ</th><th>担当者</th><th>ステータス</th><th></th>
+                    <th>会社名</th><th>電話番号</th><th>メールアドレス</th><th>お問い合わせ</th>
+                    <th>ランク</th><th>規模</th><th>主催</th><th>LINE</th>
+                    <th>担当者</th><th>ステータス</th><th></th>
                   </tr></thead>
                   <tbody id="ai-results-tbody"></tbody>
                 </table>
@@ -895,6 +900,7 @@
             <option value="name-asc">担当者名(A→Z)</option>
           </select>
           <button class="btn btn-sm" onclick="openAiJudge('contacts')" title="Web検索でランク・イベント規模・主催者・LINE公式をまとめて判定します">AIで判定</button>
+          <button class="btn btn-sm" onclick="exportSectionCsv('contacts')" title="取り込みと同じ列でCSVに書き出します。AI判定にかけて戻すのに使えます">CSVで書き出す</button>
           <span class="clear-filters" onclick="clearFilters('contacts')">フィルターをクリア</span>
         </div>
 
@@ -965,6 +971,7 @@
             <option value="name-asc">担当者名(A→Z)</option>
           </select>
           <button class="btn btn-sm" onclick="openAiJudge('clients')" title="Web検索でランク・イベント規模・主催者・LINE公式をまとめて判定します">AIで判定</button>
+          <button class="btn btn-sm" onclick="exportSectionCsv('clients')" title="取り込みと同じ列でCSVに書き出します。AI判定にかけて戻すのに使えます">CSVで書き出す</button>
           <span class="clear-filters" onclick="clearFilters('clients')">フィルターをクリア</span>
         </div>
 
@@ -1764,6 +1771,15 @@ function normScale(v){
   if(s.includes('中')) return '中（500～10,000人）';
   if(s.includes('小')) return '小（～499人）';
   return '';
+}
+/* ランクの表記ゆれを吸収する（全角英字・小文字・「Aランク」等も受け付ける） */
+function normRank(v){
+  if(v == null) return '';
+  const s = String(v).trim()
+    .replace(/[Ａ-Ｚａ-ｚ]/g, c=>String.fromCharCode(c.charCodeAt(0) - 0xFEE0))
+    .toUpperCase();
+  const m = s.match(/^(SS|S|A|B|C)\b/) || s.match(/^(SS|S|A|B|C)(ランク|級)?$/);
+  return m && RANK_OPTIONS.includes(m[1]) ? m[1] : '';
 }
 
 let aiJudgeSection = null;
@@ -3296,11 +3312,13 @@ function findExistingMatch(row){
   const nk = normKey(row.company_name);
   const em = normKey(row.email);
   const ph = normPhone(row.phone);
-  const pool = contacts.concat(clients);
-  for(const c of pool){
-    if(nk && normKey(c.name) === nk) return {name:c.name, by:'会社名'};
-    if(em && c.email && normKey(c.email) === em) return {name:c.name, by:'メール'};
-    if(ph && c.phone && normPhone(c.phone) === ph) return {name:c.name, by:'電話番号'};
+  // どちらの一覧の何番の会社に当たったかまで返す（既存への反映に使う）
+  const pool = contacts.map(c=>({c, sec:'contacts'})).concat(clients.map(c=>({c, sec:'clients'})));
+  for(const {c, sec} of pool){
+    const hit = by => ({name:c.name, by, id:c.id, sec});
+    if(nk && normKey(c.name) === nk) return hit('会社名');
+    if(em && c.email && normKey(c.email) === em) return hit('メール');
+    if(ph && c.phone && normPhone(c.phone) === ph) return hit('電話番号');
   }
   return null;
 }
@@ -3380,6 +3398,14 @@ function parsePastedList(){
       listing: normalizeListing((cells[9] || '').trim()),
       ticketTool: (cells[10] || '').trim(),
       source_note: (cells[11] || '').trim(),
+      // 13列目以降はAI判定結果。無い場合は空欄として扱う
+      industry: (cells[12] || '').trim(),
+      rank: normRank(cells[13]),
+      eventScale: normScale(cells[14]),
+      isOrganizer: normMark(cells[15]),
+      lineOfficial: normMark(cells[16]),
+      lineInfo: (cells[17] || '').trim(),
+      ai_reason: (cells[18] || '').trim(),
       added: false,
     });
   });
@@ -3407,7 +3433,7 @@ function parsePastedList(){
   showStatus(
     `${parsed.length}件を読み込みました。` +
     (skipped ? `（会社名が空の${skipped}行は除きました）` : '') +
-    (dupCount ? `重複の可能性が${dupCount}件あります（黄色の印）。内容をご確認ください。`
+    (dupCount ? `重複の可能性が${dupCount}件あります（黄色の印）。登録済みの会社は「既存に反映」で判定結果だけを上書きできます。`
               : ' 内容を確認して新規クライアントに追加してください。'),
     dupCount ? 'warn' : 'ok'
   );
@@ -3420,6 +3446,154 @@ function clearPastedList(){
   aiResults = [];
   document.getElementById('ai-results-wrap').style.display = 'none';
   document.getElementById('ai-status').style.display = 'none';
+}
+
+/* ---------- AI調査用の指示文 ----------
+   Claude（claude.ai など）に貼って企業を調べさせ、この画面がそのまま読み込めるCSVで
+   出力させるための指示文。判定基準は画面内のAI判定と同じ定数を使い回すので、
+   基準を直せば指示文にも自動で反映され、二重管理でずれることがない。 */
+const IMPORT_COLUMNS = ['会社名','電話番号','メールアドレス','お問い合わせフォームURL','担当者',
+  'ステータス','事業内容','売上規模','創業年数','上場区分','チケットツール','メモ',
+  '業種','ランク','イベント規模','主催者','LINE公式','LINE公式アカウント情報','判定根拠'];
+
+/* 判定基準はAPI用に書かれているため、チャットに貼って使う指示文向けに言い回しだけ整える。
+   基準そのものは書き換えず、呼び名の違いだけを吸収する。 */
+function rubricForChat(text){
+  return text
+    .replace(/^あなたは[^。]*。/, '')                       // 役割は指示文の冒頭で既に伝えている
+    .replace(/web_search ツールを使って/g, 'web検索で')
+    .replace(/rank を空文字 ""/g, '「ランク」列を空欄')
+    .replace(/lineInfo に/g, '「LINE公式アカウント情報」列に')
+    .replace(/空文字 ""/g, '空欄')
+    .replace(/\s*""/g, '空欄')        // 残りの "" も日本語の「空欄」に寄せる
+    .replace(/空欄[ 　]+/g, '空欄')   // 置換で生じた余分な空白を詰める
+    .trim();
+}
+
+/* ---------- 登録済みクライアントのCSV書き出し ----------
+   取り込みと同じ19列で出すので、AIに判定させたあと、そのまま貼り付け欄に戻せる。
+   セル内改行は取り込み時に行が壊れるため、書き出す時点で空白に潰しておく。 */
+function csvSafe(v){
+  return (v == null ? '' : String(v)).replace(/[\r\n]+/g, ' ').trim();
+}
+
+function exportSectionCsv(section){
+  const arr = dataOf(section);
+  const ids = selection[section].size > 0 ? [...selection[section]] : visibleIds[section];
+  const rows = ids.map(id => arr.find(x => x.id === id)).filter(Boolean);
+  if(!rows.length){ toast('書き出せる行がありません'); return; }
+
+  const line = c => [
+    c.name, c.phone, c.email, c.inquiryForm,
+    ownerName(c.owner) || '', c.status,
+    c.business, c.revenue, c.founded, c.listing, c.ticketTool,
+    // AI判定のメモは取り込み時に作り直されるため書き出さない（往復のたびに増えるのを防ぐ）
+    (c.notes || []).filter(n => !/^AI判定/.test(n.author || '')).map(n => n.text).join(' / '),
+    c.industry, c.rank, c.eventScale, c.isOrganizer, c.lineOfficial, c.lineInfo,
+    '',   // 判定根拠はAIが新しく書く列なので空で出す
+  ].map(v => csvCell(csvSafe(v))).join(',');
+
+  const lines = [IMPORT_COLUMNS.join(',')].concat(rows.map(line));
+  // ExcelでもUTF-8として正しく開けるようBOMを付ける
+  const blob = new Blob(['﻿' + lines.join('\r\n')], {type:'text/csv;charset=utf-8'});
+
+  try{
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const d = new Date();
+    const pad = n => String(n).padStart(2,'0');
+    a.href = url;
+    a.download = `${SECTION_LABEL[section]}_${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}.csv`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url), 1000);
+    const basis = selection[section].size > 0 ? '選択中の' : '表示中の';
+    toast(`${basis}${rows.length}件をCSVに書き出しました`);
+  }catch(e){
+    console.error(e);
+    toast('書き出せませんでした');
+  }
+}
+
+function researchPromptText(){
+  return [
+'あなたは営業リードの調査アシスタントです。以下に渡す企業について web検索で実際に調べ、',
+'最後に CSV だけを出力してください。',
+'',
+'【調査手順】',
+'1. 1社ずつ、公式サイト・イベントページ・チケット販売ページ・SNS・LINE公式アカウントを確認する。',
+'2. 1つの情報源で決めない。判定する項目ごとに、根拠になるページを実際に開いて確かめる。',
+'   - 主催者：会社概要の事業内容と、実際の公演・試合ページの主催表記の両方を見る',
+'   - イベント規模：年間の開催本数と1回あたりの動員が分かる資料（リーグ発表・興行実績・会場定員）を探す',
+'   - LINE公式：LINE公式アカウントのページ、または公式サイトの友だち追加リンクを確認する',
+'3. 確認できた事実だけを書く。推測で埋めない。確認できなかった項目は空欄にする。',
+'   「たぶんある」「大手だから持っているはず」で 〇 を付けないこと。空欄のほうが有益。',
+'4. 会社名は渡されたものをそのまま使う（正式名称に勝手に直さない）。CRM側の重複照合に使うため。',
+'',
+'【ランクの基準】',
+rubricForChat(RANK_RUBRIC),
+'',
+'【イベント規模・主催者・LINE公式の基準】',
+rubricForChat(EVENT_RUBRIC),
+'',
+'【出力形式】',
+'・CSV（カンマ区切り・UTF-8）のみを出力する。前置きも解説もコードブロック記号も付けない。',
+'・1行目は必ず次の見出し行にする：',
+IMPORT_COLUMNS.join(','),
+'・2行目以降が1社1行。列は必ずこの19列・この順番で、余分な列を足さない。',
+'・値にカンマ・引用符が含まれる場合はセル全体を " で囲み、中の " は "" と書く。',
+'・セル内で改行しない（1社は必ず1行に収める）。',
+'',
+'【各列の書き方】',
+'・会社名：必須。ここが空の行は取り込めない。',
+'・電話番号／メールアドレス／お問い合わせフォームURL：公式サイトで確認できたものだけ。',
+'・担当者：空欄でよい（CRM側で割り当てる）。',
+'・ステータス：空欄でよい（空欄は「未対応」として取り込まれる）。',
+'・事業内容：40字程度で簡潔に。',
+'・売上規模／創業年数／上場区分：確認できた場合のみ。上場区分は「上場」「非上場」「不明」のいずれか。',
+'・チケットツール：使用が確認できたサービス名（例：チケットぴあ、イープラス、Peatix）。',
+'・メモ：営業担当への申し送り事項があれば。無ければ空欄。',
+'・業種：「音楽・エンタメ」「舞台・演劇」「スポーツ」のように短く。',
+'・ランク：' + RANK_OPTIONS.filter(r=>r!=='SS').join(' / ') + ' のいずれか。SSは手動運用なので出力しない。判断材料が乏しければ空欄。',
+'・イベント規模：「小」「中」「大」の一文字。不明なら空欄。',
+'・主催者／LINE公式：全角の「〇」または「×」。確認できなければ空欄。',
+'・LINE公式アカウント情報：LINE公式が「〇」のとき、アカウント名・LINE ID・友だち追加URLを分かる範囲で。',
+'・判定根拠：80字以内。何を見てそう判断したかを情報源とあわせて簡潔に（この内容はCRMのメモに残ります）。',
+'',
+'【調査対象】',
+'次のどちらの形式で渡されても対応すること。',
+'A. 会社名だけが1行ずつ並んでいる場合 → 新規に調べて全項目を埋める。',
+'B. 上と同じ19列のCSVが渡された場合 → CRMからの書き出しなので、既存の登録内容を',
+'   手がかりに調べ直す（再判定）。このとき次を守ること：',
+'   - 会社名・電話番号・メールアドレス・お問い合わせフォームURL・担当者・ステータス・メモは',
+'     渡された値をそのまま返す（勝手に書き換えない）。',
+'   - ランク・イベント規模・主催者・LINE公式・LINE公式アカウント情報・業種は、',
+'     既存の値に引きずられず、調べ直した結果で上書きする。',
+'   - 既存の値と違う判定になった場合は、判定根拠にその理由を書く。',
+'   - 判定根拠は毎回必ず書き直す（前回の内容をそのまま返さない）。',
+'',
+'（ここに会社名の一覧、またはCRMから書き出したCSVを貼り付けてください）',
+].join('\n');
+}
+
+function copyResearchPrompt(){
+  const text = researchPromptText();
+  const done = ()=>toast('指示文をコピーしました。Claudeに貼り付けてお使いください');
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(text).then(done).catch(()=>fallbackCopy(text, done));
+  } else {
+    fallbackCopy(text, done);
+  }
+}
+/* クリップボードAPIが使えない環境（古いブラウザ・非HTTPS）向けの控え */
+function fallbackCopy(text, done){
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.position = 'fixed'; ta.style.left = '-9999px';
+  document.body.appendChild(ta);
+  ta.select();
+  try{ document.execCommand('copy'); done(); }
+  catch(e){ toast('コピーできませんでした'); }
+  ta.remove();
 }
 
 /* ---------- Excelテンプレートの生成（外部ライブラリなし） ----------
@@ -3503,15 +3677,25 @@ function sheetXml(rows){
 
 function downloadTemplateXlsx(){
   const enc = new TextEncoder();
-  const headers = ['会社名','電話番号','メールアドレス','お問い合わせフォームURL','担当者',
-                   'ステータス','事業内容','売上規模','創業年数','上場区分','チケットツール','メモ'];
+  const headers = IMPORT_COLUMNS.slice();   // 貼り付け取り込みと同じ列定義を使う
   const example = ['株式会社サンプル音楽','03-0000-0000','info@sample.co.jp','https://sample.co.jp/contact',
-                   '小熊 夢樹','送信済','音楽制作','10億円','25年','非上場','Zendesk','展示会で名刺交換'];
+                   '小熊 夢樹','送信済','音楽制作','10億円','25年','非上場','Zendesk','展示会で名刺交換',
+                   '音楽・エンタメ','A','中','〇','〇','@sample-music / https://lin.ee/xxxx',
+                   '自主公演を年6本主催、動員は年間約3,000人（公式サイトの公演一覧より）'];
 
-  // 別シートに、担当者とステータスの入力候補を参考として置く
+  // 別シートに、入力候補と各列の意味を参考として置く
   const ref = [['入力候補（参考）'], ['担当者'], ...SALES_REPS.map(r=>[r.name]),
                [''], ['ステータス'], ...STATUS_LIST.map(s=>[s]),
-               [''], ['上場区分'], ...['上場','非上場','不明'].map(v=>[v])];
+               [''], ['上場区分'], ...['上場','非上場','不明'].map(v=>[v]),
+               [''], ['ランク（SSは手動運用）'], ...RANK_OPTIONS.map(v=>[v]),
+               [''], ['イベント規模（年間動員数で分類）'],
+               ['小', '年間動員 およそ499人以下'],
+               ['中', '年間動員 およそ500～10,000人'],
+               ['大', '年間動員 およそ10,000人以上'],
+               [''], ['主催者 / LINE公式'], ['〇', '該当する'], ['×', '該当しない'], ['（空欄）', '確認できなかった'],
+               [''], ['注意'],
+               ['確認できない項目は空欄にしてください。空欄の列は取り込み時に上書きされません。'],
+               ['セル内で改行しないでください。1社＝1行で入力します。']];
 
   const files = [
     {name:'[Content_Types].xml', data: enc.encode(
@@ -3712,17 +3896,22 @@ function renderAiResults(){
       ? `<div class="dup-badge" title="${escapeHtml(r.dupExisting.by)}が一致">登録済みの可能性：${escapeHtml(r.dupExisting.name)}（${escapeHtml(r.dupExisting.by)}一致）</div>`
       : (r.dupInList ? '<div class="dup-badge">この一覧内で重複しています</div>' : '');
     tr.innerHTML = `
-      <td><div class="cell-name">${escapeHtml(r.company_name)}</div>${dupBadge}${r.source_note ? `<div class="ai-source-note">${escapeHtml(r.source_note)}</div>`:''}</td>
+      <td><div class="cell-name">${escapeHtml(r.company_name)}</div>${dupBadge}${r.source_note ? `<div class="ai-source-note">${escapeHtml(r.source_note)}</div>`:''}${r.ai_reason ? `<div class="ai-source-note" title="${escapeHtml(r.ai_reason)}">根拠：${escapeHtml(r.ai_reason)}</div>`:''}</td>
       <td>${r.phone ? escapeHtml(r.phone) : '<span class="unassigned">—</span>'}</td>
       <td>${r.email ? escapeHtml(r.email) : '<span class="unassigned">—</span>'}</td>
       <td>${r.inquiry_form ? `<a href="${escapeHtml(r.inquiry_form)}" target="_blank" rel="noopener" style="color:var(--primary-deep); text-decoration:none; font-size:12px;">フォーム ↗</a>` : '<span class="unassigned">—</span>'}</td>
+      <td>${r.rank ? rankBadge(r.rank) : '<span class="unassigned">—</span>'}</td>
+      <td>${scaleCell(r.eventScale)}</td>
+      <td>${markCell(r.isOrganizer)}</td>
+      <td>${markCell(r.lineOfficial)}${r.lineInfo ? `<div class="mail-meta" title="${escapeHtml(r.lineInfo)}">${escapeHtml(r.lineInfo.slice(0,18))}${r.lineInfo.length>18?'…':''}</div>` : ''}</td>
       <td>${r.owner ? escapeHtml(ownerName(r.owner))
             : (r.owner_text ? `<span class="unassigned" title="担当者一覧に一致する名前がありませんでした">未割当て（${escapeHtml(r.owner_text)}）</span>`
                             : '<span class="unassigned">未割当て</span>')}</td>
       <td>${statusPill(r.status)}${r.business ? `<div class="mail-meta">${escapeHtml(r.business)}</div>` : ''}</td>
       <td>
-        <button class="ai-add-btn" id="ai-add-btn-${idx}" onclick="addAiResultToContacts(${idx})" ${r.added?'disabled':''}>
-          ${r.added ? '追加済み' : '新規クライアントに追加'}
+        <button class="ai-add-btn" id="ai-add-btn-${idx}" onclick="${r.dupExisting ? `applyAiResultToExisting(${idx})` : `addAiResultToContacts(${idx})`}" ${r.added?'disabled':''}
+          ${r.dupExisting && !r.added ? `title="「${escapeHtml(r.dupExisting.name)}」の判定結果（ランク・規模・主催・LINE）を上書きし、空欄の基本情報だけ補います"` : ''}>
+          ${r.added ? (r.appliedTo ? '反映済み' : '追加済み') : (r.dupExisting ? '既存に反映' : '新規クライアントに追加')}
         </button>
       </td>`;
     tbody.appendChild(tr);
@@ -3734,6 +3923,17 @@ function renderAiResults(){
 function addAiResultToContacts(idx, silent){
   const r = aiResults[idx];
   if(!r || r.added) return;
+  // メモ欄の内容と、AI判定の根拠を、それぞれ別のメモとして残す
+  const notes = [];
+  if(r.source_note) notes.push({text: r.source_note, time: nowDateTimeStr(), author: ownerName(currentUser)});
+  if(r.rank || r.eventScale || r.isOrganizer || r.lineOfficial || r.ai_reason){
+    notes.push({
+      text: `【AI判定】ランク:${r.rank||'—'} / 規模:${r.eventScale||'—'} / 主催:${r.isOrganizer||'—'} / LINE:${r.lineOfficial||'—'}`
+            + (r.lineInfo ? `（${r.lineInfo}）` : '')
+            + (r.ai_reason ? `｜${r.ai_reason}` : ''),
+      time: nowDateTimeStr(), author: 'AI判定（取り込み）',
+    });
+  }
   contacts.unshift({
     id: nextIds.contact++,
     name: r.company_name,
@@ -3741,18 +3941,21 @@ function addAiResultToContacts(idx, silent){
     phone: r.phone || '',
     inquiryForm: r.inquiry_form || '',
     business: r.business || '',
+    industry: r.industry || '',
     revenue: r.revenue || '',
     founded: r.founded || '',
     listing: r.listing || '',
     ticketTool: r.ticketTool || '',
+    rank: r.rank || '',
+    eventScale: r.eventScale || '',
+    isOrganizer: r.isOrganizer || '',
+    lineOfficial: r.lineOfficial || '',
+    lineInfo: r.lineInfo || '',
     owner: r.owner || null,
     created: todayStr(),
     status: r.status || '未対応',
     statusUpdated: nowDateTimeStr(),
-    // メモ欄に書かれた内容があれば、そのまま会社のメモとして残す
-    notes: r.source_note
-      ? [{text: r.source_note, time: nowDateTimeStr(), author: ownerName(currentUser)}]
-      : [],
+    notes,
   });
   r.added = true;
   const btn = document.getElementById('ai-add-btn-'+idx);
@@ -3761,34 +3964,85 @@ function addAiResultToContacts(idx, silent){
   renderContacts(); renderHome();
 }
 
+/* 既に登録済みの会社に、CSVの判定結果だけを反映する。
+   ランク・規模・主催・LINEは新しい判定で上書きし、
+   電話やメールなどの基本情報は「元が空欄のときだけ」補う（手入力を消さないため）。 */
+function applyAiResultToExisting(idx, silent){
+  const r = aiResults[idx];
+  if(!r || r.added || !r.dupExisting) return;
+  const arr = r.dupExisting.sec === 'clients' ? clients : contacts;
+  const c = arr.find(x=>x.id === r.dupExisting.id);
+  if(!c){ if(!silent) toast('反映先の会社が見つかりませんでした'); return; }
+
+  const changed = [];
+  // 判定結果：値があれば上書き
+  const overwrite = (key, val, label)=>{ if(val && c[key] !== val){ c[key] = val; changed.push(label); } };
+  overwrite('rank', r.rank, 'ランク');
+  overwrite('eventScale', r.eventScale, 'イベント規模');
+  overwrite('isOrganizer', r.isOrganizer, '主催者');
+  overwrite('lineOfficial', r.lineOfficial, 'LINE公式');
+  overwrite('lineInfo', r.lineInfo, 'LINE情報');
+  // 基本情報：空欄のときだけ補う
+  const fill = (key, val, label)=>{ if(val && !c[key]){ c[key] = val; changed.push(label); } };
+  fill('email', r.email, 'メール');
+  fill('phone', r.phone, '電話');
+  fill('inquiryForm', r.inquiry_form, 'フォーム');
+  fill('business', r.business, '事業内容');
+  fill('industry', r.industry, '業種');
+  fill('revenue', r.revenue, '売上規模');
+  fill('founded', r.founded, '創業年数');
+  fill('listing', r.listing, '上場区分');
+  fill('ticketTool', r.ticketTool, 'チケットツール');
+
+  if(!c.notes) c.notes = [];
+  c.notes.push({
+    text: `【AI判定】ランク:${r.rank||'—'} / 規模:${r.eventScale||'—'} / 主催:${r.isOrganizer||'—'} / LINE:${r.lineOfficial||'—'}`
+          + (r.lineInfo ? `（${r.lineInfo}）` : '')
+          + (r.ai_reason ? `｜${r.ai_reason}` : ''),
+    time: nowDateTimeStr(), author: 'AI判定（取り込み）',
+  });
+
+  r.added = true;
+  r.appliedTo = c.name;
+  const btn = document.getElementById('ai-add-btn-'+idx);
+  if(btn){ btn.disabled = true; btn.textContent = '反映済み'; }
+  if(!silent) toast(changed.length ? `${c.name} に反映しました（${changed.join('・')}）` : `${c.name} に変更点はありませんでした`);
+  renderContacts(); renderClients(); renderHome();
+}
+
 function addAllAiResults(){
   const pending = aiResults.filter(r=>!r.added);
   if(pending.length === 0){ toast('追加できる項目がありません'); return; }
 
-  const dupCount = pending.filter(r=>r.dupExisting || r.dupInList).length;
+  const existCount = pending.filter(r=>r.dupExisting).length;
+  const dupCount   = pending.filter(r=>r.dupExisting || r.dupInList).length;
 
-  // 重複を含む場合は、除外して追加するか、まとめて追加するかを確認する
-  const run = (skipDup)=>{
-    let count = 0;
+  /* mode 'apply'：登録済みの会社は既存に反映し、それ以外を新規追加する（既定）
+     mode 'skip' ：重複の可能性がある行は何もせず飛ばす */
+  const run = (mode)=>{
+    let added = 0, applied = 0, skipped = 0;
     aiResults.forEach((r, idx)=>{
       if(r.added) return;
-      if(skipDup && (r.dupExisting || r.dupInList)) return;
-      addAiResultToContacts(idx, true);
-      count++;
+      if(mode === 'skip' && (r.dupExisting || r.dupInList)){ skipped++; return; }
+      if(r.dupExisting){ applyAiResultToExisting(idx, true); applied++; }
+      else if(r.dupInList){ skipped++; }      // このリスト内の2件目以降は作らない
+      else { addAiResultToContacts(idx, true); added++; }
     });
-    renderAiResults();   // 除外した重複行の印を残したまま再描画
-    toast(count === 0 ? '追加した項目はありません' : `${count}件を新規クライアントに追加しました`);
+    renderAiResults();   // 飛ばした重複行の印を残したまま再描画
+    const msg = [added ? `${added}件を新規追加` : '', applied ? `${applied}件を既存に反映` : ''].filter(Boolean).join('・');
+    toast((msg ? msg + 'しました' : '処理した項目はありません')
+          + (skipped ? `（重複${skipped}件は飛ばしました）` : ''));
   };
 
   if(dupCount > 0){
     showConfirm(
-      `重複の可能性がある${dupCount}件が含まれています。どうしますか?`,
-      ()=>run(true),
-      {okLabel:`重複を除いて追加（${pending.length - dupCount}件）`, danger:false,
-       altLabel:`重複も含めて追加（${pending.length}件）`, onAlt:()=>run(false)}
+      `重複の可能性がある${dupCount}件が含まれています（うち${existCount}件は登録済みの会社です）。どうしますか?`,
+      ()=>run('apply'),
+      {okLabel:`登録済みは既存に反映して取り込む`, danger:false,
+       altLabel:`重複を除いて追加（${pending.length - dupCount}件）`, onAlt:()=>run('skip')}
     );
   } else {
-    run(false);
+    run('apply');
   }
 }
 

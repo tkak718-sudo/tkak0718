@@ -1,0 +1,17 @@
+{
+  // Cloudflare Workers の設定。crm-deploy フォルダの中身をそのまま配信する。
+  // 配信ルート直下が crm-deploy/ の中身になるため、/ で index.html が開く。
+  //
+  // 使い方（リポジトリのルートで実行）:
+  //   npx wrangler login     ... 初回のみ。ブラウザでCloudflareにログインする
+  //   npx wrangler deploy    ... これでデプロイされる
+  //
+  // name は既存のWorkerと同じ名前にしてある。変えると別のURLになるので注意。
+  "name": "crowdbasket-crm",
+  "compatibility_date": "2026-08-01",
+  "assets": {
+    "directory": "./crm-deploy",
+    // 単一HTMLのアプリなので、どのパスで開かれても index.html を返す
+    "not_found_handling": "single-page-application"
+  }
+}
