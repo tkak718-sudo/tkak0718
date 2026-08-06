@@ -900,6 +900,7 @@
             <option value="name-asc">担当者名(A→Z)</option>
           </select>
           <button class="btn btn-sm" onclick="openAiJudge('contacts')" title="Web検索でランク・イベント規模・主催者・LINE公式をまとめて判定します">AIで判定</button>
+          <button class="btn btn-sm" onclick="exportSectionCsv('contacts')" title="取り込みと同じ列でCSVに書き出します。AI判定にかけて戻すのに使えます">CSVで書き出す</button>
           <span class="clear-filters" onclick="clearFilters('contacts')">フィルターをクリア</span>
         </div>
 
@@ -970,6 +971,7 @@
             <option value="name-asc">担当者名(A→Z)</option>
           </select>
           <button class="btn btn-sm" onclick="openAiJudge('clients')" title="Web検索でランク・イベント規模・主催者・LINE公式をまとめて判定します">AIで判定</button>
+          <button class="btn btn-sm" onclick="exportSectionCsv('clients')" title="取り込みと同じ列でCSVに書き出します。AI判定にかけて戻すのに使えます">CSVで書き出す</button>
           <span class="clear-filters" onclick="clearFilters('clients')">フィルターをクリア</span>
         </div>
 
@@ -3468,6 +3470,50 @@ function rubricForChat(text){
     .trim();
 }
 
+/* ---------- 登録済みクライアントのCSV書き出し ----------
+   取り込みと同じ19列で出すので、AIに判定させたあと、そのまま貼り付け欄に戻せる。
+   セル内改行は取り込み時に行が壊れるため、書き出す時点で空白に潰しておく。 */
+function csvSafe(v){
+  return (v == null ? '' : String(v)).replace(/[\r\n]+/g, ' ').trim();
+}
+
+function exportSectionCsv(section){
+  const arr = dataOf(section);
+  const ids = selection[section].size > 0 ? [...selection[section]] : visibleIds[section];
+  const rows = ids.map(id => arr.find(x => x.id === id)).filter(Boolean);
+  if(!rows.length){ toast('書き出せる行がありません'); return; }
+
+  const line = c => [
+    c.name, c.phone, c.email, c.inquiryForm,
+    ownerName(c.owner) || '', c.status,
+    c.business, c.revenue, c.founded, c.listing, c.ticketTool,
+    // AI判定のメモは取り込み時に作り直されるため書き出さない（往復のたびに増えるのを防ぐ）
+    (c.notes || []).filter(n => !/^AI判定/.test(n.author || '')).map(n => n.text).join(' / '),
+    c.industry, c.rank, c.eventScale, c.isOrganizer, c.lineOfficial, c.lineInfo,
+    '',   // 判定根拠はAIが新しく書く列なので空で出す
+  ].map(v => csvCell(csvSafe(v))).join(',');
+
+  const lines = [IMPORT_COLUMNS.join(',')].concat(rows.map(line));
+  // ExcelでもUTF-8として正しく開けるようBOMを付ける
+  const blob = new Blob(['﻿' + lines.join('\r\n')], {type:'text/csv;charset=utf-8'});
+
+  try{
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const d = new Date();
+    const pad = n => String(n).padStart(2,'0');
+    a.href = url;
+    a.download = `${SECTION_LABEL[section]}_${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}.csv`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url), 1000);
+    const basis = selection[section].size > 0 ? '選択中の' : '表示中の';
+    toast(`${basis}${rows.length}件をCSVに書き出しました`);
+  }catch(e){
+    console.error(e);
+    toast('書き出せませんでした');
+  }
+}
+
 function researchPromptText(){
   return [
 'あなたは営業リードの調査アシスタントです。以下に渡す企業について web検索で実際に調べ、',
@@ -3475,8 +3521,13 @@ function researchPromptText(){
 '',
 '【調査手順】',
 '1. 1社ずつ、公式サイト・イベントページ・チケット販売ページ・SNS・LINE公式アカウントを確認する。',
-'2. 確認できた事実だけを書く。推測で埋めない。確認できなかった項目は空欄にする。',
-'3. 会社名は渡されたものをそのまま使う（正式名称に勝手に直さない）。重複判定に使うため。',
+'2. 1つの情報源で決めない。判定する項目ごとに、根拠になるページを実際に開いて確かめる。',
+'   - 主催者：会社概要の事業内容と、実際の公演・試合ページの主催表記の両方を見る',
+'   - イベント規模：年間の開催本数と1回あたりの動員が分かる資料（リーグ発表・興行実績・会場定員）を探す',
+'   - LINE公式：LINE公式アカウントのページ、または公式サイトの友だち追加リンクを確認する',
+'3. 確認できた事実だけを書く。推測で埋めない。確認できなかった項目は空欄にする。',
+'   「たぶんある」「大手だから持っているはず」で 〇 を付けないこと。空欄のほうが有益。',
+'4. 会社名は渡されたものをそのまま使う（正式名称に勝手に直さない）。CRM側の重複照合に使うため。',
 '',
 '【ランクの基準】',
 rubricForChat(RANK_RUBRIC),
@@ -3508,8 +3559,19 @@ IMPORT_COLUMNS.join(','),
 '・LINE公式アカウント情報：LINE公式が「〇」のとき、アカウント名・LINE ID・友だち追加URLを分かる範囲で。',
 '・判定根拠：80字以内。何を見てそう判断したかを情報源とあわせて簡潔に（この内容はCRMのメモに残ります）。',
 '',
-'【調査対象の企業リスト】',
-'（ここに会社名を1行ずつ貼り付けてください）',
+'【調査対象】',
+'次のどちらの形式で渡されても対応すること。',
+'A. 会社名だけが1行ずつ並んでいる場合 → 新規に調べて全項目を埋める。',
+'B. 上と同じ19列のCSVが渡された場合 → CRMからの書き出しなので、既存の登録内容を',
+'   手がかりに調べ直す（再判定）。このとき次を守ること：',
+'   - 会社名・電話番号・メールアドレス・お問い合わせフォームURL・担当者・ステータス・メモは',
+'     渡された値をそのまま返す（勝手に書き換えない）。',
+'   - ランク・イベント規模・主催者・LINE公式・LINE公式アカウント情報・業種は、',
+'     既存の値に引きずられず、調べ直した結果で上書きする。',
+'   - 既存の値と違う判定になった場合は、判定根拠にその理由を書く。',
+'   - 判定根拠は毎回必ず書き直す（前回の内容をそのまま返さない）。',
+'',
+'（ここに会社名の一覧、またはCRMから書き出したCSVを貼り付けてください）',
 ].join('\n');
 }
 
