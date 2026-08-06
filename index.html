@@ -3417,19 +3417,32 @@ function splitRow(line){
    一致しなければ未割当てとして取り込む（勝手に誰かに割り当てない） */
 /* 重複チェック用に、表記ゆれを吸収したキーを作る */
 function normKey(s){ return (s || '').toString().replace(/[\s　]/g, '').toLowerCase(); }
+
+/* 会社名の突き合わせ用キー。法人格の書き方と全角英数の違いを吸収する。
+   名刺や登記は「株式会社〇〇」、業界団体の会員一覧は「（株）〇〇」と割れるため、
+   空白除去と小文字化だけでは同じ会社を別会社として取り込んでしまう。 */
+const CORP_FORMS = /(株式会社|（株）|\(株\)|㈱|有限会社|（有）|\(有\)|㈲|合同会社|（同）|\(同\)|一般社団法人|公益社団法人|一般財団法人|公益財団法人|特定非営利活動法人)/g;
+function normCompanyKey(s){
+  return (s || '').toString()
+    .replace(/[Ａ-Ｚａ-ｚ０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0))
+    .replace(/[\s　]/g, '')
+    .replace(CORP_FORMS, '')
+    .replace(/[・･]/g, '')
+    .toLowerCase();
+}
 function normPhone(s){ return (s || '').toString().replace(/[^0-9]/g, ''); }
 
 /* 取り込む1行が、既に登録済みの会社と一致しないか調べる。
    会社名・メール・電話のいずれかが一致したら重複とみなす。
    新規クライアントとクライアントデータの両方を対象にする。 */
 function findExistingMatch(row){
-  const nk = normKey(row.company_name);
+  const nk = normCompanyKey(row.company_name);
   const em = normKey(row.email);
   const ph = normPhone(row.phone);
   // 一致した会社を後から更新できるよう、どちらの一覧のどのidかまで返す
   const pool = contacts.map(c=>['contacts', c]).concat(clients.map(c=>['clients', c]));
   for(const [section, c] of pool){
-    const by = (nk && normKey(c.name) === nk)            ? '会社名'
+    const by = (nk && normCompanyKey(c.name) === nk)      ? '会社名'
              : (em && c.email && normKey(c.email) === em) ? 'メール'
              : (ph && c.phone && normPhone(c.phone) === ph) ? '電話番号' : '';
     if(by) return {name:c.name, by, id:c.id, section};
@@ -3546,7 +3559,7 @@ function parsePastedList(){
   parsed.forEach(r=>{
     r.dupExisting = findExistingMatch(r);
 
-    const keys = [normKey(r.company_name), normKey(r.email), normPhone(r.phone)].filter(Boolean);
+    const keys = [normCompanyKey(r.company_name), normKey(r.email), normPhone(r.phone)].filter(Boolean);
     r.dupInList = keys.some(k=>seen[k]);
     keys.forEach(k=>{ seen[k] = true; });
 
