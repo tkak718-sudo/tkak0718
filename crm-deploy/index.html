@@ -893,7 +893,7 @@
         <div class="filter-bar">
           <div class="search-box">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>
-            <input type="text" id="contacts-search" placeholder="会社名で検索">
+            <input type="text" id="contacts-search" placeholder="会社名・メールアドレスで検索">
           </div>
           <span class="filter-label">担当者</span>
           <select id="contacts-filter-owner"><option value="">すべて</option></select>
@@ -2912,7 +2912,9 @@ function renderContacts(){
   if(s.scope==='unassigned') list = list.filter(c=>!c.owner);
   if(s.owner) list = list.filter(c=>c.owner===s.owner);
   if(s.status) list = list.filter(c=>c.status===s.status);
-  if(s.search) list = list.filter(c=> c.name.toLowerCase().includes(s.search));
+  // 会社名とメールアドレスの両方を検索対象にする。
+  // 間に空白を挟むのは、会社名の末尾とメールの先頭がつながって誤ヒットするのを防ぐため。
+  if(s.search) list = list.filter(c=> `${c.name||''} ${c.email||''}`.toLowerCase().includes(s.search));
   if(s.mail==='sendable') list = list.filter(c=> isSendable(c));
   if(s.mail==='optout')   list = list.filter(c=> c.emailOptOut);
   if(s.mail==='noemail')  list = list.filter(c=> !hasEmail(c));
