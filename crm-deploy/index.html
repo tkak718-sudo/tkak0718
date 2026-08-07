@@ -232,6 +232,21 @@
   .task-title{font-size:13.5px; font-weight:600;}
   .task-title.done{text-decoration:line-through; color:var(--text-faint); font-weight:500;}
   .task-meta{font-size:11.5px; color:var(--text-faint); margin-top:2px;}
+  /* 期日。期限切れ・当日・翌日は色で気づけるようにする */
+  .task-due{
+    display:inline-block; margin-right:6px; padding:1px 6px; border-radius:5px;
+    font-size:11px; font-weight:700; white-space:nowrap;
+    background:var(--surface-alt); color:var(--text-secondary);
+  }
+  .task-due.over{background:#fee2e2; color:#b91c1c;}
+  .task-due.today{background:#ffedd5; color:#c2410c;}
+  .task-due.soon{background:#fef9c3; color:#a16207;}
+  .task-due.done{background:var(--surface-alt); color:var(--text-faint);}
+  .tk-due-row{display:flex; align-items:center; gap:6px; flex-wrap:wrap;}
+  .tk-due-row input[type=date]{
+    border:1px solid var(--border-strong); border-radius:6px; padding:7px 10px;
+    font-size:12.5px; background:var(--surface); color:var(--text); font-family:inherit;
+  }
   .task-badge{
     font-size:10.5px; font-weight:700; padding:2px 8px; border-radius:20px; flex-shrink:0;
   }
@@ -274,11 +289,14 @@
   .tab.active .cnt{color:var(--primary-deep);}
 
   .filter-bar{display:flex; align-items:center; gap:10px; margin-bottom:14px; flex-wrap:wrap;}
-  .filter-bar select, .filter-bar input[type=text]{
+  .filter-bar select, .filter-bar input[type=text], .filter-bar input[type=date]{
     border:1px solid var(--border-strong); border-radius:6px; padding:7px 10px;
     font-size:12.5px; background:var(--surface); color:var(--text); font-family:inherit;
     min-width:120px;
   }
+  /* 対象期間の指定（データ分析） */
+  .an-range-sep{color:var(--text-faint); font-size:12.5px;}
+  .an-presets{display:flex; gap:4px; flex-wrap:wrap;}
   .filter-bar .search-box{position:relative; min-width:220px;}
   .filter-bar .search-box input{width:100%; padding-left:30px;}
   .filter-bar .search-box svg{position:absolute; left:9px; top:8.5px; width:14px; height:14px; stroke:var(--text-faint);}
@@ -1071,8 +1089,18 @@
         </div>
 
         <div class="filter-bar">
-          <span class="filter-label">対象月</span>
-          <select id="an-month"></select>
+          <span class="filter-label">対象期間</span>
+          <input type="date" id="an-from" title="開始日">
+          <span class="an-range-sep">〜</span>
+          <input type="date" id="an-to" title="終了日">
+          <span class="an-presets">
+            <button class="btn btn-sm" onclick="setAnalyticsRange('this-month')">今月</button>
+            <button class="btn btn-sm" onclick="setAnalyticsRange('last-month')">先月</button>
+            <button class="btn btn-sm" onclick="setAnalyticsRange('7d')">直近7日</button>
+            <button class="btn btn-sm" onclick="setAnalyticsRange('30d')">直近30日</button>
+            <button class="btn btn-sm" onclick="setAnalyticsRange('all')">全期間</button>
+          </span>
+          <span class="filter-label" id="an-range-info"></span>
           <span class="an-hint">送信・返信は入力値、開封率・クリック率は配信サービスの数値をご入力ください。</span>
         </div>
 
@@ -1111,7 +1139,7 @@
                 </tr></thead>
                 <tbody id="an-table"></tbody>
               </table>
-              <div class="empty" id="an-empty" style="display:none"><p>この月の記録はまだありません</p></div>
+              <div class="empty" id="an-empty" style="display:none"><p>この期間の記録はまだありません</p></div>
             </div>
           </div>
         </div>
@@ -1189,6 +1217,16 @@
             <option value="mid">優先度中</option>
             <option value="low">優先度低</option>
           </select>
+        </div>
+      </div>
+      <div class="field">
+        <label>期日</label>
+        <div class="tk-due-row">
+          <input type="date" id="tk-due">
+          <button class="btn btn-sm" onclick="setTaskDue(0)">今日</button>
+          <button class="btn btn-sm" onclick="setTaskDue(1)">明日</button>
+          <button class="btn btn-sm" onclick="setTaskDue(7)">1週間後</button>
+          <button class="btn btn-sm" onclick="setTaskDue(null)">なし</button>
         </div>
       </div>
     </div>
@@ -3065,10 +3103,13 @@ function renderHome(){
   document.getElementById('home-date').textContent =
     `${now.getFullYear()}年${now.getMonth()+1}月${now.getDate()}日(${wd})の業務状況`;
 
-  const myTasks = tasks.filter(t=>t.owner===currentUser);
+  const myTasks = sortTasks(tasks.filter(t=>t.owner===currentUser));
   const undone = myTasks.filter(t=>!t.done);
   document.getElementById('stat-tasks').textContent = undone.length;
-  document.getElementById('task-progress').textContent = `${myTasks.length-undone.length} / ${myTasks.length} 完了`;
+  // 期日を過ぎた未完了タスクがあれば、進捗の横で気づけるようにする
+  const overdue = undone.filter(t=>t.due && daysUntil(t.due) < 0).length;
+  document.getElementById('task-progress').textContent =
+    `${myTasks.length-undone.length} / ${myTasks.length} 完了` + (overdue ? `・期限切れ ${overdue}件` : '');
 
   document.getElementById('stat-unassigned').textContent = contacts.filter(c=>!c.owner).length;
   document.getElementById('stat-mydeals').textContent = deals.filter(d=>d.owner===currentUser && !['成立','失注'].includes(d.status)).length;
@@ -3088,7 +3129,7 @@ function renderHome(){
         </div>
         <div class="task-main">
           <div class="task-title ${t.done?'done':''}">${escapeHtml(t.title)}</div>
-          <div class="task-meta">${escapeHtml(t.sub)}</div>
+          <div class="task-meta">${dueBadge(t.due, t.done)}${escapeHtml(t.sub)}</div>
         </div>
         <div class="task-badge badge-${t.priority}">${t.priority==='high'?'優先度高':t.priority==='mid'?'優先度中':'優先度低'}</div>
         <span class="icon-btn row-hover-action" title="編集" onclick="openTaskModal(${t.id})">
@@ -3126,6 +3167,47 @@ function toggleTask(id){
   if(t){ t.done = !t.done; renderHome(); }
 }
 
+/* ---------- タスクの期日 ---------- */
+/* 今日から n 日後の日付を入れる。null なら期日なしにする。 */
+function setTaskDue(days){
+  const el = document.getElementById('tk-due');
+  if(days === null){ el.value = ''; return; }
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  el.value = isoOf(d);
+}
+
+/* 期日までの日数。今日=0、過ぎていればマイナス */
+function daysUntil(due){
+  const today = new Date(todayISO() + 'T00:00:00');
+  const target = new Date(due + 'T00:00:00');
+  return Math.round((target - today) / 86400000);
+}
+
+/* 一覧に出す期日バッジ。完了済みは色を付けない */
+function dueBadge(due, done){
+  if(!due) return '';
+  const n = daysUntil(due);
+  const md = `${parseInt(due.slice(5,7),10)}/${parseInt(due.slice(8,10),10)}`;
+  if(done) return `<span class="task-due done" title="期日 ${due}">${md}</span>`;
+  if(n < 0)  return `<span class="task-due over" title="期日 ${due}">${md} ${-n}日超過</span>`;
+  if(n === 0) return `<span class="task-due today" title="期日 ${due}">今日</span>`;
+  if(n === 1) return `<span class="task-due soon" title="期日 ${due}">明日</span>`;
+  if(n <= 3)  return `<span class="task-due soon" title="期日 ${due}">${md}（あと${n}日）</span>`;
+  return `<span class="task-due" title="期日 ${due}">${md}</span>`;
+}
+
+/* 未完了を上に、期日の早い順。期日なしは同じ区分の最後に置く */
+function sortTasks(list){
+  return list.slice().sort((a, b)=>{
+    if(!!a.done !== !!b.done) return a.done ? 1 : -1;
+    if(a.due && b.due) return a.due.localeCompare(b.due);
+    if(a.due) return -1;
+    if(b.due) return 1;
+    return 0;
+  });
+}
+
 /* ---------- task edit/create/delete ---------- */
 let tkCurrentId = null;
 function openTaskModal(id){
@@ -3136,6 +3218,7 @@ function openTaskModal(id){
   document.getElementById('tk-sub').value = t ? t.sub : '';
   document.getElementById('tk-owner').value = t ? t.owner : currentUser;
   document.getElementById('tk-priority').value = t ? t.priority : 'mid';
+  document.getElementById('tk-due').value = t && t.due ? t.due : '';
   document.getElementById('tk-delete-btn').style.display = t ? 'inline-flex' : 'none';
   openModal('task-modal');
 }
@@ -3145,13 +3228,14 @@ function saveTask(){
   const sub = document.getElementById('tk-sub').value.trim();
   const owner = document.getElementById('tk-owner').value;
   const priority = document.getElementById('tk-priority').value;
+  const due = document.getElementById('tk-due').value;
 
   if(tkCurrentId){
     const t = tasks.find(x=>x.id===tkCurrentId);
-    if(t){ t.title=title; t.sub=sub; t.owner=owner; t.priority=priority; }
+    if(t){ t.title=title; t.sub=sub; t.owner=owner; t.priority=priority; t.due=due; }
     toast('タスクを更新しました');
   } else {
-    tasks.push({id: nextIds.task++, title, sub, owner, priority, done:false});
+    tasks.push({id: nextIds.task++, title, sub, owner, priority, due, done:false});
     toast('タスクを追加しました');
   }
   closeModal('task-modal');
@@ -4408,23 +4492,58 @@ function todayISO(){
 }
 function pct(part, whole){ return whole > 0 ? Math.round((part/whole)*100) : 0; }
 
-/* 対象月のプルダウンを、記録のある月＋今月から作る */
-function fillMonthSelect(){
-  const sel = document.getElementById('an-month');
-  const months = new Set(Object.keys(dailyStats).map(d=>d.slice(0,7)));
-  months.add(todayISO().slice(0,7));
-  const list = Array.from(months).sort().reverse();
-  const cur = sel.value;
-  sel.innerHTML = list.map(m=>{
-    const [y, mo] = m.split('-');
-    return `<option value="${m}">${y}年${parseInt(mo,10)}月</option>`;
-  }).join('');
-  if(cur && list.includes(cur)) sel.value = cur;
+/* 対象期間の開始日・終了日を読む。日付はISO形式なので文字列のまま比較できる。
+   逆順に入力されても動くよう、必要なら入れ替える。 */
+function analyticsRange(){
+  let from = document.getElementById('an-from').value;
+  let to   = document.getElementById('an-to').value;
+  if(from && to && from > to) [from, to] = [to, from];
+  return {from, to};
 }
 
-/* 選択月の合計を出す */
-function analyticsAgg(ym){
-  const days = Object.keys(dailyStats).filter(d=>d.slice(0,7) === ym).sort();
+const isoOf = d => {
+  const p = n => String(n).padStart(2,'0');
+  return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`;
+};
+
+/* よく使う期間をワンタッチで入れる */
+function setAnalyticsRange(preset){
+  const now = new Date();
+  let from, to;
+  if(preset === 'this-month'){
+    from = isoOf(new Date(now.getFullYear(), now.getMonth(), 1));
+    to   = isoOf(new Date(now.getFullYear(), now.getMonth() + 1, 0));   // 月末＝翌月0日
+  } else if(preset === 'last-month'){
+    from = isoOf(new Date(now.getFullYear(), now.getMonth() - 1, 1));
+    to   = isoOf(new Date(now.getFullYear(), now.getMonth(), 0));
+  } else if(preset === '7d' || preset === '30d'){
+    const back = preset === '7d' ? 6 : 29;                              // 今日を含めてN日分
+    from = isoOf(new Date(now.getFullYear(), now.getMonth(), now.getDate() - back));
+    to   = isoOf(now);
+  } else {                                                              // 全期間
+    const keys = Object.keys(dailyStats).sort();
+    from = keys.length ? keys[0] : isoOf(now);
+    to   = isoOf(now);
+    if(keys.length && keys[keys.length - 1] > to) to = keys[keys.length - 1];  // 未来日の記録も含める
+  }
+  document.getElementById('an-from').value = from;
+  document.getElementById('an-to').value = to;
+  renderAnalytics();
+}
+
+/* 期間が未入力のまま開かれたときは今月を既定にする */
+function ensureAnalyticsRange(){
+  const f = document.getElementById('an-from'), t = document.getElementById('an-to');
+  if(f.value || t.value) return;
+  const now = new Date();
+  f.value = isoOf(new Date(now.getFullYear(), now.getMonth(), 1));
+  t.value = isoOf(new Date(now.getFullYear(), now.getMonth() + 1, 0));
+}
+
+/* 対象期間の合計を出す。片方だけの指定（その日以降／その日まで）も受け付ける。 */
+function analyticsAgg(from, to){
+  const days = Object.keys(dailyStats)
+    .filter(d => (!from || d >= from) && (!to || d <= to)).sort();
   const sum = {sent:0, opened:0, clicked:0, replied:0, inq:0, inqrep:0};
   days.forEach(d=>{
     const s = dailyStats[d] || {};
@@ -4453,12 +4572,16 @@ function donutGauge(percent, label, sub){
 
 /* 日別の縦棒グラフ */
 function barChart(days, pick){
-  if(!days.length) return '<div class="an-nodata">この月の記録はありません</div>';
+  if(!days.length) return '<div class="an-nodata">この期間の記録はありません</div>';
+  // 期間が複数の月にまたがるときは、日だけだと区別できないので「月/日」にする
+  const multiMonth = new Set(days.map(d=>d.slice(0,7))).size > 1;
   const vals = days.map(d=>({d, v:(dailyStats[d]||{})[pick]||0}));
   const max = Math.max(1, ...vals.map(x=>x.v));
   return `<div class="bar-row">` + vals.map(x=>{
     const h = Math.round((x.v/max)*100);
-    const day = x.d.slice(8,10);
+    const day = multiMonth
+      ? `${parseInt(x.d.slice(5,7),10)}/${parseInt(x.d.slice(8,10),10)}`
+      : x.d.slice(8,10);
     return `<div class="bar-col" title="${escapeHtml(x.d)}：${x.v}件">
       <div class="bar-val">${x.v || ''}</div>
       <div class="bar-track"><div class="bar-fill" style="height:${h}%"></div></div>
@@ -4467,10 +4590,9 @@ function barChart(days, pick){
   }).join('') + `</div>`;
 }
 
-/* 選択月の記録がある日を、日付プルダウンに並べる */
-function fillDaySelect(ym){
+/* 対象期間の記録がある日を、日付プルダウンに並べる */
+function fillDaySelect(days){
   const sel = document.getElementById('an-day');
-  const days = Object.keys(dailyStats).filter(d=>d.slice(0,7) === ym).sort();
   const cur = sel.value;
   sel.innerHTML = days.map(d=>{
     const mo = parseInt(d.slice(5,7),10), day = parseInt(d.slice(8,10),10);
@@ -4486,7 +4608,7 @@ function renderDayGauges(){
   const day = document.getElementById('an-day').value;
   const s = day ? dailyStats[day] : null;
   if(!s){
-    box.innerHTML = '<div class="an-nodata">この月の記録はありません</div>';
+    box.innerHTML = '<div class="an-nodata">この期間の記録はありません</div>';
     return;
   }
   const sent = s.sent || 0;
@@ -4497,9 +4619,13 @@ function renderDayGauges(){
 }
 
 function renderAnalytics(){
-  fillMonthSelect();
-  const ym = document.getElementById('an-month').value || todayISO().slice(0,7);
-  const {days, sum} = analyticsAgg(ym);
+  ensureAnalyticsRange();
+  const {from, to} = analyticsRange();
+  const {days, sum} = analyticsAgg(from, to);
+
+  // 期間の中で実際に記録がある日数を出す（空欄の日は数えない）
+  document.getElementById('an-range-info').textContent =
+    days.length ? `記録 ${days.length}日分` : '記録なし';
 
   // メール
   document.getElementById('an-mail-total').textContent = `送信 ${sum.sent}件`;
@@ -4507,7 +4633,7 @@ function renderAnalytics(){
     donutGauge(pct(sum.opened, sum.sent), '開封率', `${sum.opened} / ${sum.sent}`) +
     donutGauge(pct(sum.clicked, sum.sent), 'クリック率', `${sum.clicked} / ${sum.sent}`) +
     donutGauge(pct(sum.replied, sum.sent), '返信率', `${sum.replied} / ${sum.sent}`);
-  fillDaySelect(ym);
+  fillDaySelect(days);
   renderDayGauges();
   document.getElementById('an-mail-bars').innerHTML = barChart(days, 'sent');
 
@@ -4563,8 +4689,11 @@ function saveDaily(){
     sent: num('dl-sent'), opened: num('dl-opened'), clicked: num('dl-clicked'),
     replied: num('dl-replied'), inq: num('dl-inq'), inqrep: num('dl-inqrep'),
   };
-  // 入力した月を表示対象にしてから再描画
-  document.getElementById('an-month').value = day.slice(0,7);
+  // 入力した日が対象期間の外だと結果が見えないので、その日を含むまで期間を広げる
+  ensureAnalyticsRange();
+  const f = document.getElementById('an-from'), t = document.getElementById('an-to');
+  if(!f.value || day < f.value) f.value = day;
+  if(!t.value || day > t.value) t.value = day;
   closeModal('daily-modal');
   renderAnalytics();
   toast(`${day} の実績を保存しました`);
@@ -4598,7 +4727,9 @@ setupTabs('deals-tabs','deals',renderDeals);
 ['deals-filter-status','deals-filter-owner','deals-search'].forEach(id=>{
   document.getElementById(id).addEventListener('input', renderDeals);
 });
-document.getElementById('an-month').addEventListener('change', renderAnalytics);
+['an-from','an-to'].forEach(id=>{
+  document.getElementById(id).addEventListener('change', renderAnalytics);
+});
 document.getElementById('an-day').addEventListener('change', renderDayGauges);
 
 renderAll();
