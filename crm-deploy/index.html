@@ -242,6 +242,12 @@
   .task-due.today{background:#ffedd5; color:#c2410c;}
   .task-due.soon{background:#fef9c3; color:#a16207;}
   .task-due.done{background:var(--surface-alt); color:var(--text-faint);}
+  /* 共有タスクの印。誰の画面にも出ていることが分かるようにする */
+  .task-shared{
+    display:inline-block; margin-right:6px; padding:1px 6px; border-radius:5px;
+    font-size:11px; font-weight:700; white-space:nowrap;
+    background:#e0e7ff; color:#4338ca;
+  }
   .tk-due-row{display:flex; align-items:center; gap:6px; flex-wrap:wrap;}
   .tk-due-row input[type=date]{
     border:1px solid var(--border-strong); border-radius:6px; padding:7px 10px;
@@ -1970,6 +1976,10 @@ const EVENT_RUBRIC = `あなたは企業リサーチのアシスタントです�
 
 let currentUser = SALES_REPS[0].id;
 
+/* タスクの担当に指定できる特別な値。誰か1人ではなく、全員の画面に出る共有タスクを表す。
+   会社や案件の担当には使わないため、ownerName() はこの値を名前に変換しない。 */
+const SHARED_OWNER = 'shared';
+
 function ownerName(id){
   const o = SALES_REPS.find(r=>r.id===id);
   return o ? o.name : null;
@@ -2362,6 +2372,13 @@ function populateOwnerSelects(){
       el.appendChild(opt);
     });
   });
+  // タスクだけは「共有」を選べる。担当を1人に決めず、全員の画面に出したいとき用。
+  const tkOwner = document.getElementById('tk-owner');
+  const sharedOpt = document.createElement('option');
+  sharedOpt.value = SHARED_OWNER;
+  sharedOpt.textContent = '共有（全員に表示）';
+  tkOwner.appendChild(sharedOpt);
+
   const ndOwner = document.getElementById('nd-owner');
   SALES_REPS.forEach(r=>{
     const opt = document.createElement('option');
@@ -3105,7 +3122,8 @@ function renderHome(){
   document.getElementById('home-date').textContent =
     `${now.getFullYear()}年${now.getMonth()+1}月${now.getDate()}日(${wd})の業務状況`;
 
-  const myTasks = sortTasks(tasks.filter(t=>t.owner===currentUser));
+  // 自分のタスクに加えて、共有タスクは誰の画面にも出す
+  const myTasks = sortTasks(tasks.filter(t=>t.owner===currentUser || t.owner===SHARED_OWNER));
   const undone = myTasks.filter(t=>!t.done);
   document.getElementById('stat-tasks').textContent = undone.length;
   // 期日を過ぎた未完了タスクがあれば、進捗の横で気づけるようにする
@@ -3131,7 +3149,7 @@ function renderHome(){
         </div>
         <div class="task-main">
           <div class="task-title ${t.done?'done':''}">${escapeHtml(t.title)}</div>
-          <div class="task-meta">${dueBadge(t.due, t.done)}${escapeHtml(t.sub)}</div>
+          <div class="task-meta">${dueBadge(t.due, t.done)}${t.owner===SHARED_OWNER?'<span class="task-shared" title="全員の画面に表示される共有タスクです">共有</span>':''}${escapeHtml(t.sub)}</div>
         </div>
         <div class="task-badge badge-${t.priority}">${t.priority==='high'?'優先度高':t.priority==='mid'?'優先度中':'優先度低'}</div>
         <span class="icon-btn row-hover-action" title="編集" onclick="openTaskModal(${t.id})">
