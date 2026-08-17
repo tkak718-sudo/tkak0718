@@ -735,7 +735,7 @@
         salesPanel+
         '<div class="grid2" style="margin-top:16px">'+seatPanel+prodPanel+'</div>'+
         playerPanel+
-        '<div class="sb-meta" style="padding:14px 4px 0">※ 販売継続中は、最新のCSV（チケット管理／注文管理／選手別）を再度「CSVを取込」すれば最新の内容に更新されます（同じ注文・チケットは重複しません）。</div>';
+        '<div class="sb-meta" style="padding:14px 4px 0">※ チケット管理／注文管理のCSVは、月ごとに分かれていても続けて取り込めば合算されます（7月分→8月分の順に取込）。同じCSVを再度取り込んでも二重計上されず、同じ注文IDは新しい内容で更新されます。<br>※ 選手別CSVは毎回置き換えです。売上は「累計」ではない列（今回イベント分）を読み込みます。</div>';
     }
     elView.innerHTML='<div class="tabs">'+tabs+(editable?'<button class="tab-add" id="addTab">＋ タブを追加</button>'+(state.events.length>1?'<button class="tab-add" id="reorderTab">⇅ 並び替え</button>':''):'')+'</div>'+body;
   }
@@ -966,9 +966,10 @@
     document.getElementById("tkok").onclick=function(){
       var bySeat=ledRead(seatCont,".led-row",seatCols).map(function(r){return {k:r.k,v:pnum(r.v)};}).filter(function(x){return x.k;});
       var byProduct=ledRead(prodCont,".led-row",prodCols).map(function(r){return {k:r.k,v:pnum(r.v)};}).filter(function(x){return x.k;});
-      if(!bySeat.length&&!byProduct.length){ev.ticket=null;ev.tkAt=new Date().toISOString();closeModal();commit();toast("チケット枚数をクリアしました");return;}
+      if(!bySeat.length&&!byProduct.length){ev.ticket=null;ev.ticketRaw=null;ev.tkAt=new Date().toISOString();closeModal();commit();toast("チケット枚数をクリアしました");return;}
       var total=bySeat.length?bySeat.reduce(function(s,x){return s+x.v;},0):byProduct.reduce(function(s,x){return s+x.v;},0);
-      ev.ticket={total:total,byProduct:byProduct,bySeat:bySeat};ev.tkAt=new Date().toISOString();
+      // 手入力した内容が正となるため、CSVの明細は破棄する（次回取込は置き換えになる）
+      ev.ticket={total:total,byProduct:byProduct,bySeat:bySeat};ev.ticketRaw=null;ev.tkAt=new Date().toISOString();
       closeModal();commit();toast("チケット枚数を保存しました（合計 "+nf(total)+" 枚）");
     };
   }
@@ -1031,25 +1032,56 @@
       if(tbl.error){toast(tbl.error);return;}
       var ev=state.events.filter(function(x){return x.id===importFor;})[0];if(!ev)return;
       var kind=detectKind(tbl.head);
-      if(kind==="ticket"){var r=importTickets(ev,tbl);if(r.error){toast(r.error);return;}commit();toast(r.prev!=null?("チケット枚数を更新："+nf(r.prev)+" → "+nf(r.total)+" 枚"):("チケット管理を取込：合計 "+nf(r.total)+" 枚"));}
-      else if(kind==="order"){var r2=importOrders(ev,tbl);if(r2.error){toast(r2.error);return;}commit();toast(r2.prev!=null?("売上を更新："+yen(r2.prevT)+" → "+yen(r2.total)+"（決済 "+nf(r2.count)+"件）"):("注文管理を取込：決済済み "+nf(r2.count)+" 件 / "+yen(r2.total)));}
-      else if(kind==="player"){var r3=importPlayers(ev,tbl);if(r3.error){toast(r3.error);return;}commit();toast((r3.prev!=null?"選手別データを更新：":"選手別を取込：")+nf(r3.rows)+"件（売上あり "+nf(r3.withSales)+"名）");}
+      if(kind==="ticket"){
+        var r=importTickets(ev,tbl); if(r.cancelled)return; if(r.error){toast(r.error);return;} commit();
+        toast(r.merged
+          ? ("チケットを追加取込：+"+nf(r.added)+" 枚"+(r.dup?"（重複 "+nf(r.dup)+" 枚は除外）":"")+" ／ 合計 "+nf(r.total)+" 枚")
+          : ("チケット管理を取込：合計 "+nf(r.total)+" 枚"+(r.prev!=null?"（以前の "+nf(r.prev)+" 枚を置き換え）":"")));
+      }
+      else if(kind==="order"){
+        var r2=importOrders(ev,tbl); if(r2.cancelled)return; if(r2.error){toast(r2.error);return;} commit();
+        toast(r2.merged
+          ? ("売上を追加取込：新規 "+nf(r2.added)+" 件"+(r2.updated?"・更新 "+nf(r2.updated)+" 件":"")+" ／ 決済済み合計 "+nf(r2.count)+" 件 "+yen(r2.total))
+          : ("注文管理を取込：決済済み "+nf(r2.count)+" 件 / "+yen(r2.total)+(r2.prevT!=null?"（以前の "+yen(r2.prevT)+" を置き換え）":"")));
+      }
+      else if(kind==="player"){
+        var r3=importPlayers(ev,tbl); if(r3.error){toast(r3.error);return;} commit();
+        toast((r3.prev!=null?"選手別データを更新：":"選手別を取込：")+nf(r3.rows)+"件（売上あり "+nf(r3.withSales)+"名・売上列「"+r3.salesCol+"」を使用）");
+      }
       else toast("対応していないCSVです（チケット管理／注文管理／選手別のいずれかを選んでください）");
     };
     rd.readAsArrayBuffer(f);
   });
   function idxer(head){return function(names){for(var i=0;i<head.length;i++){var h=String(head[i]).replace(/\s/g,"");for(var j=0;j<names.length;j++)if(h===names[j])return i;}return -1;};}
+  function normH(s){return String(s==null?"":s).replace(/[\s　]/g,"");}
+  // 列を探す。names は優先順の候補、exclude を含む見出しは採用しない。
+  // 「売上」と「売上累計」が並ぶCSVで、累計ではない方（＝今回イベント分）を選ぶために使う。
+  function colFinder(head){
+    return function(names,exclude){
+      exclude=exclude||[];
+      var ng=function(h){for(var b=0;b<exclude.length;b++)if(h.indexOf(exclude[b])>=0)return true;return false;};
+      var i,j,h;
+      for(j=0;j<names.length;j++)for(i=0;i<head.length;i++){h=normH(head[i]);if(h===names[j]&&!ng(h))return i;}      // 完全一致
+      for(j=0;j<names.length;j++)for(i=0;i<head.length;i++){h=normH(head[i]);if(h.indexOf(names[j])>=0&&!ng(h))return i;} // 部分一致
+      return -1;
+    };
+  }
+  var PL_SALES=["売上","購入金額","売上金額"];   // 選手別CSVの売上列（候補・優先順）
+  var PL_EXCL =["累計","合計","トータル"];        // これらを含む見出しは使わない（＝累計列を避ける）
   function detectKind(head){
-    var ix=idxer(head);
+    var ix=idxer(head), pc=colFinder(head);
     if(ix(["商品名"])>=0&&ix(["オブジェクト名"])>=0&&ix(["注文番号"])>=0)return "ticket";
     if(ix(["注文ID"])>=0&&ix(["金額"])>=0&&ix(["決済状況"])>=0)return "order";
-    if(ix(["広告コード"])>=0&&ix(["購入金額"])>=0)return "player";
+    if(pc(["広告コード"])>=0&&pc(PL_SALES,PL_EXCL)>=0)return "player";
     return null;
   }
   function importPlayers(ev,tbl){
-    var ix=idxer(tbl.head);
-    var iN=ix(["広告コード"]),iG=ix(["グループ名"]),iM=ix(["パートナー名"]),iA=ix(["アクセス数"]),iC=ix(["クリック数"]),iT=ix(["購入商品数"]),iCt=ix(["購入件数"]),iS=ix(["購入金額"]);
-    if(iN<0||iS<0)return {error:"選手データの列（広告コード/購入金額）が見つかりません"};
+    var pc=colFinder(tbl.head);
+    var iN=pc(["広告コード"]),iG=pc(["グループ名","グループ"]),
+        iA=pc(["アクセス数","アクセス"],PL_EXCL),iC=pc(["クリック数","クリック"],PL_EXCL),
+        iT=pc(["購入商品数","購入枚数","枚数"],PL_EXCL),iCt=pc(["購入件数","件数"],PL_EXCL),
+        iS=pc(PL_SALES,PL_EXCL);
+    if(iN<0||iS<0)return {error:"選手データの列（広告コード / 売上）が見つかりません"};
     var agg={},order=[];
     tbl.rows.forEach(function(c){
       var n=(c[iN]||"").trim(); if(!n)return;
@@ -1062,41 +1094,75 @@
     var prev=ev.players?ev.players.length:null;
     var withSales=players.filter(function(p){return p.sales>0;}).length;
     ev.players=players; ev.plAt=new Date().toISOString();
-    return {rows:players.length,withSales:withSales,prev:prev};
+    return {rows:players.length,withSales:withSales,prev:prev,salesCol:normH(tbl.head[iS])};
+  }
+  // 7月分・8月分のように複数回に分けて取り込めるよう、明細を保持して合算する。
+  // 同じCSVを再取込しても増えないよう、注文単位で「多い方の枚数」を採用する。
+  function tkKey(o,p,s){return o+""+p+""+s;}
+  function tkMerge(base,fresh){
+    var m={},added=0,dup=0;
+    (base||[]).forEach(function(r){m[tkKey(r.o,r.p,r.s)]={o:r.o,p:r.p,s:r.s,n:r.n||0};});
+    Object.keys(fresh).forEach(function(k){
+      var f=fresh[k];
+      if(m[k]){var d=f.n-m[k].n; if(d>0){m[k].n=f.n;added+=d;} else {dup+=f.n;}}
+      else{m[k]={o:f.o,p:f.p,s:f.s,n:f.n};added+=f.n;}
+    });
+    return {rows:Object.keys(m).map(function(k){return m[k];}),added:added,dup:dup};
+  }
+  // 明細を持たない既存集計に追加取込しようとしたとき、消してよいか確認する
+  function askReplace(what,cur){
+    return confirm("このイベントには既存の"+what+"（"+cur+"）がありますが、明細データを持たないため追加での取込ができません。\n\n［OK］今回のCSVの内容で置き換える\n［キャンセル］取込をやめる\n\n※7月分・8月分の両方を反映したい場合は、OKで1件目を取り込んだあと、続けて2件目を取り込んでください。2回目以降は自動で合算されます。");
   }
   function importTickets(ev,tbl){
     var ix=idxer(tbl.head);
     var iP=ix(["商品名"]),iS=ix(["オブジェクト名"]),iO=ix(["注文番号"]),iD=ix(["購入期間"]);
     if(iP<0||iS<0)return {error:"チケット管理の列（商品名/オブジェクト名）が見つかりません"};
-    var byP={},byS={},total=0,dateMap={};
+    var fresh={},seen=0,newDates={};
     tbl.rows.forEach(function(c){
       var p=(c[iP]||"").trim(); if(!p)return;
       var s=(c[iS]||"").trim()||"(未設定)";
-      byP[p]=(byP[p]||0)+1; byS[s]=(byS[s]||0)+1; total++;
-      if(iO>=0){var o=(c[iO]||"").trim(); if(o&&!dateMap[o]&&iD>=0){var d=toISODate(c[iD]); if(d)dateMap[o]=d;}}
+      var o=iO>=0?((c[iO]||"").trim()||"(注文番号なし)"):"(注文番号なし)";
+      seen++;
+      var k=tkKey(o,p,s); if(!fresh[k])fresh[k]={o:o,p:p,s:s,n:0}; fresh[k].n++;
+      if(iO>=0&&iD>=0){var oo=(c[iO]||"").trim(); if(oo&&!newDates[oo]){var d=toISODate(c[iD]); if(d)newDates[oo]=d;}}
     });
-    if(!total)return {error:"チケットのデータ行がありません"};
+    if(!seen)return {error:"チケットのデータ行がありません"};
+    var hasRaw=Array.isArray(ev.ticketRaw)&&ev.ticketRaw.length>0;
     var prev=ev.ticket?ev.ticket.total:null;
+    if(!hasRaw&&prev&&!askReplace("チケット集計",nf(prev)+" 枚"))return {cancelled:true};
+    var mg=tkMerge(hasRaw?ev.ticketRaw:[],fresh);
+    var byP={},byS={},total=0;
+    mg.rows.forEach(function(r){byP[r.p]=(byP[r.p]||0)+r.n;byS[r.s]=(byS[r.s]||0)+r.n;total+=r.n;});
+    ev.ticketRaw=mg.rows;
     ev.ticket={total:total,byProduct:mapToArr(byP),bySeat:mapToArr(byS)};
-    ev.dateMap=dateMap; ev.tkAt=new Date().toISOString();
-    return {total:total,prev:prev};
+    // 日付の紐付けは上書きせずマージする（他の月の売上推移が消えないように）
+    var dm=(ev.dateMap&&typeof ev.dateMap==="object")?ev.dateMap:{};
+    Object.keys(newDates).forEach(function(k){dm[k]=newDates[k];});
+    ev.dateMap=dm; ev.tkAt=new Date().toISOString();
+    return {total:total,prev:prev,added:mg.added,dup:mg.dup,merged:hasRaw};
   }
   function importOrders(ev,tbl){
     var ix=idxer(tbl.head);
     var iO=ix(["注文ID"]),iA=ix(["金額"]),iS=ix(["決済状況"]);
     if(iO<0||iA<0||iS<0)return {error:"注文管理の列（注文ID/金額/決済状況）が見つかりません"};
-    var raw=[],total=0,count=0;
+    var hasRaw=Array.isArray(ev.orderRaw)&&ev.orderRaw.length>0;
+    var ps=salesOf(ev), prevC=ps?ps.count:null, prevT=ps?ps.total:null;
+    if(!hasRaw&&ps&&ps.total&&!askReplace("売上データ",yen(ps.total)+" / "+nf(ps.count)+" 件"))return {cancelled:true};
+    var base=hasRaw?ev.orderRaw.slice():[];
+    var pos={};base.forEach(function(r,i){pos[r.o]=i;});
+    var added=0,updated=0,seen=0;
     tbl.rows.forEach(function(c){
       var o=(c[iO]||"").trim(); if(!o)return;
       var a=parseFloat(String(c[iA]||"").replace(/[^0-9.\-]/g,""))||0;
-      var s=(c[iS]||"").trim();
-      raw.push({o:o,a:a,s:s});
-      if(s==="決済済み"){total+=grossFromExport(a);count++;}
+      var s=(c[iS]||"").trim(); seen++;
+      var row={o:o,a:a,s:s};
+      if(pos[o]!=null){base[pos[o]]=row;updated++;}   // 同じ注文IDは上書き（決済状況の変化に追従）
+      else{pos[o]=base.length;base.push(row);added++;}
     });
-    if(!raw.length)return {error:"注文のデータ行がありません"};
-    var ps=salesOf(ev); var prevC=ps?ps.count:null, prevT=ps?ps.total:null;
-    ev.orderRaw=raw; ev.odAt=new Date().toISOString();
-    return {total:total,count:count,prev:prevC,prevT:prevT};
+    if(!seen)return {error:"注文のデータ行がありません"};
+    ev.orderRaw=base; ev.odAt=new Date().toISOString();
+    var ns=salesOf(ev)||{total:0,count:0};
+    return {total:ns.total,count:ns.count,added:added,updated:updated,prev:prevC,prevT:prevT,merged:hasRaw};
   }
   function mapToArr(m){return Object.keys(m).map(function(k){return {k:k,v:m[k]};});}
   function parseTable(text){
