@@ -140,11 +140,32 @@ def is_required(page, el):
         return False
 
 
+def body_for(el, profile, company_name, notes):
+    """その欄の maxlength に収まる本文を選ぶ。
+       通常版 → 短縮版 の順に試し、どちらも入らなければ空を返して中止させる。
+       黙って切り詰めると文末の連絡先ごと消えるので、切らずに差し替える。"""
+    full = profile['body'].replace('{会社名}', company_name)
+    short = (profile.get('body_short') or '').replace('{会社名}', company_name)
+    try:
+        ml = el.get_attribute('maxlength')
+        lim = int(ml) if ml and int(ml) > 0 else None
+    except (TypeError, ValueError):
+        lim = None
+    if lim is None or len(full) <= lim:
+        return full
+    if short and len(short) <= lim:
+        notes.append(f'本文を短縮版に差し替え(上限{lim}字)')
+        return short
+    notes.append(f'本文が上限{lim}字に収まらない')
+    return ''
+
+
 def fill_form(page, profile, company_name):
     """フォームに値を入れる。何をどこへ入れたかと、埋め残した必須項目を返す"""
     values = dict(profile['fields'])
     values['body'] = profile['body'].replace('{会社名}', company_name)
     values['subject'] = profile.get('subject', '').replace('{会社名}', company_name)
+    notes = []
 
     filled, missing, seen = {}, [], set()
     for el in page.query_selector_all('input, textarea, select'):
@@ -191,9 +212,12 @@ def fill_form(page, profile, company_name):
                     filled[kind] = pick
                 continue
 
-            v = values.get(kind if kind != 'email2' else 'email', '')
+            if kind == 'body':
+                v = body_for(el, profile, company_name, notes)
+            else:
+                v = values.get(kind if kind != 'email2' else 'email', '')
             if not v:
-                if is_required(page, el):
+                if is_required(page, el) or kind == 'body':
                     missing.append(f'{kind}({text[:24]})')
                 continue
             if kind in seen and kind not in ('email2',):
@@ -203,6 +227,8 @@ def fill_form(page, profile, company_name):
             filled[kind] = str(v)[:60]
         except Exception:
             continue
+    if notes:
+        filled['_note'] = ' / '.join(notes)
     return filled, missing
 
 
