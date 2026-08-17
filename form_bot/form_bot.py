@@ -171,20 +171,21 @@ def is_required(page, el):
 
 def body_for(el, profile, company_name, notes):
     """その欄の maxlength に収まる本文を選ぶ。
-       通常版 → 短縮版 の順に試し、どちらも入らなければ空を返して中止させる。
+       通常版 → 短縮版 → 極小版 の順に試し、どれも入らなければ空を返して中止させる。
        黙って切り詰めると文末の連絡先ごと消えるので、切らずに差し替える。"""
-    full = profile['body'].replace('{会社名}', company_name)
-    short = (profile.get('body_short') or '').replace('{会社名}', company_name)
     try:
         ml = el.get_attribute('maxlength')
         lim = int(ml) if ml and int(ml) > 0 else None
     except (TypeError, ValueError):
         lim = None
-    if lim is None or len(full) <= lim:
-        return full
-    if short and len(short) <= lim:
-        notes.append(f'本文を短縮版に差し替え(上限{lim}字)')
-        return short
+    for key, label in (('body', ''), ('body_short', '短縮版'), ('body_mini', '極小版')):
+        text = (profile.get(key) or '').replace('{会社名}', company_name)
+        if not text:
+            continue
+        if lim is None or len(text) <= lim:
+            if label:
+                notes.append(f'本文を{label}に差し替え(上限{lim}字)')
+            return text
     notes.append(f'本文が上限{lim}字に収まらない')
     return ''
 
