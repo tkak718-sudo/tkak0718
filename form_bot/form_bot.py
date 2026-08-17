@@ -35,6 +35,27 @@ CAPTCHA = re.compile(r'(recaptcha|g-recaptcha|hcaptcha|cf-turnstile|turnstile)',
 
 # 上から順に見て、最初に当たったものを採用する。
 # name属性・id・placeholder・aria-label・直前のラベル文言をまとめて照合する。
+
+# 姓と名が別欄のフォーム向け。カナ系を先に見るので、フリガナの姓名分割も拾える。
+SEI = re.compile(r'(姓|苗字|名字|セイ|せい|last[-_]?name|lastname|family[-_]?name|(^|[-_])sei([-_]|$))', re.I)
+MEI = re.compile(r'(メイ|めい|first[-_]?name|firstname|given[-_]?name|(^|[-_])mei([-_]|$))', re.I)
+KANA = re.compile(r'(フリガナ|ふりがな|カナ|かな|kana|furigana|ruby)', re.I)
+# 姓名の判定前に取り除く語。これを残すと「氏名」が「名」に化ける
+STRIP = re.compile(r'(フリガナ|ふりがな|カナ|かな|kana|furigana|ruby|お名前|氏名|name)', re.I)
+DECOR = re.compile(r'[\s　:：*＊（）()【】\[\]｜|/／必須任意入力]')
+
+
+def split_kind(text):
+    """姓／名のどちらを指す欄かを返す。判別できなければ None。
+       「名」一文字は会社名・件名などと紛れるので、飾りを落として単独の「名」のときだけ拾う"""
+    t = DECOR.sub('', STRIP.sub('', text))
+    if SEI.search(text) or t == '姓':
+        return 'sei'
+    if MEI.search(text) or t == '名':
+        return 'mei'
+    return None
+
+
 FIELDS = [
     ('company',  r'会社名|法人名|団体名|組織名|貴社名|御社名|企業名|company|corp|kaisha|soshiki'),
     ('dept',     r'部署|所属|部門|department|busho'),
@@ -124,10 +145,18 @@ def label_text(page, el):
 
 
 def classify(text):
+    # 会社名・団体名を「姓名の名」と取り違えないよう、先に通常の分類を当てる
+    base = None
     for kind, pat in FIELDS:
         if re.search(pat, text, re.I):
-            return kind
-    return None
+            base = kind
+            break
+    if base in ('company', 'dept', 'subject', 'body', 'email', 'email2', 'tel', 'zip', 'address', 'url'):
+        return base
+    part = split_kind(text)
+    if part:
+        return ('kana_' if (base == 'name_kana' or KANA.search(text)) else 'name_') + part
+    return base
 
 
 def is_required(page, el):
@@ -165,6 +194,13 @@ def fill_form(page, profile, company_name):
     values = dict(profile['fields'])
     values['body'] = profile['body'].replace('{会社名}', company_name)
     values['subject'] = profile.get('subject', '').replace('{会社名}', company_name)
+    # 姓名が別欄のフォーム向けに、空白区切りの氏名・フリガナを割る
+    for src, pre in (('name', 'name_'), ('name_kana', 'kana_')):
+        parts = re.split(r'[\s　]+', str(values.get(src, '')).strip())
+        if len(parts) >= 2:
+            values[pre + 'sei'], values[pre + 'mei'] = parts[0], ' '.join(parts[1:])
+        elif parts and parts[0]:
+            values[pre + 'sei'] = parts[0]
     notes = []
 
     filled, missing, seen = {}, [], set()
