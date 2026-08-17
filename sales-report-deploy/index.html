@@ -722,7 +722,12 @@
           return '<tr><td><div class="pname"><span class="pav" style="background:'+avatarColor(p.n)+'">'+esc(String(p.n).slice(0,1))+'</span>'+esc(p.n)+(p.g?' <span style="color:var(--faint);font-weight:600;font-size:11px">'+esc(p.g)+'</span>':'')+'</div></td>'+
             '<td class="num">'+nf(p.access)+'</td><td class="num">'+nf(p.clicks)+'</td><td class="num">'+nf(p.tickets)+'</td><td class="num">'+nf(p.count)+'</td><td class="num"><b>'+yen(p.sales)+'</b></td><td class="num">'+share.toFixed(1)+'%</td></tr>';
         }).join("");
-        playerPanel='<div class="panel" style="margin-top:16px"><div class="panel-h"><h3>選手別 売上</h3>'+hRight('<span class="sub">広告コード別 ・ 売上の多い順</span>'+plEditBtn)+'</div><div class="tbl-wrap"><table><thead><tr><th>選手名</th><th>アクセス</th><th>クリック</th><th>枚数</th><th>件数</th><th>売上</th><th>構成比</th></tr></thead><tbody>'+pTrs+'</tbody><tfoot><tr><td>合計</td><td class="num">—</td><td class="num">—</td><td class="num">—</td><td class="num">—</td><td class="num">'+yen(pTot)+'</td><td class="num">100%</td></tr></tfoot></table></div></div>';
+        var pbs=Array.isArray(ev.playerBatches)?ev.playerBatches:[];
+        var pbNames=pbs.map(function(b){return b.k;}).join(" ／ ");
+        var plSub=pbs.length>1
+          ? esc(nf(pbs.length)+"ファイル合算（"+(pbNames.length>48?pbNames.slice(0,48)+"…":pbNames)+"）")
+          : "広告コード別 ・ 売上の多い順";
+        playerPanel='<div class="panel" style="margin-top:16px"><div class="panel-h"><h3>選手別 売上</h3>'+hRight('<span class="sub"'+(pbs.length?' title="'+esc(pbNames)+'"':'')+'>'+plSub+'</span>'+plEditBtn)+'</div><div class="tbl-wrap"><table><thead><tr><th>選手名</th><th>アクセス</th><th>クリック</th><th>枚数</th><th>件数</th><th>売上</th><th>構成比</th></tr></thead><tbody>'+pTrs+'</tbody><tfoot><tr><td>合計</td><td class="num">—</td><td class="num">—</td><td class="num">—</td><td class="num">—</td><td class="num">'+yen(pTot)+'</td><td class="num">100%</td></tr></tfoot></table></div></div>';
       } else {
         playerPanel='<div class="panel" style="margin-top:16px"><div class="panel-h"><h3>選手別 売上</h3>'+(editable?'<button class="btn btn-sm" data-editplayers="'+ev.id+'">＋ 手入力</button>':'')+'</div><div class="empty" style="padding:30px"><b>選手別データなし</b><p>'+(editable?'「＋ 手入力」で選手別（広告コード別）の数値を入力できます。「CSVを取込」でも自動集計されます。':'選手別データは未取込です。')+'</p></div></div>';
       }
@@ -735,7 +740,7 @@
         salesPanel+
         '<div class="grid2" style="margin-top:16px">'+seatPanel+prodPanel+'</div>'+
         playerPanel+
-        '<div class="sb-meta" style="padding:14px 4px 0">※ チケット管理／注文管理のCSVは、月ごとに分かれていても続けて取り込めば合算されます（7月分→8月分の順に取込）。同じCSVを再度取り込んでも二重計上されず、同じ注文IDは新しい内容で更新されます。<br>※ 選手別CSVは毎回置き換えです。売上は「累計」ではない列（今回イベント分）を読み込みます。</div>';
+        '<div class="sb-meta" style="padding:14px 4px 0">※ チケット管理／注文管理のCSVは、月ごとに分かれていても続けて取り込めば合算されます（7月分→8月分の順に取込）。同じCSVを再度取り込んでも二重計上されず、同じ注文IDは新しい内容で更新されます。<br>※ 選手別CSVも月ごとに分けて取り込めば広告コード単位で合算されます。同じファイル名で取り込み直した場合はその分だけ差し替わります。売上は「累計」ではない列（今回イベント分）を読み込みます。</div>';
     }
     elView.innerHTML='<div class="tabs">'+tabs+(editable?'<button class="tab-add" id="addTab">＋ タブを追加</button>'+(state.events.length>1?'<button class="tab-add" id="reorderTab">⇅ 並び替え</button>':''):'')+'</div>'+body;
   }
@@ -1015,7 +1020,8 @@
     document.getElementById("plAdd").onclick=function(){plCont.insertAdjacentHTML("beforeend",ledCard(cols,{}));};
     document.getElementById("plok").onclick=function(){
       var players=ledRead(plCont,".led-card",cols).map(function(r){return {n:r.n,g:r.g,access:pnum(r.access),clicks:pnum(r.clicks),tickets:pnum(r.tickets),count:pnum(r.count),sales:pnum(r.sales)};}).filter(function(p){return p.n;});
-      ev.players=players.length?players:null;ev.plAt=new Date().toISOString();
+      // 手入力した内容が正となるため、CSVのファイル別明細は破棄する（次回取込は置き換えになる）
+      ev.players=players.length?players:null;ev.playerBatches=null;ev.plAt=new Date().toISOString();
       closeModal();commit();toast(players.length?("選手別データを保存しました（"+nf(players.length)+"名）"):"選手別データをクリアしました");
     };
   }
@@ -1045,8 +1051,9 @@
           : ("注文管理を取込：決済済み "+nf(r2.count)+" 件 / "+yen(r2.total)+(r2.prevT!=null?"（以前の "+yen(r2.prevT)+" を置き換え）":"")));
       }
       else if(kind==="player"){
-        var r3=importPlayers(ev,tbl); if(r3.error){toast(r3.error);return;} commit();
-        toast((r3.prev!=null?"選手別データを更新：":"選手別を取込：")+nf(r3.rows)+"件（売上あり "+nf(r3.withSales)+"名・売上列「"+r3.salesCol+"」を使用）");
+        var r3=importPlayers(ev,tbl,f.name); if(r3.cancelled)return; if(r3.error){toast(r3.error);return;} commit();
+        toast((r3.reimport?"選手別を再取込："+r3.key+" を差し替え":(r3.merged?"選手別を追加取込："+r3.key:"選手別を取込："+r3.key))
+          +" ／ "+(r3.files>1?nf(r3.files)+"ファイル合算 ":"")+nf(r3.rows)+"名（売上あり "+nf(r3.withSales)+"名・売上列「"+r3.salesCol+"」）");
       }
       else toast("対応していないCSVです（チケット管理／注文管理／選手別のいずれかを選んでください）");
     };
@@ -1075,7 +1082,21 @@
     if(pc(["広告コード"])>=0&&pc(PL_SALES,PL_EXCL)>=0)return "player";
     return null;
   }
-  function importPlayers(ev,tbl){
+  // 選手別は取り込んだファイル単位で保持し、全ファイルを広告コードごとに合算する。
+  // 同じファイル名で取り込み直した場合はそのファイル分だけ差し替わる（二重計上しない）。
+  function aggPlayers(batches){
+    var agg={},order=[];
+    (batches||[]).forEach(function(b){
+      (b.rows||[]).forEach(function(r){
+        if(!agg[r.n]){agg[r.n]={n:r.n,g:r.g||"",access:0,clicks:0,tickets:0,count:0,sales:0};order.push(r.n);}
+        var a=agg[r.n];
+        if(!a.g&&r.g)a.g=r.g;
+        a.access+=r.access||0;a.clicks+=r.clicks||0;a.tickets+=r.tickets||0;a.count+=r.count||0;a.sales+=r.sales||0;
+      });
+    });
+    return order.map(function(n){return agg[n];});
+  }
+  function importPlayers(ev,tbl,srcName){
     var pc=colFinder(tbl.head);
     var iN=pc(["広告コード"]),iG=pc(["グループ名","グループ"]),
         iA=pc(["アクセス数","アクセス"],PL_EXCL),iC=pc(["クリック数","クリック"],PL_EXCL),
@@ -1089,12 +1110,20 @@
       if(!agg[n]){agg[n]={n:n,g:iG>=0?(c[iG]||"").trim():"",access:0,clicks:0,tickets:0,count:0,sales:0};order.push(n);}
       var a=agg[n];a.access+=num(iA);a.clicks+=num(iC);a.tickets+=num(iT);a.count+=num(iCt);a.sales+=num(iS);
     });
-    var players=order.map(function(n){return agg[n];});
-    if(!players.length)return {error:"選手データの行がありません"};
+    var rows=order.map(function(n){return agg[n];});
+    if(!rows.length)return {error:"選手データの行がありません"};
+    var hasB=Array.isArray(ev.playerBatches)&&ev.playerBatches.length>0;
     var prev=ev.players?ev.players.length:null;
-    var withSales=players.filter(function(p){return p.sales>0;}).length;
-    ev.players=players; ev.plAt=new Date().toISOString();
-    return {rows:players.length,withSales:withSales,prev:prev,salesCol:normH(tbl.head[iS])};
+    if(!hasB&&prev&&!askReplace("選手別データ",nf(prev)+" 名"))return {cancelled:true};
+    var key=String(srcName||"").trim()||("取込"+((hasB?ev.playerBatches.length:0)+1));
+    var batches=hasB?ev.playerBatches.slice():[];
+    var idx=-1; batches.forEach(function(b,i){if(b.k===key)idx=i;});
+    if(idx>=0)batches[idx]={k:key,rows:rows}; else batches.push({k:key,rows:rows});
+    ev.playerBatches=batches;
+    ev.players=aggPlayers(batches);
+    ev.plAt=new Date().toISOString();
+    return {rows:ev.players.length,fileRows:rows.length,withSales:ev.players.filter(function(p){return p.sales>0;}).length,
+            prev:prev,salesCol:normH(tbl.head[iS]),files:batches.length,key:key,reimport:idx>=0,merged:hasB};
   }
   // 7月分・8月分のように複数回に分けて取り込めるよう、明細を保持して合算する。
   // 同じCSVを再取込しても増えないよう、注文単位で「多い方の枚数」を採用する。
