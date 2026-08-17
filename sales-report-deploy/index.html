@@ -727,7 +727,12 @@
         var plSub=pbs.length>1
           ? esc(nf(pbs.length)+"ファイル合算（"+(pbNames.length>48?pbNames.slice(0,48)+"…":pbNames)+"）")
           : "広告コード別 ・ 売上の多い順";
-        playerPanel='<div class="panel" style="margin-top:16px"><div class="panel-h"><h3>選手別 売上</h3>'+hRight('<span class="sub"'+(pbs.length?' title="'+esc(pbNames)+'"':'')+'>'+plSub+'</span>'+plEditBtn)+'</div><div class="tbl-wrap"><table><thead><tr><th>選手名</th><th>アクセス</th><th>クリック</th><th>枚数</th><th>件数</th><th>売上</th><th>構成比</th></tr></thead><tbody>'+pTrs+'</tbody><tfoot><tr><td>合計</td><td class="num">—</td><td class="num">—</td><td class="num">—</td><td class="num">—</td><td class="num">'+yen(pTot)+'</td><td class="num">100%</td></tr></tfoot></table></div></div>';
+        // どの列を売上として読んだかを常時表示する（取込メッセージは消えてしまうため）
+        var pbInfo=pbs.length?'<div class="sb-meta" style="padding:12px 16px 4px;line-height:1.7">'+pbs.map(function(b){
+          return '<b>'+esc(b.k)+'</b> → 売上として '+(b.pos||"?")+' 列目「'+esc(b.col||"?")+'」を使用'+(b.how?'（'+esc(b.how)+'）':'')+
+            (b.heads?'<br><span style="color:var(--faint)">列: '+esc(b.heads)+'</span>':'');
+        }).join('<br>')+'</div>':'';
+        playerPanel='<div class="panel" style="margin-top:16px"><div class="panel-h"><h3>選手別 売上</h3>'+hRight('<span class="sub"'+(pbs.length?' title="'+esc(pbNames)+'"':'')+'>'+plSub+'</span>'+plEditBtn)+'</div><div class="tbl-wrap"><table><thead><tr><th>選手名</th><th>アクセス</th><th>クリック</th><th>枚数</th><th>件数</th><th>売上</th><th>構成比</th></tr></thead><tbody>'+pTrs+'</tbody><tfoot><tr><td>合計</td><td class="num">—</td><td class="num">—</td><td class="num">—</td><td class="num">—</td><td class="num">'+yen(pTot)+'</td><td class="num">100%</td></tr></tfoot></table></div>'+pbInfo+'</div>';
       } else {
         playerPanel='<div class="panel" style="margin-top:16px"><div class="panel-h"><h3>選手別 売上</h3>'+(editable?'<button class="btn btn-sm" data-editplayers="'+ev.id+'">＋ 手入力</button>':'')+'</div><div class="empty" style="padding:30px"><b>選手別データなし</b><p>'+(editable?'「＋ 手入力」で選手別（広告コード別）の数値を入力できます。「CSVを取込」でも自動集計されます。':'選手別データは未取込です。')+'</p></div></div>';
       }
@@ -1142,7 +1147,8 @@
     var key=String(srcName||"").trim()||("取込"+((hasB?ev.playerBatches.length:0)+1));
     var batches=hasB?ev.playerBatches.slice():[];
     var idx=-1; batches.forEach(function(b,i){if(b.k===key)idx=i;});
-    if(idx>=0)batches[idx]={k:key,rows:rows}; else batches.push({k:key,rows:rows});
+    var bat={k:key,rows:rows,col:normH(tbl.head[iS]),pos:iS+1,how:sc.how,heads:tbl.head.map(normH).join(" , ")};
+    if(idx>=0)batches[idx]=bat; else batches.push(bat);
     ev.playerBatches=batches;
     ev.players=aggPlayers(batches);
     ev.plAt=new Date().toISOString();
