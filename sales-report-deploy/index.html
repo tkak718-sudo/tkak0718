@@ -1053,7 +1053,8 @@
       else if(kind==="player"){
         var r3=importPlayers(ev,tbl,f.name); if(r3.cancelled)return; if(r3.error){toast(r3.error);return;} commit();
         toast((r3.reimport?"選手別を再取込："+r3.key+" を差し替え":(r3.merged?"選手別を追加取込："+r3.key:"選手別を取込："+r3.key))
-          +" ／ "+(r3.files>1?nf(r3.files)+"ファイル合算 ":"")+nf(r3.rows)+"名（売上あり "+nf(r3.withSales)+"名・売上列「"+r3.salesCol+"」）");
+          +" ／ "+(r3.files>1?nf(r3.files)+"ファイル合算 ":"")+nf(r3.rows)+"名（売上あり "+nf(r3.withSales)
+          +"名・売上は"+r3.salesPos+"列目「"+r3.salesCol+"」"+(r3.salesHow?"＝"+r3.salesHow:"")+"）");
       }
       else toast("対応していないCSVです（チケット管理／注文管理／選手別のいずれかを選んでください）");
     };
@@ -1075,11 +1076,34 @@
   }
   var PL_SALES=["売上","購入金額","売上金額"];   // 選手別CSVの売上列（候補・優先順）
   var PL_EXCL =["累計","合計","トータル"];        // これらを含む見出しは使わない（＝累計列を避ける）
+  // 売上列とは考えにくい見出し（位置で拾うときの誤判定よけ）
+  var PL_NOTSALES=["件数","商品数","枚数","アクセス","クリック","率","コード","グループ","名","日付","ID"];
+  // 選手別CSVの「今回イベント分の売上」列を決める。
+  // 実際のCSVは「売上」「売上累計」がこの順に並ぶため、累計列の1つ左を採用する。
+  // 累計列が無いCSVでは従来どおり列名から探す。
+  function findSalesCol(head){
+    var H=head.map(normH),i,k;
+    var notSales=function(h){for(k=0;k<PL_NOTSALES.length;k++)if(h.indexOf(PL_NOTSALES[k])>=0)return true;return false;};
+    // 1) 売上・金額系の「累計」列の1つ左
+    for(i=1;i<H.length;i++)
+      if(H[i].indexOf("累計")>=0&&(H[i].indexOf("売上")>=0||H[i].indexOf("金額")>=0)&&!notSales(H[i-1]))
+        return {idx:i-1,how:"累計の左"};
+    // 2) 「累計」列が1つだけなら、その1つ左
+    var cum=[]; for(i=0;i<H.length;i++)if(H[i].indexOf("累計")>=0)cum.push(i);
+    if(cum.length===1&&cum[0]>0&&!notSales(H[cum[0]-1]))return {idx:cum[0]-1,how:"累計の左"};
+    // 3) 累計列が無い場合は、売上・金額系のうち最も左の列（今回分が累計より先に並ぶため）
+    for(i=0;i<H.length;i++)
+      if((H[i].indexOf("売上")>=0||H[i].indexOf("金額")>=0)&&H[i].indexOf("累計")<0&&H[i].indexOf("トータル")<0&&!notSales(H[i]))
+        return {idx:i,how:"最も左の売上列"};
+    // 4) それでも決まらなければ列名から
+    var j=colFinder(head)(PL_SALES,PL_EXCL);
+    return {idx:j,how:j>=0?"列名":""};
+  }
   function detectKind(head){
     var ix=idxer(head), pc=colFinder(head);
     if(ix(["商品名"])>=0&&ix(["オブジェクト名"])>=0&&ix(["注文番号"])>=0)return "ticket";
     if(ix(["注文ID"])>=0&&ix(["金額"])>=0&&ix(["決済状況"])>=0)return "order";
-    if(pc(["広告コード"])>=0&&pc(PL_SALES,PL_EXCL)>=0)return "player";
+    if(pc(["広告コード"])>=0&&findSalesCol(head).idx>=0)return "player";
     return null;
   }
   // 選手別は取り込んだファイル単位で保持し、全ファイルを広告コードごとに合算する。
@@ -1100,8 +1124,8 @@
     var pc=colFinder(tbl.head);
     var iN=pc(["広告コード"]),iG=pc(["グループ名","グループ"]),
         iA=pc(["アクセス数","アクセス"],PL_EXCL),iC=pc(["クリック数","クリック"],PL_EXCL),
-        iT=pc(["購入商品数","購入枚数","枚数"],PL_EXCL),iCt=pc(["購入件数","件数"],PL_EXCL),
-        iS=pc(PL_SALES,PL_EXCL);
+        iT=pc(["購入商品数","購入枚数","枚数"],PL_EXCL),iCt=pc(["購入件数","件数"],PL_EXCL);
+    var sc=findSalesCol(tbl.head), iS=sc.idx;
     if(iN<0||iS<0)return {error:"選手データの列（広告コード / 売上）が見つかりません"};
     var agg={},order=[];
     tbl.rows.forEach(function(c){
@@ -1123,7 +1147,8 @@
     ev.players=aggPlayers(batches);
     ev.plAt=new Date().toISOString();
     return {rows:ev.players.length,fileRows:rows.length,withSales:ev.players.filter(function(p){return p.sales>0;}).length,
-            prev:prev,salesCol:normH(tbl.head[iS]),files:batches.length,key:key,reimport:idx>=0,merged:hasB};
+            prev:prev,salesCol:normH(tbl.head[iS]),salesHow:sc.how,salesPos:iS+1,
+            files:batches.length,key:key,reimport:idx>=0,merged:hasB};
   }
   // 7月分・8月分のように複数回に分けて取り込めるよう、明細を保持して合算する。
   // 同じCSVを再取込しても増えないよう、注文単位で「多い方の枚数」を採用する。
