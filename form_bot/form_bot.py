@@ -1,0 +1,388 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""問い合わせフォームの自動入力・自動送信。
+
+既定は dry-run。送信するには --send と --yes の両方が要る。
+誤送信を防ぐ仕掛けは PREFLIGHT（送信前チェック）と LEDGER（送信済み台帳）に集約した。
+
+  python form_bot.py --csv 企業リスト.csv --profile profile.json            # 下見（送信しない）
+  python form_bot.py --csv 企業リスト.csv --profile profile.json --test-url https://自社/contact
+  python form_bot.py --csv 企業リスト.csv --profile profile.json --send --yes --limit 10
+"""
+import argparse, csv, hashlib, json, os, re, sys, time
+from datetime import datetime, timezone
+from urllib.parse import urlparse
+
+from playwright.sync_api import sync_playwright, TimeoutError as PWTimeout
+
+# ---------------------------------------------------------------- 送信前チェック
+
+# このいずれかがページにあれば送らない。営業を断っている相手に送るのが
+# フォーム営業で最も苦情になるパターンなので、実行時オプションでは外せなくしてある。
+NG_SALES = re.compile(
+    r'(営業|勧誘|セールス|売り込み|広告)[^。、]{0,25}'
+    r'(お断り|ご遠慮|禁止|受け付け(ており)?ませ|お受けし(ており)?ませ|固くお断り)'
+    r'|(営業・勧誘目的|営業目的でのご利用)'
+)
+# 採用・サポート専用の窓口は用途が違うので送らない
+NG_PURPOSE = re.compile(r'(採用|求人|エントリー|リクルート)[^。、]{0,15}(専用|に関するお問)'
+                        r'|(技術|製品|カスタマー)?サポート専用'
+                        r'|(取材|報道|プレス)専用')
+NG_URL = re.compile(r'(recruit|saiyo|career|entry|support|helpdesk|press)', re.I)
+CAPTCHA = re.compile(r'(recaptcha|g-recaptcha|hcaptcha|cf-turnstile|turnstile)', re.I)
+
+# ---------------------------------------------------------------- 項目の対応付け
+
+# 上から順に見て、最初に当たったものを採用する。
+# name属性・id・placeholder・aria-label・直前のラベル文言をまとめて照合する。
+FIELDS = [
+    ('company',  r'会社名|法人名|団体名|組織名|貴社名|御社名|企業名|company|corp|kaisha|soshiki'),
+    ('dept',     r'部署|所属|部門|department|busho'),
+    ('name_kana',r'(フリガナ|ふりがな|カナ|かな|kana|furigana)'),
+    ('name',     r'(お?名前|氏名|担当者名|ご担当者|your[-_ ]?name|\bname\b|onamae|shimei)'),
+    ('email2',   r'(メール|mail).{0,8}(確認|再入力|confirm)|confirm.{0,8}mail'),
+    ('email',    r'(メール|mail|e-?mail|address)'),
+    ('tel',      r'(電話|TEL|Tel|tel|phone|denwa)'),
+    ('zip',      r'(郵便番号|〒|zip|postal)'),
+    ('address',  r'(住所|所在地|address|jusho)'),
+    ('url',      r'(URL|ホームページ|サイト|website|homepage)'),
+    ('subject',  r'(件名|題名|タイトル|subject|title|用件)'),
+    ('body',     r'(お問(い)?合わせ内容|お問合せ内容|内容|本文|ご相談|詳細|message|content|honbun|naiyo|備考)'),
+]
+# 選択肢から選ぶ「お問い合わせ種別」で、営業・提案に近いものを優先して選ぶ
+CATEGORY_PREF = ['提案', '営業', 'サービス', '協業', 'ご提案', 'その他', 'そのほか', 'other']
+
+
+def now():
+    return datetime.now(timezone.utc).astimezone().isoformat(timespec='seconds')
+
+
+def key_of(company, url):
+    """送信済み判定のキー。会社名とドメインの両方で見る"""
+    host = urlparse(url).netloc.lower()
+    name = re.sub(r'[\s　]', '', company)
+    return hashlib.sha1(f'{name}|{host}'.encode()).hexdigest()[:16]
+
+
+class Ledger:
+    """送信済み台帳。二重送信を防ぐ唯一の拠り所なので、送信の直前と直後に書く"""
+
+    def __init__(self, path):
+        self.path = path
+        self.done = {}
+        if os.path.exists(path):
+            with open(path, encoding='utf-8') as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        r = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    self.done[r['key']] = r
+
+    def sent(self, key):
+        r = self.done.get(key)
+        return bool(r) and r.get('phase') in ('submitting', 'sent')
+
+    def write(self, rec):
+        self.done[rec['key']] = rec
+        with open(self.path, 'a', encoding='utf-8') as f:
+            f.write(json.dumps(rec, ensure_ascii=False) + '\n')
+            f.flush()
+            os.fsync(f.fileno())
+
+
+def label_text(page, el):
+    """その入力欄が何を指しているかを、拾えるだけ拾って1つの文字列にする"""
+    bits = []
+    for attr in ('name', 'id', 'placeholder', 'aria-label', 'title'):
+        v = el.get_attribute(attr)
+        if v:
+            bits.append(v)
+    try:
+        eid = el.get_attribute('id')
+        if eid:
+            lab = page.query_selector(f'label[for="{eid}"]')
+            if lab:
+                bits.append(lab.inner_text())
+        # ラベルで囲まれている書き方と、表組みの見出しセル
+        t = el.evaluate("""e => {
+            const L = e.closest('label');
+            if (L) return L.innerText;
+            const td = e.closest('td, dd, div.form-item, p');
+            if (!td) return '';
+            const prev = td.previousElementSibling;
+            return prev ? prev.innerText : '';
+        }""")
+        if t:
+            bits.append(t)
+    except Exception:
+        pass
+    return ' '.join(bits)[:300]
+
+
+def classify(text):
+    for kind, pat in FIELDS:
+        if re.search(pat, text, re.I):
+            return kind
+    return None
+
+
+def is_required(page, el):
+    if el.get_attribute('required') is not None:
+        return True
+    try:
+        t = el.evaluate("e => { const c = e.closest('td,dd,div,p,li'); return c ? c.innerText : ''; }")
+        return bool(re.search(r'(必須|required|\*)', t or ''))
+    except Exception:
+        return False
+
+
+def fill_form(page, profile, company_name):
+    """フォームに値を入れる。何をどこへ入れたかと、埋め残した必須項目を返す"""
+    values = dict(profile['fields'])
+    values['body'] = profile['body'].replace('{会社名}', company_name)
+    values['subject'] = profile.get('subject', '').replace('{会社名}', company_name)
+
+    filled, missing, seen = {}, [], set()
+    for el in page.query_selector_all('input, textarea, select'):
+        try:
+            if not el.is_visible() or not el.is_enabled():
+                continue
+            typ = (el.get_attribute('type') or el.evaluate('e => e.tagName.toLowerCase()')).lower()
+            if typ in ('hidden', 'submit', 'button', 'image', 'file', 'reset'):
+                continue
+
+            text = label_text(page, el)
+
+            if typ == 'checkbox':
+                # 個人情報の同意だけ入れる。メルマガ購読などは触らない
+                if re.search(r'(同意|承諾|agree|consent|プライバシー|個人情報)', text, re.I):
+                    if not el.is_checked():
+                        el.check()
+                    filled['agree'] = 'checked'
+                continue
+            if typ == 'radio':
+                continue
+
+            kind = classify(text)
+            if not kind:
+                if is_required(page, el):
+                    missing.append(text[:40] or '(不明な必須項目)')
+                continue
+
+            if el.evaluate('e => e.tagName.toLowerCase()') == 'select':
+                opts = el.query_selector_all('option')
+                labels = [(o.inner_text().strip(), o.get_attribute('value')) for o in opts]
+                pick = None
+                for want in CATEGORY_PREF:
+                    for lab, val in labels:
+                        if want in lab and (val or '').strip():
+                            pick = val
+                            break
+                    if pick:
+                        break
+                if pick is None and len(labels) > 1:
+                    pick = labels[1][1]
+                if pick is not None:
+                    el.select_option(pick)
+                    filled[kind] = pick
+                continue
+
+            v = values.get(kind if kind != 'email2' else 'email', '')
+            if not v:
+                if is_required(page, el):
+                    missing.append(f'{kind}({text[:24]})')
+                continue
+            if kind in seen and kind not in ('email2',):
+                continue
+            el.fill(str(v))
+            seen.add(kind)
+            filled[kind] = str(v)[:60]
+        except Exception:
+            continue
+    return filled, missing
+
+
+def find_button(page, kinds):
+    """確認ボタンと送信ボタンは別物。取り違えると1手で送信してしまうので分けて探す"""
+    pats = {
+        'confirm': r'(確認|内容を確認|入力内容の確認|次へ|confirm)',
+        'submit':  r'(送信|送信する|この内容で送信|上記内容で送信|申し込む|submit|send)',
+    }
+    pat = pats[kinds]
+    for el in page.query_selector_all(
+            'button, input[type="submit"], input[type="button"], input[type="image"], a[role="button"]'):
+        try:
+            if not el.is_visible():
+                continue
+            t = (el.inner_text() or '') + ' ' + (el.get_attribute('value') or '') + ' ' + (el.get_attribute('alt') or '')
+            if re.search(pat, t, re.I):
+                # 「確認」を送信として拾わないように、送信探索では確認語を弾く
+                if kinds == 'submit' and re.search(pats['confirm'], t, re.I) and not re.search(r'送信|submit|send', t, re.I):
+                    continue
+                return el, t.strip()[:30]
+        except Exception:
+            continue
+    return None, ''
+
+
+def preflight(page, url):
+    """送信してよい相手かを判定する。ここで弾いたものは送信モードでも絶対に送らない"""
+    try:
+        text = page.inner_text('body')
+    except Exception:
+        text = ''
+    html = page.content()
+    ng = []
+    if NG_SALES.search(text):
+        ng.append('営業お断りの記載')
+    if NG_PURPOSE.search(text) or NG_URL.search(urlparse(url).path):
+        ng.append('採用/サポート/取材専用の窓口')
+    if CAPTCHA.search(html):
+        ng.append('CAPTCHAあり（自動送信しない）')
+    if not page.query_selector('form') and not page.query_selector('textarea'):
+        ng.append('フォームが見つからない')
+    return ng
+
+
+def run_one(page, row, profile, args, ledger, shot_dir):
+    company = row['会社名']
+    url = (row.get('お問い合わせフォームURL') or '').strip()
+    key = key_of(company, url or company)
+    base = {'key': key, 'company': company, 'url': url, 'time': now()}
+
+    if not url:
+        return {**base, 'phase': 'skip', 'reason': 'フォームURLなし'}
+    if ledger.sent(key):
+        return {**base, 'phase': 'skip', 'reason': '送信済み台帳にあり'}
+
+    try:
+        page.goto(url, timeout=args.timeout * 1000, wait_until='domcontentloaded')
+        page.wait_for_timeout(1200)
+    except PWTimeout:
+        return {**base, 'phase': 'skip', 'reason': '読み込みタイムアウト'}
+    except Exception as e:
+        return {**base, 'phase': 'skip', 'reason': f'到達不可: {str(e)[:60]}'}
+
+    ng = preflight(page, url)
+    if ng:
+        return {**base, 'phase': 'skip', 'reason': ' / '.join(ng)}
+
+    filled, missing = fill_form(page, profile, company)
+    shot = os.path.join(shot_dir, f'{key}_filled.png')
+    try:
+        page.screenshot(path=shot, full_page=True)
+    except Exception:
+        shot = ''
+
+    if missing:
+        return {**base, 'phase': 'skip', 'reason': f'必須項目が埋まらない: {missing[:3]}',
+                'filled': filled, 'shot': shot}
+    if len(filled) < args.min_fields:
+        return {**base, 'phase': 'skip', 'reason': f'入力できた項目が{len(filled)}件（下限{args.min_fields}）',
+                'filled': filled, 'shot': shot}
+
+    if not args.send:
+        return {**base, 'phase': 'dry-run', 'reason': '下見のみ。送信していない',
+                'filled': filled, 'shot': shot}
+
+    # ---- ここから先が実送信。台帳に submitting を先に書き、落ちても再送しない
+    ledger.write({**base, 'phase': 'submitting', 'filled': filled})
+
+    btn, lab = find_button(page, 'confirm')
+    if btn:
+        try:
+            btn.click()
+            page.wait_for_load_state('domcontentloaded', timeout=args.timeout * 1000)
+            page.wait_for_timeout(1200)
+        except Exception:
+            pass
+    sbtn, slab = find_button(page, 'submit')
+    if not sbtn:
+        rec = {**base, 'phase': 'failed', 'reason': '送信ボタンが見つからない', 'filled': filled, 'shot': shot}
+        ledger.write(rec)
+        return rec
+    try:
+        sbtn.click()
+        page.wait_for_load_state('domcontentloaded', timeout=args.timeout * 1000)
+        page.wait_for_timeout(1500)
+        body = page.inner_text('body')[:4000]
+        ok = bool(re.search(r'(送信(が)?完了|受け付けました|ありがとうございました|thank you|完了しました)', body, re.I))
+        after = os.path.join(shot_dir, f'{key}_after.png')
+        page.screenshot(path=after, full_page=True)
+        rec = {**base, 'phase': 'sent' if ok else 'unknown', 'button': slab,
+               'reason': '完了表示を確認' if ok else '完了表示を確認できず（要目視）',
+               'filled': filled, 'shot': after}
+    except Exception as e:
+        rec = {**base, 'phase': 'unknown', 'reason': f'送信後の確認に失敗: {str(e)[:60]}',
+               'filled': filled, 'shot': shot}
+    ledger.write(rec)
+    return rec
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument('--csv', required=True, help='会社名とお問い合わせフォームURLを含むCSV')
+    ap.add_argument('--profile', required=True, help='送信者情報と本文のJSON')
+    ap.add_argument('--ledger', default='sent_ledger.jsonl')
+    ap.add_argument('--out', default='result.csv')
+    ap.add_argument('--shots', default='shots')
+    ap.add_argument('--send', action='store_true', help='実際に送信する')
+    ap.add_argument('--yes', action='store_true', help='--send の確認。両方ないと送信しない')
+    ap.add_argument('--test-url', help='本番前に自社フォームで1件だけ通す')
+    ap.add_argument('--limit', type=int, default=20, help='1回の実行で扱う上限')
+    ap.add_argument('--interval', type=float, default=45, help='送信間隔（秒）')
+    ap.add_argument('--timeout', type=int, default=30)
+    ap.add_argument('--min-fields', type=int, default=3, help='この数を下回る入力なら送らない')
+    ap.add_argument('--headed', action='store_true', help='ブラウザを表示する')
+    args = ap.parse_args()
+
+    if args.send and not args.yes:
+        sys.exit('送信するには --send と --yes の両方が必要です。まず --send なしで下見してください。')
+
+    profile = json.load(open(args.profile, encoding='utf-8'))
+    rows = list(csv.DictReader(open(args.csv, encoding='utf-8-sig')))
+    if args.test_url:
+        rows = [{'会社名': '【テスト】自社フォーム', 'お問い合わせフォームURL': args.test_url}]
+    rows = rows[:args.limit]
+
+    os.makedirs(args.shots, exist_ok=True)
+    ledger = Ledger(args.ledger)
+    results = []
+
+    with sync_playwright() as p:
+        launch = {'headless': not args.headed}
+        exe = os.environ.get('PW_CHROME')
+        if exe:
+            launch['executable_path'] = exe
+        browser = p.chromium.launch(**launch)
+        ctx = browser.new_context(locale='ja-JP',
+                                  user_agent=('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
+                                              '(KHTML, like Gecko) Chrome/125.0 Safari/537.36'))
+        page = ctx.new_page()
+        for i, row in enumerate(rows, 1):
+            r = run_one(page, row, profile, args, ledger, args.shots)
+            results.append(r)
+            mark = {'sent': '送信', 'dry-run': '下見', 'skip': '除外', 'failed': '失敗'}.get(r['phase'], r['phase'])
+            print(f'[{i}/{len(rows)}] {mark}  {r["company"][:26]}  {r.get("reason","")}')
+            if args.send and r['phase'] in ('sent', 'unknown'):
+                time.sleep(args.interval)
+        browser.close()
+
+    with open(args.out, 'w', encoding='utf-8', newline='') as f:
+        w = csv.writer(f, lineterminator='\n')
+        w.writerow(['会社名', 'フォームURL', '結果', '理由', '入力内容', 'スクリーンショット', '時刻'])
+        for r in results:
+            w.writerow([r['company'], r['url'], r['phase'], r.get('reason', ''),
+                        json.dumps(r.get('filled', {}), ensure_ascii=False), r.get('shot', ''), r['time']])
+
+    n = lambda k: sum(1 for r in results if r['phase'] == k)
+    print(f'\n下見 {n("dry-run")} / 送信 {n("sent")} / 要目視 {n("unknown")} / 除外 {n("skip")} / 失敗 {n("failed")}')
+    print(f'結果: {args.out}   台帳: {args.ledger}   画面: {args.shots}/')
+
+
+if __name__ == '__main__':
+    main()
