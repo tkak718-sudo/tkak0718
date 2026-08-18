@@ -204,7 +204,7 @@
   .page-header p{margin:0; color:var(--text-secondary); font-size:13px;}
 
   /* ---------- Home widgets ---------- */
-  .grid-home{display:grid; grid-template-columns: 1.3fr 1fr; gap:18px; align-items:start;}
+  .grid-home{display:grid; grid-template-columns: 1fr; gap:18px; align-items:start;}
   .card{
     background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
     box-shadow:var(--shadow-sm);
@@ -221,7 +221,7 @@
   }
   .task-row:hover{background:var(--surface-alt);}
   .row-hover-action{opacity:0; flex-shrink:0; transition:opacity .1s;}
-  .task-row:hover .row-hover-action, .sched-row:hover .row-hover-action{opacity:1;}
+  .task-row:hover .row-hover-action{opacity:1;}
   .task-check{
     width:18px;height:18px;border-radius:5px;border:1.5px solid var(--border-strong);
     flex-shrink:0; display:flex;align-items:center;justify-content:center; cursor:pointer;
@@ -249,20 +249,20 @@
     background:#e0e7ff; color:#4338ca;
   }
   /* 案件（タスクのグループ） */
-  .task-group{margin-bottom:2px;}
-  .task-group + .task-group{margin-top:10px;}
+  /* 案件はひとつの囲みブロックにして、どこからどこまでが同じ案件か一目で分かるようにする */
+  .task-group{
+    border:1px solid var(--border); border-left:4px solid var(--pc,#64748b);
+    border-radius:8px; overflow:hidden; margin-bottom:12px; background:var(--surface);
+  }
   .task-group-head{
-    display:flex; align-items:center; gap:7px; padding:5px 2px 5px 0; margin-bottom:2px;
-    border-bottom:1px solid var(--border);
+    display:flex; align-items:center; gap:8px; padding:8px 12px;
+    background:var(--pc-bg,#e2e8f0);
   }
   .task-group-mark{color:var(--pc,#64748b); font-size:11px; line-height:1;}
-  .task-group-name{
-    font-size:12px; font-weight:800; letter-spacing:.02em;
-    padding:2px 8px; border-radius:5px; background:var(--pc-bg,#e2e8f0); color:var(--pc-fg,#334155);
-  }
-  .task-group-count{font-size:11px; color:var(--text-faint); margin-left:auto;}
-  /* 案件に属するタスクは、左に案件色の線を引いて所属を示す */
-  .task-row.in-group{border-left:3px solid var(--pc,#64748b); padding-left:9px;}
+  .task-group-name{font-size:12.5px; font-weight:800; letter-spacing:.02em; color:var(--pc-fg,#334155);}
+  .task-group-count{font-size:11px; font-weight:700; color:var(--pc-fg,#334155); opacity:.75; margin-left:auto;}
+  .task-group-body{padding:2px 6px;}
+  .task-group-body .task-row{padding-left:10px;}
   .task-hint{font-size:11.5px; color:var(--text-faint); padding:8px 2px 2px;}
   .pj-row{display:flex; align-items:center; gap:6px; padding:6px 0; border-bottom:1px solid var(--border);}
   .pj-row input[type=text], .pj-row select{
@@ -288,17 +288,6 @@
   .badge-high{background:var(--danger-soft); color:var(--danger);}
   .badge-mid{background:var(--warn-soft); color:var(--warn);}
   .badge-low{background:var(--info-soft); color:var(--info);}
-
-  .sched-row{display:flex; align-items:center; gap:12px; padding:11px 12px; border-radius:6px;}
-  .sched-row:hover{background:var(--surface-alt);}
-  .sched-time{
-    width:52px; flex-shrink:0; font-family:"JetBrains Mono",monospace; font-size:12px;
-    font-weight:700; color:var(--primary-deep); padding-top:1px;
-  }
-  .sched-bar{width:3px; border-radius:3px; background:var(--primary); align-self:stretch; flex-shrink:0;}
-  .sched-main{flex:1; padding-bottom:2px;}
-  .sched-title{font-size:13px; font-weight:600;}
-  .sched-sub{font-size:11.5px; color:var(--text-faint); margin-top:1px;}
 
   .empty{padding:34px 18px; text-align:center; color:var(--text-faint);}
   .empty svg{width:30px;height:30px; opacity:0.35; margin-bottom:8px;}
@@ -825,15 +814,6 @@
             <div class="card-body" id="task-list"></div>
           </div>
 
-          <div class="card">
-            <div class="card-head">
-              <h2>本日のスケジュール</h2>
-              <span class="icon-btn" title="予定を追加" onclick="openScheduleModal()">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 5v14M5 12h14"/></svg>
-              </span>
-            </div>
-            <div class="card-body" id="sched-list"></div>
-          </div>
         </div>
       </div>
 
@@ -1306,25 +1286,6 @@
 </div>
 
 <!-- Schedule Modal -->
-<div class="modal-overlay" id="schedule-modal">
-  <div class="modal">
-    <div class="modal-head"><h3 id="schedule-modal-title">予定を追加</h3><span class="modal-close" onclick="closeModal('schedule-modal')">&times;</span></div>
-    <div class="modal-body">
-      <div class="field-row">
-        <div class="field" style="flex:0.6;"><label>時刻 *</label><input type="text" id="sc-time" placeholder="10:00"></div>
-        <div class="field"><label>予定タイトル *</label><input type="text" id="sc-title" placeholder="例:株式会社ネクストコア 定例MTG"></div>
-      </div>
-      <div class="field"><label>詳細(場所・所要時間など)</label><input type="text" id="sc-sub" placeholder="例:オンライン / 60分"></div>
-    </div>
-    <div class="modal-foot">
-      <button class="btn" id="sc-delete-btn" style="color:var(--danger); border-color:var(--danger-soft); display:none;" onclick="deleteScheduleFromModal()">削除</button>
-      <div style="flex:1"></div>
-      <button class="btn" onclick="closeModal('schedule-modal')">キャンセル</button>
-      <button class="btn btn-primary" onclick="saveSchedule()">保存する</button>
-    </div>
-  </div>
-</div>
-
 <!-- Contact Modal -->
 <div class="modal-overlay" id="contact-modal">
   <div class="modal">
@@ -2110,6 +2071,8 @@ let tasks = [
   {id:5, title:'小林様に事例資料を送付', sub:'株式会社サミット物流', owner:'u1', priority:'mid', done:false},
 ];
 
+/* スケジュール表示は廃止したが、保存済みの予定を失わないようデータは保持している。
+   画面に出す場所は無いため、同期のためだけに読み書きしている。 */
 let schedule = [
   {id:1, time:'10:00', title:'株式会社ネクストコア 定例MTG', sub:'オンライン / 60分'},
   {id:2, time:'13:30', title:'扶桑製薬 見積提示', sub:'先方オフィス訪問'},
@@ -3246,7 +3209,10 @@ function renderHome(){
         <span class="task-group-name">${escapeHtml(g.pj ? g.pj.name : '案件なし')}</span>
         <span class="task-group-count">${doneCount} / ${g.list.length} 完了</span>`;
       wrap.appendChild(head);
-      g.list.forEach(t=>wrap.appendChild(taskRow(t, !!g.pj)));
+      const body = document.createElement('div');
+      body.className = 'task-group-body';
+      g.list.forEach(t=>body.appendChild(taskRow(t)));
+      wrap.appendChild(body);
       taskList.appendChild(wrap);
     });
     if(!taskProjects.length){
@@ -3257,38 +3223,16 @@ function renderHome(){
     }
   }
 
-  const schedList = document.getElementById('sched-list');
-  schedList.innerHTML = '';
-  const sortedSchedule = schedule.slice().sort((a,b)=> a.time.localeCompare(b.time));
-  if(sortedSchedule.length===0){
-    schedList.innerHTML = `<div class="empty"><p>本日の予定はありません</p></div>`;
-  } else {
-    sortedSchedule.forEach(ev=>{
-      const row = document.createElement('div');
-      row.className = 'sched-row';
-      row.innerHTML = `
-        <div class="sched-time">${escapeHtml(ev.time)}</div>
-        <div class="sched-bar"></div>
-        <div class="sched-main">
-          <div class="sched-title">${escapeHtml(ev.title)}</div>
-          <div class="sched-sub">${escapeHtml(ev.sub)}</div>
-        </div>
-        <span class="icon-btn row-hover-action" title="編集" onclick="openScheduleModal(${ev.id})">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/></svg>
-        </span>`;
-      schedList.appendChild(row);
-    });
-  }
 }
 function toggleTask(id){
   const t = tasks.find(x=>x.id===id);
   if(t){ t.done = !t.done; renderHome(); }
 }
 
-/* タスク1行分。案件に属する場合は左に案件色の線を出す。 */
-function taskRow(t, inGroup){
+/* タスク1行分。所属する案件は囲みブロック側で示すため、行自体は共通の見た目にする。 */
+function taskRow(t){
   const row = document.createElement('div');
-  row.className = 'task-row' + (inGroup ? ' in-group' : '');
+  row.className = 'task-row';
   row.innerHTML = `
     <div class="task-check ${t.done?'done':''}" onclick="toggleTask(${t.id})">
       ${t.done?'<svg viewBox="0 0 24 24" fill="none" stroke-width="3"><path d="M5 12l4 4 10-10"/></svg>':''}
@@ -3500,47 +3444,6 @@ function deleteTaskFromModal(){
     tasks = tasks.filter(x=>x.id!==tkCurrentId);
     closeModal('task-modal');
     toast('タスクを削除しました');
-    renderHome();
-  });
-}
-
-/* ---------- schedule edit/create/delete ---------- */
-let scCurrentId = null;
-function openScheduleModal(id){
-  scCurrentId = id || null;
-  const ev = id ? schedule.find(x=>x.id===id) : null;
-  document.getElementById('schedule-modal-title').textContent = ev ? '予定を編集' : '予定を追加';
-  document.getElementById('sc-time').value = ev ? ev.time : '';
-  document.getElementById('sc-title').value = ev ? ev.title : '';
-  document.getElementById('sc-sub').value = ev ? ev.sub : '';
-  document.getElementById('sc-delete-btn').style.display = ev ? 'inline-flex' : 'none';
-  openModal('schedule-modal');
-}
-function saveSchedule(){
-  const time = document.getElementById('sc-time').value.trim();
-  const title = document.getElementById('sc-title').value.trim();
-  if(!time || !title){ toast('時刻と予定タイトルを入力してください'); return; }
-  const sub = document.getElementById('sc-sub').value.trim();
-
-  if(scCurrentId){
-    const ev = schedule.find(x=>x.id===scCurrentId);
-    if(ev){ ev.time=time; ev.title=title; ev.sub=sub; }
-    toast('予定を更新しました');
-  } else {
-    schedule.push({id: nextIds.schedule++, time, title, sub});
-    toast('予定を追加しました');
-  }
-  closeModal('schedule-modal');
-  renderHome();
-}
-function deleteScheduleFromModal(){
-  if(!scCurrentId) return;
-  const ev = schedule.find(x=>x.id===scCurrentId);
-  if(!ev) return;
-  showConfirm(`「${ev.title}」の予定を削除しますか?`, ()=>{
-    schedule = schedule.filter(x=>x.id!==scCurrentId);
-    closeModal('schedule-modal');
-    toast('予定を削除しました');
     renderHome();
   });
 }
