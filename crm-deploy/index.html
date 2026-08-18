@@ -248,6 +248,35 @@
     font-size:11px; font-weight:700; white-space:nowrap;
     background:#e0e7ff; color:#4338ca;
   }
+  /* 案件（タスクのグループ） */
+  .task-group{margin-bottom:2px;}
+  .task-group + .task-group{margin-top:10px;}
+  .task-group-head{
+    display:flex; align-items:center; gap:7px; padding:5px 2px 5px 0; margin-bottom:2px;
+    border-bottom:1px solid var(--border);
+  }
+  .task-group-mark{color:var(--pc,#64748b); font-size:11px; line-height:1;}
+  .task-group-name{
+    font-size:12px; font-weight:800; letter-spacing:.02em;
+    padding:2px 8px; border-radius:5px; background:var(--pc-bg,#e2e8f0); color:var(--pc-fg,#334155);
+  }
+  .task-group-count{font-size:11px; color:var(--text-faint); margin-left:auto;}
+  /* 案件に属するタスクは、左に案件色の線を引いて所属を示す */
+  .task-row.in-group{border-left:3px solid var(--pc,#64748b); padding-left:9px;}
+  .task-hint{font-size:11.5px; color:var(--text-faint); padding:8px 2px 2px;}
+  .pj-row{display:flex; align-items:center; gap:6px; padding:6px 0; border-bottom:1px solid var(--border);}
+  .pj-row input[type=text], .pj-row select{
+    border:1px solid var(--border-strong); border-radius:6px; padding:6px 8px;
+    font-size:12.5px; background:var(--surface); color:var(--text); font-family:inherit;
+  }
+  .pj-row input[type=text]{flex:1; min-width:0;}
+  .pj-swatch{width:14px; height:14px; border-radius:4px; flex:none;}
+  .pj-move{display:flex; flex-direction:column; gap:1px;}
+  .pj-move button{
+    border:1px solid var(--border-strong); background:var(--surface); color:var(--text-secondary);
+    border-radius:4px; line-height:1; font-size:9px; padding:1px 4px; cursor:pointer;
+  }
+  .pj-move button:disabled{opacity:.35; cursor:default;}
   .tk-due-row{display:flex; align-items:center; gap:6px; flex-wrap:wrap;}
   .tk-due-row input[type=date]{
     border:1px solid var(--border-strong); border-radius:6px; padding:7px 10px;
@@ -785,6 +814,9 @@
               <h2>本日のタスク</h2>
               <div style="display:flex; align-items:center; gap:10px;">
                 <span class="filter-label" id="task-progress">0 / 0 完了</span>
+                <span class="icon-btn" title="案件を管理" onclick="openProjectModal()">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7h18M3 12h18M3 17h11"/></svg>
+                </span>
                 <span class="icon-btn" title="タスクを追加" onclick="openTaskModal()">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 5v14M5 12h14"/></svg>
                 </span>
@@ -1207,12 +1239,40 @@
 </div>
 
 <!-- Task Modal -->
+<div class="modal-overlay" id="project-modal">
+  <div class="modal">
+    <div class="modal-head"><h3>案件を管理</h3><span class="modal-close" onclick="closeModal('project-modal')">&times;</span></div>
+    <div class="modal-body">
+      <p class="ai-desc" style="font-size:12px; color:var(--text-secondary); line-height:1.7;">
+        タスクをまとめる案件です。色はタスク一覧の色分けに使われ、並び順はそのまま一覧の表示順になります。</p>
+      <div id="pj-list"></div>
+      <div class="detail-section-label">案件を追加</div>
+      <div class="pj-row" style="border-bottom:none;">
+        <input type="text" id="pj-new-name" placeholder="例:春の展示会キャンペーン">
+        <select id="pj-new-color"></select>
+        <button class="btn btn-primary btn-sm" onclick="addProject()">追加</button>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <div style="flex:1"></div>
+      <button class="btn" onclick="closeModal('project-modal')">閉じる</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="task-modal">
   <div class="modal">
     <div class="modal-head"><h3 id="task-modal-title">タスクを追加</h3><span class="modal-close" onclick="closeModal('task-modal')">&times;</span></div>
     <div class="modal-body">
       <div class="field"><label>タスク内容 *</label><input type="text" id="tk-title" placeholder="例:伊藤様へ初回架電"></div>
       <div class="field"><label>関連メモ(会社名・案件名など)</label><input type="text" id="tk-sub" placeholder="例:株式会社フロンティア"></div>
+      <div class="field">
+        <label>案件</label>
+        <div class="tk-due-row">
+          <select id="tk-project" style="flex:1; min-width:0;"></select>
+          <button class="btn btn-sm" onclick="openProjectModal()" title="案件の追加・並べ替え・色の変更">案件を管理</button>
+        </div>
+      </div>
       <div class="field-row">
         <div class="field"><label>担当者</label>
           <select id="tk-owner"></select>
@@ -1976,6 +2036,28 @@ const EVENT_RUBRIC = `あなたは企業リサーチのアシスタントです�
 
 let currentUser = SALES_REPS[0].id;
 
+/* 案件の色。一覧のバッジ（bg/fg）と、左の線・ひし形（bar）に使う。 */
+const PROJECT_COLORS = [
+  {id:'blue',   name:'ブルー',   bg:'#e0e7ff', fg:'#3730a3', bar:'#4f46e5'},
+  {id:'green',  name:'グリーン', bg:'#dcfce7', fg:'#166534', bar:'#16a34a'},
+  {id:'amber',  name:'イエロー', bg:'#fef3c7', fg:'#92400e', bar:'#d97706'},
+  {id:'rose',   name:'レッド',   bg:'#ffe4e6', fg:'#9f1239', bar:'#e11d48'},
+  {id:'cyan',   name:'シアン',   bg:'#cffafe', fg:'#155e75', bar:'#0891b2'},
+  {id:'purple', name:'パープル', bg:'#f3e8ff', fg:'#6b21a8', bar:'#9333ea'},
+  {id:'slate',  name:'グレー',   bg:'#e2e8f0', fg:'#334155', bar:'#64748b'},
+];
+function projectColor(id){
+  return PROJECT_COLORS.find(c=>c.id===id) || PROJECT_COLORS[PROJECT_COLORS.length-1];
+}
+
+/* タスクをまとめる案件。order の昇順で表示する。 */
+let taskProjects = [];
+/* 表示順に並べた案件。order が欠けていても崩れないよう id で補う。 */
+function sortedProjects(){
+  return taskProjects.slice().sort((a,b)=> (a.order||0)-(b.order||0) || a.id-b.id);
+}
+function projectById(id){ return taskProjects.find(p=>p.id===id) || null; }
+
 /* タスクの担当に指定できる特別な値。誰か1人ではなく、全員の画面に出る共有タスクを表す。
    会社や案件の担当には使わないため、ownerName() はこの値を名前に変換しない。 */
 const SHARED_OWNER = 'shared';
@@ -2035,7 +2117,7 @@ let schedule = [
   {id:4, time:'17:00', title:'アオゾラ食品 架電フォロー', sub:'電話 / 15分'},
 ];
 
-let nextIds = {contact: 9, client: 8, deal: 9, task: 6, schedule: 5};
+let nextIds = {contact: 9, client: 8, deal: 9, task: 6, schedule: 5, project: 1};
 
 /* 日次実績。キーは 'YYYY-MM-DD'、値は各件数 */
 let dailyStats = {};
@@ -2054,7 +2136,7 @@ let lastSaved = '';
 let currentUserEmail = '';
 
 function snapshot(){
-  return JSON.stringify({v:1, contacts, clients, deals, tasks, schedule, nextIds, dailyStats});
+  return JSON.stringify({v:1, contacts, clients, deals, tasks, taskProjects, schedule, nextIds, dailyStats});
 }
 
 function setSaveState(text, warn){
@@ -2098,6 +2180,7 @@ function applyRemote(d){
     if(Array.isArray(d.clients))  clients  = d.clients;
     if(Array.isArray(d.deals))    deals    = d.deals;
     if(Array.isArray(d.tasks))    tasks    = d.tasks;
+    if(Array.isArray(d.taskProjects)) taskProjects = d.taskProjects;
     if(Array.isArray(d.schedule)) schedule = d.schedule;
     if(d.dailyStats && typeof d.dailyStats === 'object') dailyStats = d.dailyStats;
     if(d.nextIds && typeof d.nextIds === 'object') nextIds = Object.assign({}, nextIds, d.nextIds);
@@ -2171,6 +2254,7 @@ function importData(ev){
       clients  = Array.isArray(d.clients)  ? d.clients  : [];
       deals    = Array.isArray(d.deals)    ? d.deals    : [];
       tasks    = Array.isArray(d.tasks)    ? d.tasks    : [];
+      taskProjects = Array.isArray(d.taskProjects) ? d.taskProjects : [];
       schedule = Array.isArray(d.schedule) ? d.schedule : [];
       if(d.nextIds) nextIds = Object.assign({}, nextIds, d.nextIds);
       Object.keys(selection).forEach(k=>selection[k].clear());
@@ -3140,23 +3224,37 @@ function renderHome(){
   if(myTasks.length===0){
     taskList.innerHTML = `<div class="empty"><p>本日のタスクはありません</p></div>`;
   } else {
-    myTasks.forEach(t=>{
-      const row = document.createElement('div');
-      row.className='task-row';
-      row.innerHTML = `
-        <div class="task-check ${t.done?'done':''}" onclick="toggleTask(${t.id})">
-          ${t.done?'<svg viewBox="0 0 24 24" fill="none" stroke-width="3"><path d="M5 12l4 4 10-10"/></svg>':''}
-        </div>
-        <div class="task-main">
-          <div class="task-title ${t.done?'done':''}">${escapeHtml(t.title)}</div>
-          <div class="task-meta">${dueBadge(t.due, t.done)}${t.owner===SHARED_OWNER?'<span class="task-shared" title="全員の画面に表示される共有タスクです">共有</span>':''}${escapeHtml(t.sub)}</div>
-        </div>
-        <div class="task-badge badge-${t.priority}">${t.priority==='high'?'優先度高':t.priority==='mid'?'優先度中':'優先度低'}</div>
-        <span class="icon-btn row-hover-action" title="編集" onclick="openTaskModal(${t.id})">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/></svg>
-        </span>`;
-      taskList.appendChild(row);
+    // 案件ごとにまとめ、案件に属さないタスクは最後に置く
+    const groups = sortedProjects()
+      .map(pj => ({pj, list: myTasks.filter(t=>t.projectId === pj.id)}))
+      .filter(g => g.list.length);
+    const loose = myTasks.filter(t=>!t.projectId || !projectById(t.projectId));
+    if(loose.length) groups.push({pj:null, list:loose});
+
+    groups.forEach(g=>{
+      const c = g.pj ? projectColor(g.pj.color) : projectColor('slate');
+      const wrap = document.createElement('div');
+      wrap.className = 'task-group';
+      wrap.style.setProperty('--pc', c.bar);
+      wrap.style.setProperty('--pc-bg', c.bg);
+      wrap.style.setProperty('--pc-fg', c.fg);
+      const doneCount = g.list.filter(t=>t.done).length;
+      const head = document.createElement('div');
+      head.className = 'task-group-head';
+      head.innerHTML = `
+        <span class="task-group-mark">◇</span>
+        <span class="task-group-name">${escapeHtml(g.pj ? g.pj.name : '案件なし')}</span>
+        <span class="task-group-count">${doneCount} / ${g.list.length} 完了</span>`;
+      wrap.appendChild(head);
+      g.list.forEach(t=>wrap.appendChild(taskRow(t, !!g.pj)));
+      taskList.appendChild(wrap);
     });
+    if(!taskProjects.length){
+      const hint = document.createElement('div');
+      hint.className = 'task-hint';
+      hint.textContent = '案件を作ると、タスクを案件ごとにまとめて色分けできます（上の一覧アイコンから）。';
+      taskList.appendChild(hint);
+    }
   }
 
   const schedList = document.getElementById('sched-list');
@@ -3185,6 +3283,25 @@ function renderHome(){
 function toggleTask(id){
   const t = tasks.find(x=>x.id===id);
   if(t){ t.done = !t.done; renderHome(); }
+}
+
+/* タスク1行分。案件に属する場合は左に案件色の線を出す。 */
+function taskRow(t, inGroup){
+  const row = document.createElement('div');
+  row.className = 'task-row' + (inGroup ? ' in-group' : '');
+  row.innerHTML = `
+    <div class="task-check ${t.done?'done':''}" onclick="toggleTask(${t.id})">
+      ${t.done?'<svg viewBox="0 0 24 24" fill="none" stroke-width="3"><path d="M5 12l4 4 10-10"/></svg>':''}
+    </div>
+    <div class="task-main">
+      <div class="task-title ${t.done?'done':''}">${escapeHtml(t.title)}</div>
+      <div class="task-meta">${dueBadge(t.due, t.done)}${t.owner===SHARED_OWNER?'<span class="task-shared" title="全員の画面に表示される共有タスクです">共有</span>':''}${escapeHtml(t.sub)}</div>
+    </div>
+    <div class="task-badge badge-${t.priority}">${t.priority==='high'?'優先度高':t.priority==='mid'?'優先度中':'優先度低'}</div>
+    <span class="icon-btn row-hover-action" title="編集" onclick="openTaskModal(${t.id})">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/></svg>
+    </span>`;
+  return row;
 }
 
 /* ---------- タスクの期日 ---------- */
@@ -3228,6 +3345,116 @@ function sortTasks(list){
   });
 }
 
+/* ---------- 案件（タスクのグループ）の管理 ---------- */
+
+/* タスクモーダルの案件プルダウン。未選択は「案件なし」。 */
+function fillProjectSelect(){
+  const sel = document.getElementById('tk-project');
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">案件なし</option>' +
+    sortedProjects().map(pj=>`<option value="${pj.id}">${escapeHtml(pj.name)}</option>`).join('');
+  if(cur && sortedProjects().some(pj=>String(pj.id)===cur)) sel.value = cur;
+}
+
+/* 色の選択肢。どの色か分かるよう名前を出す。 */
+function colorOptions(selected){
+  return PROJECT_COLORS.map(c=>
+    `<option value="${c.id}"${c.id===selected?' selected':''}>${c.name}</option>`).join('');
+}
+
+function openProjectModal(){
+  document.getElementById('pj-new-name').value = '';
+  document.getElementById('pj-new-color').innerHTML = colorOptions(PROJECT_COLORS[0].id);
+  renderProjectList();
+  openModal('project-modal');
+}
+
+function renderProjectList(){
+  const box = document.getElementById('pj-list');
+  const list = sortedProjects();
+  if(!list.length){
+    box.innerHTML = '<div class="task-hint">案件がまだありません。下の欄から追加してください。</div>';
+    return;
+  }
+  box.innerHTML = list.map((pj, i)=>{
+    const c = projectColor(pj.color);
+    const count = tasks.filter(t=>t.projectId===pj.id).length;
+    return `<div class="pj-row">
+      <span class="pj-move">
+        <button onclick="moveProject(${pj.id},-1)" ${i===0?'disabled':''} title="上へ">▲</button>
+        <button onclick="moveProject(${pj.id},1)" ${i===list.length-1?'disabled':''} title="下へ">▼</button>
+      </span>
+      <span class="pj-swatch" style="background:${c.bar}"></span>
+      <input type="text" value="${escapeHtml(pj.name)}" onchange="renameProject(${pj.id}, this.value)">
+      <select onchange="recolorProject(${pj.id}, this.value)">${colorOptions(pj.color)}</select>
+      <span class="task-group-count">${count}件</span>
+      <span class="icon-btn" title="削除" onclick="deleteProject(${pj.id})">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg>
+      </span>
+    </div>`;
+  }).join('');
+}
+
+function addProject(){
+  const name = document.getElementById('pj-new-name').value.trim();
+  if(!name){ toast('案件名を入力してください'); return; }
+  const color = document.getElementById('pj-new-color').value;
+  const maxOrder = taskProjects.reduce((m,p)=>Math.max(m, p.order||0), 0);
+  taskProjects.push({id: nextIds.project++, name, color, order: maxOrder + 1});
+  document.getElementById('pj-new-name').value = '';
+  renderProjectList();
+  renderHome();
+  toast(`案件「${name}」を追加しました`);
+}
+
+function renameProject(id, name){
+  const pj = projectById(id);
+  if(!pj) return;
+  const v = name.trim();
+  if(!v){ toast('案件名は空にできません'); renderProjectList(); return; }
+  pj.name = v;
+  renderHome();
+}
+
+function recolorProject(id, color){
+  const pj = projectById(id);
+  if(!pj) return;
+  pj.color = color;
+  renderProjectList();
+  renderHome();
+}
+
+/* 並べ替え。隣と order を入れ替える。 */
+function moveProject(id, dir){
+  const list = sortedProjects();
+  const i = list.findIndex(p=>p.id===id);
+  const j = i + dir;
+  if(i < 0 || j < 0 || j >= list.length) return;
+  // order が未設定・重複していても確実に入れ替わるよう、並び順どおりに振り直す
+  list.forEach((p, k)=>{ p.order = k + 1; });
+  const a = list[i], b = list[j];
+  const tmp = a.order; a.order = b.order; b.order = tmp;
+  renderProjectList();
+  renderHome();
+}
+
+/* 案件を消しても、ぶら下がっていたタスクは消さず「案件なし」に戻す。 */
+function deleteProject(id){
+  const pj = projectById(id);
+  if(!pj) return;
+  const count = tasks.filter(t=>t.projectId===id).length;
+  const msg = count
+    ? `案件「${pj.name}」を削除しますか?この案件の${count}件のタスクは「案件なし」に移ります(タスクは消えません)。`
+    : `案件「${pj.name}」を削除しますか?`;
+  showConfirm(msg, ()=>{
+    tasks.forEach(t=>{ if(t.projectId===id) t.projectId = null; });
+    taskProjects = taskProjects.filter(p=>p.id!==id);
+    renderProjectList();
+    renderHome();
+    toast('案件を削除しました');
+  });
+}
+
 /* ---------- task edit/create/delete ---------- */
 let tkCurrentId = null;
 function openTaskModal(id){
@@ -3238,6 +3465,8 @@ function openTaskModal(id){
   document.getElementById('tk-sub').value = t ? t.sub : '';
   document.getElementById('tk-owner').value = t ? t.owner : currentUser;
   document.getElementById('tk-priority').value = t ? t.priority : 'mid';
+  fillProjectSelect();
+  document.getElementById('tk-project').value = t && t.projectId ? String(t.projectId) : '';
   document.getElementById('tk-due').value = t && t.due ? t.due : '';
   document.getElementById('tk-delete-btn').style.display = t ? 'inline-flex' : 'none';
   openModal('task-modal');
@@ -3249,13 +3478,15 @@ function saveTask(){
   const owner = document.getElementById('tk-owner').value;
   const priority = document.getElementById('tk-priority').value;
   const due = document.getElementById('tk-due').value;
+  const pjVal = document.getElementById('tk-project').value;
+  const projectId = pjVal ? parseInt(pjVal, 10) : null;
 
   if(tkCurrentId){
     const t = tasks.find(x=>x.id===tkCurrentId);
-    if(t){ t.title=title; t.sub=sub; t.owner=owner; t.priority=priority; t.due=due; }
+    if(t){ t.title=title; t.sub=sub; t.owner=owner; t.priority=priority; t.due=due; t.projectId=projectId; }
     toast('タスクを更新しました');
   } else {
-    tasks.push({id: nextIds.task++, title, sub, owner, priority, due, done:false});
+    tasks.push({id: nextIds.task++, title, sub, owner, priority, due, projectId, done:false});
     toast('タスクを追加しました');
   }
   closeModal('task-modal');
