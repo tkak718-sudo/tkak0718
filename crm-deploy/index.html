@@ -655,6 +655,65 @@
 
   ::-webkit-scrollbar{width:10px; height:10px;}
   ::-webkit-scrollbar-thumb{background:#D3E0D7; border-radius:6px;}
+
+  /* ---------- 問い合わせ返信（Outlook連携） ---------- */
+  .ib-bar{
+    display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+    padding:11px 14px; background:var(--surface); border:1px solid var(--border);
+    border-radius:var(--radius); box-shadow:var(--shadow-sm); margin-bottom:14px;
+  }
+  .ib-conn{
+    display:inline-flex; align-items:center; gap:6px; font-size:12.5px;
+    color:var(--text-secondary); font-weight:600;
+  }
+  .ib-conn .dot{background:var(--text-faint);}
+  .ib-conn.on{color:var(--primary-deep);}
+  .ib-conn.on .dot{background:var(--primary);}
+  .ib-bar select{
+    padding:6px 8px; border:1px solid var(--border-strong); border-radius:var(--radius);
+    font-size:12.5px; background:var(--surface); color:var(--text);
+  }
+  .ib-spacer{flex:1;}
+  .ib-log{
+    max-height:150px; overflow:auto; white-space:pre-wrap; font-size:12px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace; color:var(--text-secondary);
+    background:var(--surface-alt); border:1px solid var(--border); border-radius:var(--radius);
+    padding:10px 12px; margin-bottom:14px; display:none;
+  }
+  .ib-log.show{display:block;}
+  .ib-card{
+    background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
+    box-shadow:var(--shadow-sm); margin-bottom:12px; overflow:hidden;
+  }
+  .ib-card-head{padding:12px 14px 10px; border-bottom:1px solid var(--border);}
+  .ib-subj{font-size:13.5px; font-weight:700; color:var(--text); margin-bottom:3px;}
+  .ib-meta{font-size:12px; color:var(--text-secondary); display:flex; gap:8px; flex-wrap:wrap; align-items:center;}
+  .ib-kind{
+    display:inline-block; padding:2px 8px; border-radius:20px; font-size:11px; font-weight:700;
+  }
+  .ib-kind.inquiry{background:var(--primary-soft-strong); color:var(--primary-deep);}
+  .ib-kind.ad{background:var(--warn-soft); color:var(--warn);}
+  .ib-kind.other{background:var(--surface-alt); color:var(--text-secondary);}
+  .ib-kind.rule{background:var(--info-soft); color:var(--info);}
+  .ib-kind.err{background:var(--danger-soft); color:var(--danger);}
+  .ib-reason{font-size:12px; color:var(--text-secondary); padding:9px 14px 0; line-height:1.6;}
+  .ib-preview{
+    font-size:12px; color:var(--text-secondary); padding:8px 14px 0; line-height:1.7;
+    white-space:pre-wrap; max-height:78px; overflow:hidden;
+  }
+  .ib-body{padding:12px 14px 14px;}
+  .ib-body textarea{
+    width:100%; min-height:190px; padding:11px 12px; border:1px solid var(--border-strong);
+    border-radius:var(--radius); font-size:13px; line-height:1.8; color:var(--text);
+    font-family:inherit; resize:vertical; background:var(--surface);
+  }
+  .ib-body textarea:focus{outline:none; border-color:var(--primary); box-shadow:0 0 0 3px var(--primary-soft);}
+  .ib-actions{display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:10px;}
+  .ib-actions .ib-spacer{flex:1;}
+  .ib-done{font-size:12px; color:var(--primary-deep); font-weight:700;}
+  .ib-draft-link{font-size:12px; color:var(--primary-deep); font-weight:600; text-decoration:none;}
+  .ib-draft-link:hover{text-decoration:underline;}
+  .ib-note{font-size:12px; color:var(--text-secondary); line-height:1.7;}
 </style>
 </head>
 <body>
@@ -714,6 +773,12 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M7 15l4-5 3 3 5-7"/></svg>
         取引ステータス一覧表
         <span class="nav-count" id="cnt-deals">0</span>
+      </div>
+      <div class="nav-section-label">メール</div>
+      <div class="nav-item" data-page="inbox">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18v12H3z"/><path d="M3 7l9 6 9-6"/></svg>
+        問い合わせ返信
+        <span class="nav-count" id="cnt-inbox">0</span>
       </div>
       <div class="nav-section-label">レポート</div>
       <div class="nav-item" data-page="analytics">
@@ -1148,6 +1213,52 @@
               <div class="empty" id="an-empty" style="display:none"><p>この期間の記録はまだありません</p></div>
             </div>
           </div>
+        </div>
+      </div>
+
+      <div class="page" id="page-inbox">
+        <div class="page-header">
+          <div>
+            <h1>問い合わせ返信</h1>
+            <p>受信メールから広告・DMを除き、問い合わせにだけ返信文を作ります。作った文はOutlookの下書きに入るだけで、送信ボタンは必ず人が押します。</p>
+          </div>
+          <div class="header-actions">
+            <button class="btn" onclick="openIbPaste()">メールを貼り付けて作る</button>
+            <button class="btn" onclick="openIbSettings()">設定</button>
+          </div>
+        </div>
+
+        <div class="legal-note">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg>
+          <div>このアプリがOutlookに求める権限は「メールの読み取りと下書きの作成」だけです。<b>送信権限を持たないため、ここからメールが送られることはありません。</b>下書きを確認して、Outlookの送信ボタンを押してください。</div>
+        </div>
+
+        <div class="ib-bar">
+          <span class="ib-conn" id="ib-conn"><span class="dot"></span><span id="ib-conn-text">Outlook未接続</span></span>
+          <button class="btn btn-sm" id="ib-connect-btn" onclick="ibConnect()">Outlookに接続</button>
+          <button class="btn btn-sm" id="ib-disconnect-btn" onclick="ibDisconnect()" style="display:none">接続を解除</button>
+          <span class="ib-spacer"></span>
+          <label class="filter-label" for="ib-count">取得件数</label>
+          <select id="ib-count">
+            <option value="10">最新10件</option>
+            <option value="25" selected>最新25件</option>
+            <option value="50">最新50件</option>
+            <option value="100">最新100件</option>
+          </select>
+          <button class="btn btn-primary btn-sm" id="ib-run-btn" onclick="ibRun()">受信メールを読んで返信文を作る</button>
+        </div>
+
+        <div class="ib-log" id="ib-log"></div>
+
+        <div class="tabs" id="ib-tabs">
+          <div class="tab active" data-ibtab="reply">返信候補 <span class="cnt" id="ib-cnt-reply">0</span></div>
+          <div class="tab" data-ibtab="skip">除外したメール <span class="cnt" id="ib-cnt-skip">0</span></div>
+        </div>
+
+        <div id="ib-list"></div>
+        <div class="empty" id="ib-empty">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18v12H3z"/><path d="M3 7l9 6 9-6"/></svg>
+          <p>まだ読み込んでいません。「受信メールを読んで返信文を作る」を押してください。</p>
         </div>
       </div>
 
@@ -1686,6 +1797,52 @@ contact@sample.co.jp"></textarea>
 <div class="toast" id="toast"></div>
 
 
+
+<!-- 問い合わせ返信の設定 -->
+<div class="modal-overlay" id="ib-settings-modal">
+  <div class="modal">
+    <div class="modal-head"><h3>問い合わせ返信の設定</h3><span class="modal-close" onclick="closeModal('ib-settings-modal')">&times;</span></div>
+    <div class="modal-body">
+      <div class="detail-section-label" style="margin-top:2px;">Outlook（Microsoft Graph）</div>
+      <div class="ib-note" style="margin-bottom:10px;">
+        Azure（Microsoft Entra ID）でアプリを1回だけ登録し、発行されたIDをここに貼ります。手順はリポジトリの README を見てください。<br>
+        リダイレクトURIには <code id="ib-redirect-uri">—</code> を「シングルページアプリケーション」として登録します。
+      </div>
+      <div class="field"><label>アプリケーション（クライアント）ID</label><input type="text" id="ib-client-id" placeholder="00000000-0000-0000-0000-000000000000"></div>
+      <div class="field"><label>ディレクトリ（テナント）ID</label><input type="text" id="ib-tenant-id" placeholder="空欄なら organizations（所属組織のアカウントで自動判別）"></div>
+      <div class="field"><label>読み込む共有メールボックス</label><input type="text" id="ib-mailbox" placeholder="info@example.co.jp（空欄なら自分の受信トレイ）"></div>
+
+      <div class="detail-section-label">返信文の作成</div>
+      <div class="field"><label>Anthropic APIキー</label><input type="password" id="ib-api-key" placeholder="sk-ant-..."></div>
+      <div class="field"><label>署名（返信文の末尾にそのまま入ります）</label><textarea id="ib-signature" class="ai-paste-area" style="min-height:96px;"></textarea></div>
+      <div class="field"><label>返信の方針（任意・自由記述）</label><textarea id="ib-policy" class="ai-paste-area" style="min-height:90px;" placeholder="例）価格の質問には必ず「担当より個別にご案内します」と書く／デモ希望には日程候補を3つ出す"></textarea></div>
+      <div class="ib-note">入力した内容はこの端末（ブラウザ）にだけ保存されます。他の担当者の画面には共有されません。</div>
+    </div>
+    <div class="modal-foot">
+      <div style="flex:1"></div>
+      <button class="btn" onclick="closeModal('ib-settings-modal')">閉じる</button>
+      <button class="btn btn-primary" onclick="saveIbSettings()">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- メールを貼り付けて返信文を作る（Outlook連携なしで使えるモード） -->
+<div class="modal-overlay" id="ib-paste-modal">
+  <div class="modal modal-wide">
+    <div class="modal-head"><h3>メールを貼り付けて返信文を作る</h3><span class="modal-close" onclick="closeModal('ib-paste-modal')">&times;</span></div>
+    <div class="modal-body">
+      <div class="ib-note" style="margin-bottom:10px;">Outlookと接続していなくても使えます。受信したメールを本文ごと貼り付けてください。</div>
+      <div class="field"><label>受信したメール</label><textarea id="ib-paste-src" class="ai-paste-area" style="min-height:170px;" placeholder="差出人・件名・本文をそのまま貼り付けてください"></textarea></div>
+      <div id="ib-paste-status" class="ai-status" style="display:none"></div>
+      <div class="field" id="ib-paste-out-field" style="display:none"><label>返信文（編集できます）</label><textarea id="ib-paste-out" class="ai-paste-area" style="min-height:210px;"></textarea></div>
+    </div>
+    <div class="modal-foot">
+      <div style="flex:1"></div>
+      <button class="btn" id="ib-paste-copy" onclick="ibCopyPaste()" style="display:none">返信文をコピー</button>
+      <button class="btn btn-primary" id="ib-paste-run" onclick="ibRunPaste()">返信文を作る</button>
+    </div>
+  </div>
+</div>
 <!-- ============================================================
      ▼▼▼ ここだけ書き換えてください ▼▼▼
      Firebaseコンソール →「プロジェクトの設定」→「マイアプリ」の
@@ -2895,9 +3052,10 @@ document.querySelectorAll('.nav-item[data-page]').forEach(item=>{
     const page = item.dataset.page;
     document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
     document.getElementById('page-'+page).classList.add('active');
-    const titles = {home:'ホーム', contacts:'新規クライアント', clients:'クライアントデータ', deals:'取引ステータス一覧表', analytics:'データ分析'};
+    const titles = {home:'ホーム', contacts:'新規クライアント', clients:'クライアントデータ', deals:'取引ステータス一覧表', inbox:'問い合わせ返信', analytics:'データ分析'};
     document.getElementById('topbar-title').textContent = titles[page];
     if(page === 'analytics') renderAnalytics();
+    if(page === 'inbox') renderInbox();
   });
 });
 
@@ -4794,6 +4952,660 @@ window.addEventListener('fb-ready', ()=>{
 setTimeout(()=>{
   if(!window.FB && !window.FB_ERROR) bootFailed();
 }, 12000);
+
+/* ========================================================================
+   問い合わせ返信（Outlook / Microsoft Graph 連携）
+
+   やること：受信トレイを読む → 広告・DM・自動通知を落とす → 残った問い合わせに
+   返信文を作る → Outlookの【下書き】に保存する。送信ボタンは必ず人が押す。
+
+   このアプリが要求する権限は Mail.ReadWrite（＋共有メールボックス用の .Shared）
+   だけで、Mail.Send は要求しない。つまり画面の操作ミスやバグでメールが
+   送信されることは、仕組みとして起こらない。
+   ======================================================================== */
+
+/* 送信権限(Mail.Send)は意図的に含めない */
+const MS_SCOPES = 'User.Read Mail.ReadWrite Mail.ReadWrite.Shared offline_access';
+const MS_GRAPH  = 'https://graph.microsoft.com/v1.0';
+/* 仕分けの誤りが直接お客様に届く処理なので、判断力の高いモデルを使う */
+const IB_MODEL  = 'claude-opus-5';
+/* 1通あたりAIに渡す本文の上限。超えた分は末尾を落とし、その旨をログに出す */
+const IB_BODY_LIMIT = 12000;
+
+const IB_DEFAULT_SIGNATURE =
+  '株式会社アクティブチャネル\n' +
+  'クラウドバスケット担当\n' +
+  'https://crowdbasket.jp';
+
+/* 設定はこの端末にだけ保存する（クライアントIDは秘密情報ではない） */
+function ibGet(key, fallback){ const v = localStorage.getItem(key); return (v === null || v === '') ? fallback : v; }
+const ibCfg = {
+  get clientId(){ return ibGet('msClientId', '').trim(); },
+  get tenant(){   return ibGet('msTenantId', 'organizations').trim() || 'organizations'; },
+  get mailbox(){  return ibGet('msMailbox', '').trim(); },
+  get apiKey(){   return ibGet('anthropicApiKey', '').trim(); },
+  get signature(){ return ibGet('ibSignature', IB_DEFAULT_SIGNATURE); },
+  get policy(){   return ibGet('ibPolicy', '').trim(); },
+};
+
+let msAuth   = null;    // {access, refresh, expires, account}
+let ibMails  = [];      // 取得・判定した結果
+let ibTab    = 'reply';
+let ibBusy   = false;
+
+function ibRedirectUri(){ return location.origin + '/auth-callback.html'; }
+
+/* ---------- 設定画面 ---------- */
+function openIbSettings(){
+  document.getElementById('ib-redirect-uri').textContent = ibRedirectUri();
+  document.getElementById('ib-client-id').value = ibCfg.clientId;
+  document.getElementById('ib-tenant-id').value = localStorage.getItem('msTenantId') || '';
+  document.getElementById('ib-mailbox').value   = ibCfg.mailbox;
+  document.getElementById('ib-api-key').value   = ibCfg.apiKey;
+  document.getElementById('ib-signature').value = ibCfg.signature;
+  document.getElementById('ib-policy').value    = ibCfg.policy;
+  openModal('ib-settings-modal');
+}
+
+function saveIbSettings(){
+  const set = (key, val)=>{ if(val) localStorage.setItem(key, val); else localStorage.removeItem(key); };
+  set('msClientId',      document.getElementById('ib-client-id').value.trim());
+  set('msTenantId',      document.getElementById('ib-tenant-id').value.trim());
+  set('msMailbox',       document.getElementById('ib-mailbox').value.trim());
+  set('anthropicApiKey', document.getElementById('ib-api-key').value.trim());
+  set('ibSignature',     document.getElementById('ib-signature').value.trim());
+  set('ibPolicy',        document.getElementById('ib-policy').value.trim());
+  closeModal('ib-settings-modal');
+  toast('設定を保存しました');
+}
+
+/* ---------- サインイン（PKCE・ポップアップ） ---------- */
+function ibB64url(bytes){
+  let s = '';
+  new Uint8Array(bytes).forEach(b => { s += String.fromCharCode(b); });
+  return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+}
+
+function ibRandom(len){
+  const a = new Uint8Array(len); crypto.getRandomValues(a); return ibB64url(a);
+}
+
+async function ibChallenge(verifier){
+  return ibB64url(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier)));
+}
+
+/* 認証用の小窓を開き、auth-callback.html から返ってくるクエリを受け取る */
+function ibAuthPopup(url, expectedState){
+  return new Promise((resolve, reject)=>{
+    const w = window.open(url, 'ms-auth', 'width=520,height=700');
+    if(!w){ reject(new Error('ポップアップがブロックされました。このサイトのポップアップを許可してください')); return; }
+    let settled = false;
+    const cleanup = ()=>{
+      settled = true;
+      clearInterval(timer);
+      window.removeEventListener('message', onMsg);
+      try{ w.close(); }catch(e){}
+    };
+    const onMsg = e=>{
+      if(e.origin !== location.origin) return;
+      if(!e.data || e.data.type !== 'ms-auth') return;
+      const p = new URLSearchParams(e.data.search || '');
+      if(p.get('state') !== expectedState) return;   // 自分が始めた認証でなければ無視
+      cleanup();
+      if(p.get('error')) reject(new Error(p.get('error_description') || p.get('error')));
+      else if(!p.get('code')) reject(new Error('認証コードを受け取れませんでした'));
+      else resolve(p.get('code'));
+    };
+    const timer = setInterval(()=>{
+      if(!settled && w.closed){ cleanup(); reject(new Error('サインインが中断されました')); }
+    }, 500);
+    window.addEventListener('message', onMsg);
+  });
+}
+
+async function ibTokenRequest(body){
+  const res = await fetch(`https://login.microsoftonline.com/${encodeURIComponent(ibCfg.tenant)}/oauth2/v2.0/token`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams(body).toString(),
+  });
+  const data = await res.json().catch(()=>({}));
+  if(!res.ok) throw new Error(data.error_description || data.error || ('サインインに失敗しました（' + res.status + '）'));
+  return data;
+}
+
+/* トークンはタブを閉じれば消える sessionStorage にだけ置く */
+function ibStoreAuth(d){
+  msAuth = {
+    access:  d.access_token,
+    refresh: d.refresh_token || (msAuth && msAuth.refresh) || '',
+    expires: Date.now() + (Number(d.expires_in || 3600) - 120) * 1000,
+    account: (msAuth && msAuth.account) || '',
+  };
+  sessionStorage.setItem('msAuth', JSON.stringify(msAuth));
+}
+
+async function ibConnect(){
+  if(!ibCfg.clientId){ toast('先に設定でクライアントIDを入力してください'); openIbSettings(); return; }
+  const btn = document.getElementById('ib-connect-btn');
+  btn.disabled = true;
+  try{
+    const verifier  = ibRandom(48);
+    const challenge = await ibChallenge(verifier);
+    const state     = ibRandom(12);
+    const url = `https://login.microsoftonline.com/${encodeURIComponent(ibCfg.tenant)}/oauth2/v2.0/authorize`
+      + `?client_id=${encodeURIComponent(ibCfg.clientId)}`
+      + `&response_type=code&response_mode=query`
+      + `&redirect_uri=${encodeURIComponent(ibRedirectUri())}`
+      + `&scope=${encodeURIComponent(MS_SCOPES)}`
+      + `&state=${encodeURIComponent(state)}`
+      + `&code_challenge=${challenge}&code_challenge_method=S256`
+      + `&prompt=select_account`;
+
+    const code = await ibAuthPopup(url, state);
+    msAuth = null;
+    ibStoreAuth(await ibTokenRequest({
+      client_id:     ibCfg.clientId,
+      grant_type:    'authorization_code',
+      code:          code,
+      redirect_uri:  ibRedirectUri(),
+      code_verifier: verifier,
+    }));
+
+    const me = await ibGraph('/me?$select=displayName,mail,userPrincipalName');
+    msAuth.account = me.mail || me.userPrincipalName || me.displayName || '';
+    sessionStorage.setItem('msAuth', JSON.stringify(msAuth));
+    renderIbStatus();
+    toast('Outlookに接続しました');
+  }catch(err){
+    toast(err.message);
+  }
+  btn.disabled = false;
+}
+
+function ibDisconnect(){
+  msAuth = null;
+  sessionStorage.removeItem('msAuth');
+  renderIbStatus();
+  toast('接続を解除しました');
+}
+
+async function ibAccessToken(){
+  if(!msAuth) throw new Error('Outlookに接続していません');
+  if(Date.now() < msAuth.expires) return msAuth.access;
+  if(!msAuth.refresh) throw new Error('接続の有効期限が切れました。もう一度接続してください');
+  ibStoreAuth(await ibTokenRequest({
+    client_id:     ibCfg.clientId,
+    grant_type:    'refresh_token',
+    refresh_token: msAuth.refresh,
+    scope:         MS_SCOPES,
+  }));
+  return msAuth.access;
+}
+
+async function ibGraph(path, opts){
+  const token = await ibAccessToken();
+  const o = opts || {};
+  const res = await fetch(MS_GRAPH + path, {
+    method:  o.method || 'GET',
+    body:    o.body,
+    headers: Object.assign({ authorization: 'Bearer ' + token, 'content-type': 'application/json' }, o.headers || {}),
+  });
+  if(res.status === 204) return null;
+  const data = await res.json().catch(()=>null);
+  if(!res.ok){
+    const msg = (data && data.error && data.error.message) || ('Outlookの操作に失敗しました（' + res.status + '）');
+    throw new Error(msg);
+  }
+  return data;
+}
+
+/* 共有メールボックスを指定していればそちら、なければ自分の受信トレイ */
+function ibMailboxPath(){
+  const m = ibCfg.mailbox;
+  return m ? '/users/' + encodeURIComponent(m) : '/me';
+}
+
+/* ---------- 広告・DMを機械的に落とすルール ---------- */
+/* AIに渡す前にここで落とす。落としたものは必ず「除外したメール」タブに出す */
+const IB_BULK_LOCALPART = /^(no-?reply|do-?not-?reply|donotreply|noreply|news|newsletter|mail-?maga\w*|mailmag\w*|melmaga\w*|magazine|campaign|promo\w*|marketing|ads?|dm|mailer-daemon|postmaster|bounce\w*|notification|notifications|alert|announce)([._\-+]|$)/i;
+const IB_BULK_SUBJECT   = /(【広告】|＜広告＞|\[広告\]|【PR】|【宣伝】|メルマガ|メールマガジン|配信停止|購読解除|unsubscribe|号外)/i;
+
+function ibHeaderMap(headers){
+  const h = {};
+  (headers || []).forEach(x=>{ h[String(x.name || '').toLowerCase()] = String(x.value || ''); });
+  return h;
+}
+
+/* 一斉配信と判定できた理由を返す。問い合わせらしければ空文字 */
+function ibBulkReason(msg, headers){
+  const h = ibHeaderMap(headers);
+  if(h['list-unsubscribe']) return '配信停止用のヘッダ（List-Unsubscribe）が付いた一斉配信';
+  if(h['list-id'])          return 'メーリングリスト（List-Id）からの配信';
+  if(h['feedback-id'])      return 'メール配信サービス経由の配信（Feedback-ID）';
+  if(/bulk|list|junk/i.test(h['precedence'] || '')) return 'Precedence: ' + h['precedence'] + ' の一括送信';
+  const auto = (h['auto-submitted'] || '').trim();
+  if(auto && !/^no$/i.test(auto)) return '自動送信メール（Auto-Submitted: ' + auto + '）';
+
+  const addr  = ((msg.from && msg.from.emailAddress && msg.from.emailAddress.address) || '').toLowerCase();
+  const local = addr.split('@')[0] || '';
+  if(IB_BULK_LOCALPART.test(local)) return '返信を受け付けない送信専用アドレス（' + addr + '）';
+  if(IB_BULK_SUBJECT.test(msg.subject || '')) return '件名が広告・メルマガの形式';
+  return '';
+}
+
+/* HTMLメールを、AIに渡すためのプレーンテキストにする */
+function ibToPlainText(body){
+  if(!body) return '';
+  let s = String(body.content || '');
+  if(String(body.contentType || '').toLowerCase() === 'html'){
+    s = s.replace(/<(script|style)[\s\S]*?<\/\1>/gi, ' ')
+         .replace(/<br\s*\/?>/gi, '\n')
+         .replace(/<\/(p|div|tr|li|h[1-6])>/gi, '\n')
+         .replace(/<[^>]+>/g, ' ');
+    const ta = document.createElement('textarea');
+    ta.innerHTML = s;
+    s = ta.value;
+  }
+  return s.replace(/\r/g, '').replace(/[ \t ]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
+}
+
+/* ---------- 返信文の作成（Claude） ---------- */
+function ibSystemPrompt(){
+  const lines = [
+    'あなたは「クラウドバスケット」（株式会社アクティブチャネルが提供する、LINE公式アカウントでチケット・グッズを販売できるツール）の',
+    'お問い合わせ窓口の担当者です。受信したメールを仕分けし、返信すべきものにだけ返信の下書きを書きます。',
+    '',
+    '【手順1：仕分け】受信メールを次のいずれかに分類する。',
+    '  inquiry … 人が書いた、こちらへの問い合わせ・質問・依頼・商談の連絡・こちらの営業メールへの返信。返信すべきもの。',
+    '  ad      … 広告・宣伝・売り込み・メルマガ・キャンペーン告知・他社からの営業DM。返信不要。',
+    '  other   … 自動通知、配送・請求・システムからの通知、社内連絡、迷惑メールなど返信の必要がないもの。',
+    '  判断に迷ったら inquiry ではなく other にする。返信すべきでないものに返信するほうが害が大きい。',
+    '  ただし「営業お断り」「配信停止希望」など、こちらの営業メールへの明確な返信は inquiry として扱い、',
+    '  丁重にお詫びし、以後の配信を停止する旨を伝える返信を書く。',
+    '',
+    '【手順2：返信文】inquiry のときだけ、そのまま送れる日本語のビジネスメール本文を書く。',
+    '  ・宛名（分かれば会社名＋担当者名、分からなければ「ご担当者様」）から書き始める',
+    '  ・お礼 → 相手の用件への回答 → 次のアクションの提案 → 結びの挨拶、の順で書く',
+    '  ・全体で300〜500字程度。件名は書かない（本文だけ）。冒頭に「返信文：」などの見出しも付けない',
+    '  ・最重要：メールに書かれていない事実を作らない。価格・納期・機能の可否・導入実績・キャンペーン条件などを',
+    '    自分の判断で断定しない。分からないことは「確認のうえ、改めてご連絡いたします」と書く',
+    '  ・相手が日本語以外で書いている場合は、その言語で返信する',
+    '  ・署名は次のものを本文の末尾にそのまま置く：',
+    ibCfg.signature,
+  ];
+  if(ibCfg.policy){
+    lines.push('', '【この会社独自の方針（上の指示より優先する）】', ibCfg.policy);
+  }
+  lines.push(
+    '',
+    '【出力】JSONオブジェクトだけを返す（説明文やコードブロック記号を付けない）。',
+    '形式：{"kind":"inquiry"|"ad"|"other","reason":"60字以内の日本語で判断理由","reply":"返信本文。inquiry以外は空文字"}'
+  );
+  return lines.join('\n');
+}
+
+async function ibAskClaude(apiKey, mail){
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true',
+    },
+    body: JSON.stringify({
+      model: IB_MODEL,
+      max_tokens: 16000,
+      output_config: { effort: 'medium' },
+      system: ibSystemPrompt(),
+      messages: [{ role: 'user', content: '次の受信メールを仕分けし、必要なら返信文を書いてください。\n\n' + JSON.stringify(mail, null, 2) }],
+    }),
+  });
+  if(!res.ok){
+    const t = await res.text();
+    throw new Error('API ' + res.status + '：' + t.slice(0, 300));
+  }
+  const data = await res.json();
+  if(data.stop_reason === 'refusal')    throw new Error('この内容には返信文を作成できませんでした');
+  if(data.stop_reason === 'max_tokens') throw new Error('返信文が長くなりすぎて途中で切れました。もう一度お試しください');
+  const text = (data.content || []).filter(b=>b.type === 'text').map(b=>b.text).join('');
+  let t = text.trim().replace(/^```(?:json)?/i, '').replace(/```$/, '').trim();
+  const s = t.indexOf('{'), e = t.lastIndexOf('}');
+  if(s < 0 || e <= s) throw new Error('返信文を読み取れませんでした: ' + text.slice(0, 120));
+  return JSON.parse(t.slice(s, e + 1));
+}
+
+/* ---------- 受信箱を読んで返信文を作る ---------- */
+function ibLog(msg){
+  const el = document.getElementById('ib-log');
+  el.classList.add('show');
+  el.textContent += msg + '\n';
+  el.scrollTop = el.scrollHeight;
+}
+
+/* 同じメールに何度も下書きを作らないよう、作成済みのメールIDを覚えておく */
+function ibDraftedIds(){
+  try{ return JSON.parse(localStorage.getItem('ibDrafted') || '[]'); }catch(e){ return []; }
+}
+function ibRememberDrafted(id){
+  const ids = ibDraftedIds();
+  if(ids.includes(id)) return;
+  ids.push(id);
+  localStorage.setItem('ibDrafted', JSON.stringify(ids.slice(-500)));
+}
+
+async function ibRun(){
+  if(ibBusy) return;
+  if(!msAuth){ toast('先にOutlookへ接続してください'); return; }
+  const apiKey = ibCfg.apiKey;
+  if(!apiKey){ toast('設定でAnthropic APIキーを入力してください'); openIbSettings(); return; }
+
+  const runBtn = document.getElementById('ib-run-btn');
+  ibBusy = true; runBtn.disabled = true;
+  document.getElementById('ib-log').textContent = '';
+  ibMails = [];
+  renderIbList();
+
+  const top = Number(document.getElementById('ib-count').value) || 25;
+  const done = ibDraftedIds();
+
+  try{
+    ibLog(`受信トレイから最新${top}件を読み込みます…`);
+    const listed = await ibGraph(`${ibMailboxPath()}/mailFolders/inbox/messages`
+      + `?$top=${top}&$orderby=receivedDateTime desc`
+      + `&$select=id,subject,receivedDateTime,from,bodyPreview,webLink`);
+    const items = (listed && listed.value) || [];
+    ibLog(`${items.length}件を読み込みました。1件ずつ仕分けします…`);
+
+    for(let i = 0; i < items.length; i++){
+      const head = items[i];
+      const who  = (head.from && head.from.emailAddress) || {};
+      const row  = {
+        id:       head.id,
+        subject:  head.subject || '(件名なし)',
+        fromName: who.name || '',
+        fromAddr: who.address || '',
+        received: head.receivedDateTime || '',
+        preview:  head.bodyPreview || '',
+        webLink:  head.webLink || '',
+        kind:     'other',
+        reason:   '',
+        reply:    '',
+        drafted:  done.includes(head.id),
+        draftLink:'',
+      };
+
+      if(row.drafted){
+        row.kind = 'inquiry';
+        row.reason = '前回すでに下書きを作成済みです';
+        ibMails.push(row);
+        ibLog(`○ ${row.subject} → 下書き作成済みのため読み飛ばしました`);
+        renderIbList();
+        continue;
+      }
+
+      let full;
+      try{
+        full = await ibGraph(`${ibMailboxPath()}/messages/${encodeURIComponent(head.id)}`
+          + `?$select=id,subject,body,internetMessageHeaders,toRecipients`);
+      }catch(err){
+        row.kind = 'err'; row.reason = '本文を取得できませんでした：' + err.message;
+        ibMails.push(row); ibLog(`× ${row.subject} → ${row.reason}`); renderIbList();
+        continue;
+      }
+
+      const bulk = ibBulkReason(head, full.internetMessageHeaders);
+      if(bulk){
+        row.kind = 'rule'; row.reason = bulk;
+        ibMails.push(row);
+        ibLog(`− ${row.subject} → 除外（${bulk}）`);
+        renderIbList();
+        continue;
+      }
+
+      let body = ibToPlainText(full.body);
+      if(body.length > IB_BODY_LIMIT){
+        ibLog(`  ※ ${row.subject} は本文が長いため、先頭${IB_BODY_LIMIT}字までをAIに渡します`);
+        body = body.slice(0, IB_BODY_LIMIT) + '\n\n…（本文が長いため以降を省略）';
+      }
+
+      try{
+        const r = await ibAskClaude(apiKey, {
+          差出人名:   row.fromName,
+          差出人:     row.fromAddr,
+          件名:       row.subject,
+          受信日時:   row.received,
+          本文:       body,
+        });
+        row.kind   = ['inquiry','ad','other'].includes(r.kind) ? r.kind : 'other';
+        row.reason = String(r.reason || '');
+        row.reply  = row.kind === 'inquiry' ? String(r.reply || '') : '';
+        ibLog(`${row.kind === 'inquiry' ? '●' : '−'} ${row.subject} → ${row.kind === 'inquiry' ? '返信候補' : '除外'}（${row.reason}）`);
+      }catch(err){
+        row.kind = 'err'; row.reason = err.message;
+        ibLog(`× ${row.subject} → エラー：${err.message}`);
+      }
+      ibMails.push(row);
+      renderIbList();
+    }
+
+    const n = ibMails.filter(m=>m.kind === 'inquiry' && !m.drafted).length;
+    ibLog(`完了：返信候補 ${n}件。内容を確認して「Outlookに下書きを保存」を押してください。`);
+    toast(`返信候補 ${n}件`);
+  }catch(err){
+    ibLog('エラー：' + err.message);
+    toast(err.message);
+  }
+
+  ibBusy = false; runBtn.disabled = false;
+  renderIbList();
+}
+
+/* ---------- Outlookの下書きに保存（送信はしない） ---------- */
+function ibTextToHtml(text){
+  return '<div style="font-family:Yu Gothic,Meiryo,sans-serif; font-size:14px; line-height:1.8;">'
+    + escapeHtml(text).replace(/\n/g, '<br>')
+    + '</div><br>';
+}
+
+/* Graphが作った返信下書き（引用付き）の本文の先頭に、こちらの文面を差し込む */
+function ibInjectBody(original, snippet){
+  if(!original) return snippet;
+  const m = original.match(/<body[^>]*>/i);
+  return m ? original.replace(m[0], m[0] + snippet) : snippet + original;
+}
+
+async function ibSaveDraft(idx){
+  const m = ibMails[idx];
+  if(!m) return;
+  const ta = document.getElementById('ib-reply-' + idx);
+  const text = (ta ? ta.value : '').trim();
+  if(!text){ toast('返信文が空です'); return; }
+
+  const btn = document.getElementById('ib-draft-btn-' + idx);
+  if(btn){ btn.disabled = true; btn.textContent = '保存中…'; }
+  try{
+    // createReply は宛先と引用を引き継いだ「下書き」を作る。送信はされない
+    const draft = await ibGraph(`${ibMailboxPath()}/messages/${encodeURIComponent(m.id)}/createReply`, {
+      method: 'POST', body: JSON.stringify({}),
+    });
+    await ibGraph(`${ibMailboxPath()}/messages/${encodeURIComponent(draft.id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ body: { contentType: 'HTML', content: ibInjectBody((draft.body && draft.body.content) || '', ibTextToHtml(text)) } }),
+    });
+    m.reply = text;
+    m.drafted = true;
+    m.draftLink = draft.webLink || '';
+    ibRememberDrafted(m.id);
+    toast('Outlookの下書きに保存しました。送信はOutlookから行ってください');
+  }catch(err){
+    toast(err.message);
+    if(btn){ btn.disabled = false; btn.textContent = 'Outlookに下書きを保存'; }
+    return;
+  }
+  renderIbList();
+}
+
+/* ---------- 画面の描画 ---------- */
+function renderIbStatus(){
+  const on   = !!msAuth;
+  const conn = document.getElementById('ib-conn');
+  const box  = ibCfg.mailbox ? `（${ibCfg.mailbox}）` : '';
+  conn.classList.toggle('on', on);
+  document.getElementById('ib-conn-text').textContent =
+    on ? `接続中: ${msAuth.account || 'Outlook'}${box}` : 'Outlook未接続';
+  document.getElementById('ib-connect-btn').style.display    = on ? 'none' : '';
+  document.getElementById('ib-disconnect-btn').style.display = on ? '' : 'none';
+  document.getElementById('ib-run-btn').disabled = !on || ibBusy;
+}
+
+const IB_KIND_LABEL = { inquiry:'返信候補', ad:'広告・DM', other:'返信不要', rule:'一斉配信', err:'エラー' };
+
+function renderIbList(){
+  const reply = [], skip = [];
+  ibMails.forEach((m, i)=>{ (m.kind === 'inquiry' ? reply : skip).push(i); });
+
+  document.getElementById('ib-cnt-reply').textContent = reply.length;
+  document.getElementById('ib-cnt-skip').textContent  = skip.length;
+  const pending = ibMails.filter(m=>m.kind === 'inquiry' && !m.drafted).length;
+  document.getElementById('cnt-inbox').textContent = pending;
+
+  const show = ibTab === 'reply' ? reply : skip;
+  const wrap = document.getElementById('ib-list');
+  const empty = document.getElementById('ib-empty');
+
+  if(show.length === 0){
+    wrap.innerHTML = '';
+    empty.style.display = '';
+    empty.querySelector('p').textContent = ibMails.length === 0
+      ? 'まだ読み込んでいません。「受信メールを読んで返信文を作る」を押してください。'
+      : (ibTab === 'reply' ? '返信が必要なメールはありませんでした。' : '除外したメールはありません。');
+    return;
+  }
+  empty.style.display = 'none';
+
+  wrap.innerHTML = show.map(i=>{
+    const m = ibMails[i];
+    const head = `
+      <div class="ib-card-head">
+        <div class="ib-subj">${escapeHtml(m.subject)}</div>
+        <div class="ib-meta">
+          <span class="ib-kind ${m.kind}">${IB_KIND_LABEL[m.kind] || m.kind}</span>
+          <span>${escapeHtml(m.fromName || m.fromAddr || '差出人不明')}${m.fromName && m.fromAddr ? '（' + escapeHtml(m.fromAddr) + '）' : ''}</span>
+          <span>${escapeHtml(ibFmtTime(m.received))}</span>
+          ${m.webLink ? `<a class="ib-draft-link" href="${escapeHtml(m.webLink)}" target="_blank" rel="noopener">元のメールを開く</a>` : ''}
+        </div>
+      </div>`;
+
+    if(m.kind !== 'inquiry'){
+      return `<div class="ib-card">${head}
+        <div class="ib-reason">${escapeHtml(m.reason || '')}</div>
+        <div class="ib-preview">${escapeHtml((m.preview || '').slice(0, 300))}</div>
+        <div class="ib-body"></div>
+      </div>`;
+    }
+
+    const actions = m.drafted
+      ? `<span class="ib-done">Outlookの下書きに保存済み</span>
+         ${m.draftLink ? `<a class="ib-draft-link" href="${escapeHtml(m.draftLink)}" target="_blank" rel="noopener">下書きを開く</a>` : ''}
+         <span class="ib-spacer"></span>
+         <button class="btn btn-sm" onclick="ibSaveDraft(${i})">下書きを作り直す</button>`
+      : `<span class="ib-note">下書きに入るだけです。送信ボタンはOutlookで押してください。</span>
+         <span class="ib-spacer"></span>
+         <button class="btn btn-sm" onclick="ibCopyReply(${i})">文面をコピー</button>
+         <button class="btn btn-primary btn-sm" id="ib-draft-btn-${i}" onclick="ibSaveDraft(${i})">Outlookに下書きを保存</button>`;
+
+    return `<div class="ib-card">${head}
+      <div class="ib-reason">${escapeHtml(m.reason || '')}</div>
+      <div class="ib-preview">${escapeHtml((m.preview || '').slice(0, 300))}</div>
+      <div class="ib-body">
+        <textarea id="ib-reply-${i}" ${m.drafted ? 'readonly' : ''}>${escapeHtml(m.reply || '')}</textarea>
+        <div class="ib-actions">${actions}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function ibFmtTime(iso){
+  if(!iso) return '';
+  const d = new Date(iso);
+  if(isNaN(d)) return iso;
+  const pad = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}/${pad(d.getMonth()+1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function ibCopyReply(idx){
+  const ta = document.getElementById('ib-reply-' + idx);
+  if(ta) copyText(ta.value, '返信文');
+}
+
+function renderInbox(){
+  renderIbStatus();
+  renderIbList();
+}
+
+/* ---------- 貼り付けモード（Outlook連携なしでも使える） ---------- */
+function openIbPaste(){
+  document.getElementById('ib-paste-src').value = '';
+  document.getElementById('ib-paste-out').value = '';
+  document.getElementById('ib-paste-out-field').style.display = 'none';
+  document.getElementById('ib-paste-copy').style.display = 'none';
+  const st = document.getElementById('ib-paste-status');
+  st.style.display = 'none'; st.className = 'ai-status';
+  openModal('ib-paste-modal');
+}
+
+async function ibRunPaste(){
+  const src = document.getElementById('ib-paste-src').value.trim();
+  if(!src){ toast('メールを貼り付けてください'); return; }
+  const apiKey = ibCfg.apiKey;
+  if(!apiKey){ toast('設定でAnthropic APIキーを入力してください'); openIbSettings(); return; }
+
+  const btn = document.getElementById('ib-paste-run');
+  const st  = document.getElementById('ib-paste-status');
+  btn.disabled = true;
+  st.style.display = ''; st.className = 'ai-status'; st.textContent = '返信文を作っています…';
+  try{
+    let body = src;
+    if(body.length > IB_BODY_LIMIT) body = body.slice(0, IB_BODY_LIMIT) + '\n\n…（本文が長いため以降を省略）';
+    const r = await ibAskClaude(apiKey, { 本文: body });
+    if(r.kind !== 'inquiry'){
+      st.className = 'ai-status warn';
+      st.textContent = `返信不要と判断しました（${IB_KIND_LABEL[r.kind] || r.kind}）：${r.reason || ''}`;
+    }else{
+      st.className = 'ai-status ok';
+      st.textContent = r.reason || '返信文を作成しました';
+      document.getElementById('ib-paste-out').value = r.reply || '';
+      document.getElementById('ib-paste-out-field').style.display = '';
+      document.getElementById('ib-paste-copy').style.display = '';
+    }
+  }catch(err){
+    st.className = 'ai-status error';
+    st.textContent = err.message;
+  }
+  btn.disabled = false;
+}
+
+function ibCopyPaste(){
+  copyText(document.getElementById('ib-paste-out').value, '返信文');
+}
+
+/* ---------- 初期化 ---------- */
+document.querySelectorAll('#ib-tabs .tab').forEach(tab=>{
+  tab.addEventListener('click', ()=>{
+    document.querySelectorAll('#ib-tabs .tab').forEach(t=>t.classList.remove('active'));
+    tab.classList.add('active');
+    ibTab = tab.dataset.ibtab;
+    renderIbList();
+  });
+});
+
+try{
+  const saved = JSON.parse(sessionStorage.getItem('msAuth') || 'null');
+  if(saved && saved.access) msAuth = saved;
+}catch(e){}
+renderIbStatus();
 </script>
 </body>
 </html>

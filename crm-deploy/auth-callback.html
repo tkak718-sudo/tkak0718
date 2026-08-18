@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="robots" content="noindex">
+  <title>サインインを処理しています</title>
+</head>
+<body style="margin:0; padding:28px; font-family:system-ui,-apple-system,'Hiragino Kaku Gothic ProN','Yu Gothic',sans-serif; color:#1A241D; background:#F2F7F3;">
+  <p style="font-size:14px; line-height:1.8;">
+    Microsoftのサインインを処理しています。<br>
+    この画面は自動で閉じます。閉じない場合は、このタブを閉じてCRMに戻ってください。
+  </p>
+  <!--
+    Microsoft のサインイン後に開かれる小窓。CRM本体（同じオリジン）へ
+    認証コードを渡して自分で閉じるだけの、それ以外は何もしないページ。
+    受け取る側は state を照合してから使う。
+  -->
+  <script>
+    (function(){
+      try{
+        if(window.opener){
+          window.opener.postMessage({ type: 'ms-auth', search: location.search }, location.origin);
+        }
+      }catch(e){}
+      setTimeout(function(){ try{ window.close(); }catch(e){} }, 200);
+    })();
+  </script>
+</body>
+</html>
