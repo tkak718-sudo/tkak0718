@@ -1766,12 +1766,18 @@ contact@sample.co.jp"></textarea>
     const { initializeApp } = await import(`https://www.gstatic.com/firebasejs/${V}/firebase-app.js`);
     const { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } =
       await import(`https://www.gstatic.com/firebasejs/${V}/firebase-auth.js`);
-    const { getFirestore, doc, onSnapshot, setDoc, enableIndexedDbPersistence } =
+    const { initializeFirestore, doc, onSnapshot, setDoc, enableIndexedDbPersistence } =
       await import(`https://www.gstatic.com/firebasejs/${V}/firebase-firestore.js`);
 
     const app  = initializeApp(firebaseConfig);
     const auth = getAuth(app);
-    const db   = getFirestore(app);
+    // 社内のプロキシやセキュリティ製品が、通常の通信方式（WebChannel）の
+    // 送信だけを止めてしまうことがある。受信はできるのに保存だけ終わらない、
+    // という症状になるため、通じる方式を自動で選ばせる。
+    const db   = initializeFirestore(app, {
+      experimentalAutoDetectLongPolling: true,
+      useFetchStreams: false,
+    });
     // オフラインでも直前の内容を表示できるようにする（複数タブで開くと片方だけ有効）
     enableIndexedDbPersistence(db).catch(()=>{});
 
@@ -2161,7 +2167,7 @@ function tickSave(){
 const DOC_LIMIT = 1048576;
 
 /* どの版が動いているかを画面から確かめられるようにする */
-const BUILD_ID = '2026-08-19c';
+const BUILD_ID = '2026-08-19d';
 /* 直近の保存結果と、サーバーから受け取った内容の素性。診断画面で見せる */
 let lastWriteInfo = 'まだ保存していません';
 let lastServerInfo = 'まだ受信していません';
@@ -2207,9 +2213,15 @@ async function unpackDoc(d){
   return d;
 }
 
+/* 保存中かどうか。これを見ずに書き込むと、前の保存が終わらないうちに
+   0.6秒ごとに次の保存を積み増してしまい、いつまでも確定しなくなる。 */
+let pushing = false;
+
 async function pushData(){
+  if(pushing) return;
   const s = snapshot();
   if(s === lastSaved) return;
+  pushing = true;
   try{
     const body = await packDoc(s);
     const size = body.z ? body.z.length : s.length;
@@ -2219,7 +2231,16 @@ async function pushData(){
       setSaveState('データが大きすぎて保存できません（診断をご確認ください）', true);
       return;
     }
-    await window.FB.write(window.FB.docRef(), body);
+    lastWriteInfo = `送信中（${size}バイト）…`;
+    setSaveState('保存しています…', false);
+    // 応答が返らないまま黙って止まるのが一番わかりにくいので、時間で区切る
+    let timer;
+    const limit = new Promise((_, rej)=>{
+      timer = setTimeout(()=>rej(Object.assign(new Error('サーバーから応答がありません'), {code:'timeout'})), 30000);
+    });
+    try{
+      await Promise.race([window.FB.write(window.FB.docRef(), body), limit]);
+    } finally { clearTimeout(timer); }
     lastSaved = s;
     lastWriteInfo = `成功 ${new Date().toLocaleTimeString('ja-JP')} / ${size}バイト`;
     setSaveState('全員と同期済み', false);
@@ -2228,6 +2249,8 @@ async function pushData(){
     lastWriteInfo = `失敗 ${new Date().toLocaleTimeString('ja-JP')} / code=${e && e.code || '(なし)'} / ${e && e.message || e}`;
     setSaveState('保存できません（診断をご確認ください）', true);
     toast('保存できませんでした。左下の「診断」をご確認ください');
+  } finally {
+    pushing = false;
   }
 }
 
@@ -2272,9 +2295,14 @@ function startSync(){
         setSaveState('サーバーに接続しています…', false);
         return;
       }
+      // サンプルデータを書き込んではいけない。実データが一時的に読めないだけの
+      // 場合に、見本の内容で全員分を上書きしてしまうため。
+      // 画面からもサンプルを消して、空であることが分かるようにする。
+      contacts = []; clients = []; deals = []; tasks = []; taskProjects = []; schedule = []; dailyStats = {};
       syncReady = true;
-      lastSaved = '';
-      pushData();
+      lastSaved = snapshot();
+      renderAll();
+      setSaveState('サーバーにデータがありません（「復元」から戻してください）', true);
       return;
     }
     const hasLocalEdit = snap.metadata.hasPendingWrites;
