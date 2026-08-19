@@ -2174,7 +2174,7 @@ function tickSave(){
 const DOC_LIMIT = 1048576;
 
 /* どの版が動いているかを画面から確かめられるようにする */
-const BUILD_ID = '2026-08-19e';
+const BUILD_ID = '2026-08-19f';
 /* 直近の保存結果と、サーバーから受け取った内容の素性。診断画面で見せる */
 let lastWriteInfo = 'まだ保存していません';
 let lastServerInfo = 'まだ受信していません';
@@ -2224,6 +2224,42 @@ async function unpackDoc(d){
    0.6秒ごとに次の保存を積み増してしまい、いつまでも確定しなくなる。 */
 let pushing = false;
 
+/* ---------- 保存はRESTで行う ----------
+   SDK経由の書き込みが、この環境では応答を返さないまま止まる。
+   一方で素のRESTは読み書きとも通ることが確認できたため、
+   受信はSDKの購読、送信はRESTと役割を分ける。 */
+function toFsFields(o){
+  const f = {};
+  for(const [k, v] of Object.entries(o)){
+    if(typeof v === 'string')       f[k] = {stringValue: v};
+    else if(typeof v === 'boolean') f[k] = {booleanValue: v};
+    else if(typeof v === 'number')  f[k] = Number.isInteger(v) ? {integerValue: String(v)} : {doubleValue: v};
+    else return null;   // 入れ子がある形は扱わない。呼び出し側でSDKに任せる
+  }
+  return f;
+}
+
+async function restWrite(body){
+  const fields = toFsFields(body);
+  if(!fields) return false;                      // 圧縮できない環境。SDKに任せる
+  const token = await window.FB.idToken();
+  if(!token) return false;
+  // updateMask を付けないPATCHは、その内容で丸ごと置き換える。
+  // 古い形式の項目もこれで一緒に消える。
+  const url = `https://firestore.googleapis.com/v1/projects/${window.FB.projectId}`
+            + `/databases/(default)/documents/workspaces/default`;
+  const res = await fetch(url, {
+    method: 'PATCH',
+    headers: {'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json'},
+    body: JSON.stringify({fields}),
+  });
+  if(!res.ok){
+    const t = await res.text();
+    throw Object.assign(new Error(t.slice(0, 300)), {code: 'HTTP ' + res.status});
+  }
+  return true;
+}
+
 async function pushData(){
   if(pushing) return;
   const s = snapshot();
@@ -2245,11 +2281,16 @@ async function pushData(){
     const limit = new Promise((_, rej)=>{
       timer = setTimeout(()=>rej(Object.assign(new Error('サーバーから応答がありません'), {code:'timeout'})), 30000);
     });
+    let via = 'REST';
     try{
-      await Promise.race([window.FB.write(window.FB.docRef(), body), limit]);
+      const done = await Promise.race([restWrite(body), limit]);
+      if(!done){
+        via = 'SDK';
+        await Promise.race([window.FB.write(window.FB.docRef(), body), limit]);
+      }
     } finally { clearTimeout(timer); }
     lastSaved = s;
-    lastWriteInfo = `成功 ${new Date().toLocaleTimeString('ja-JP')} / ${size}バイト`;
+    lastWriteInfo = `成功 ${new Date().toLocaleTimeString('ja-JP')} / ${size}バイト / ${via}`;
     setSaveState('全員と同期済み', false);
   } catch(e){
     console.error('保存に失敗しました', e);
@@ -2327,6 +2368,8 @@ function startSync(){
       applyingRemote = true;   // 展開しているあいだに書き戻さないよう先に印をつける
       unpackDoc(snap.data()).then(d=>{
         applyingRemote = false;
+        // 自分が保存した内容がそのまま返ってきただけなら、画面を触らない
+        if(JSON.stringify(d) === lastSaved) return;
         applyRemote(d);
       }).catch(e=>{
         applyingRemote = false;
