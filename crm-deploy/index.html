@@ -2137,7 +2137,7 @@ function tickSave(){
 const DOC_LIMIT = 1048576;
 
 /* どの版が動いているかを画面から確かめられるようにする */
-const BUILD_ID = '2026-08-19i';
+const BUILD_ID = '2026-08-19j';
 /* 直近の保存結果と、サーバーから受け取った内容の素性。診断画面で見せる */
 let lastWriteInfo = 'まだ保存していません';
 let lastServerInfo = 'まだ受信していません';
@@ -2364,6 +2364,9 @@ async function pollRemote(){
     return;
   }
   try{
+    // 本文の取得には数秒かかる。その間に手元で変更されたものを、
+    // 取得し終えた古い内容で塗り潰さないよう、開始時点を控えておく。
+    const savedAtStart = lastSaved;
     const head = await restRead(true);
     if(!head){
       lastServerInfo = `確認 ${new Date().toLocaleTimeString('ja-JP')} / サーバーにデータがありません`;
@@ -2375,6 +2378,11 @@ async function pollRemote(){
 
     const full = await restRead(false);
     if(!full) return;
+    if(pushing || lastSaved !== savedAtStart || snapshot() !== lastSaved){
+      // 取得しているあいだに手元が動いた。この結果は捨てて、次の巡回に任せる。
+      lastServerInfo = `${new Date().toLocaleTimeString('ja-JP')} / 手元に未保存の変更があるため受信を見送り`;
+      return;
+    }
     const raw = fromFsFields(full.fields);
     const d = await unpackDoc(raw);
     remoteStamp = stamp;
