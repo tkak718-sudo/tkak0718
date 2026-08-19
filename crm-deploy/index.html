@@ -745,11 +745,12 @@
         <button onclick="exportData()" title="データをJSONファイルに書き出します">バックアップ</button>
         <button onclick="document.getElementById('import-file').click()" title="書き出したファイルから戻します">復元</button>
         <button onclick="openRestoreModal()" title="この端末に残っている直近の状態に戻します">復元ポイント</button>
+        <button onclick="openDiagModal()" title="保存できない原因を調べます">診断</button>
         <button class="danger" onclick="doSignOut()" title="ログアウトします">ログアウト</button>
       </div>
       <input type="file" id="import-file" accept=".json" style="display:none" onchange="importData(event)">
       <div class="footer-ver">ログイン中: <span id="signed-in-as">—</span></div>
-      <div class="footer-ver">crowdbasket CRM v2.0（共有版）</div>
+      <div class="footer-ver">crowdbasket CRM v2.0（共有版）<span id="build-id"></span></div>
     </div>
   </div>
 
@@ -1232,6 +1233,24 @@
     <div class="modal-foot">
       <div style="flex:1"></div>
       <button class="btn" onclick="closeModal('restore-modal')">閉じる</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="diag-modal">
+  <div class="modal">
+    <div class="modal-head"><h3>同期の診断</h3><span class="modal-close" onclick="closeModal('diag-modal')">&times;</span></div>
+    <div class="modal-body">
+      <p class="ai-desc" style="font-size:12px; color:var(--text-secondary); line-height:1.7;">
+        保存できない原因を調べるための画面です。「テスト保存」を押すと1回だけ保存を試し、
+        結果をそのまま表示します。うまくいかない場合は、この内容をそのままお知らせください。</p>
+      <pre id="diag-out" style="white-space:pre-wrap; word-break:break-all; font-size:12px; line-height:1.7; background:var(--bg-subtle,#f6f7f9); padding:12px; border-radius:8px; margin:0;"></pre>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" onclick="copyDiag()">この内容をコピー</button>
+      <div style="flex:1"></div>
+      <button class="btn btn-primary" onclick="runDiagWrite()">テスト保存</button>
+      <button class="btn" onclick="closeModal('diag-modal')">閉じる</button>
     </div>
   </div>
 </div>
@@ -2141,6 +2160,12 @@ function tickSave(){
    そこで本文はgzipで圧縮し、1つの文字列にして持たせる。 */
 const DOC_LIMIT = 1048576;
 
+/* どの版が動いているかを画面から確かめられるようにする */
+const BUILD_ID = '2026-08-19c';
+/* 直近の保存結果と、サーバーから受け取った内容の素性。診断画面で見せる */
+let lastWriteInfo = 'まだ保存していません';
+let lastServerInfo = 'まだ受信していません';
+
 function bytesToB64(u8){
   let s = '';
   const CH = 0x8000;   // 一度に渡す量が多すぎると引数の上限で落ちる
@@ -2190,15 +2215,19 @@ async function pushData(){
     const size = body.z ? body.z.length : s.length;
     if(size > DOC_LIMIT){
       // ここで止めないと、拒否された書き込みが端末側の変更ごと取り消されてしまう
-      setSaveState('データが大きすぎて保存できません（サポートにご連絡ください）', true);
+      lastWriteInfo = `上限超過のため中止（${size}バイト > ${DOC_LIMIT}）`;
+      setSaveState('データが大きすぎて保存できません（診断をご確認ください）', true);
       return;
     }
     await window.FB.write(window.FB.docRef(), body);
     lastSaved = s;
+    lastWriteInfo = `成功 ${new Date().toLocaleTimeString('ja-JP')} / ${size}バイト`;
     setSaveState('全員と同期済み', false);
   } catch(e){
     console.error('保存に失敗しました', e);
-    setSaveState('保存できません（' + (e && e.code ? e.code : '通信をご確認ください') + '）', true);
+    lastWriteInfo = `失敗 ${new Date().toLocaleTimeString('ja-JP')} / code=${e && e.code || '(なし)'} / ${e && e.message || e}`;
+    setSaveState('保存できません（診断をご確認ください）', true);
+    toast('保存できませんでした。左下の「診断」をご確認ください');
   }
 }
 
@@ -2249,6 +2278,15 @@ function startSync(){
       return;
     }
     const hasLocalEdit = snap.metadata.hasPendingWrites;
+    const raw = snap.data() || {};
+    lastServerInfo = [
+      `受信 ${new Date().toLocaleTimeString('ja-JP')}`,
+      `形式=${raw.z ? '圧縮あり(' + raw.z.length + '文字)' : '圧縮なし'}`,
+      `キャッシュ=${fromCache ? 'この端末' : 'サーバー'}`,
+      `送信待ち=${hasLocalEdit ? 'あり' : 'なし'}`,
+      `更新=${raw.updatedAt || '(なし)'} / ${raw.updatedBy || '(なし)'}`,
+      `会社=${raw.z ? '(圧縮)' : (Array.isArray(raw.contacts) ? raw.contacts.length + '件' : '(なし)')}`,
+    ].join(' / ');
     // 自分の書き込みの反響・AI判定中の上書きは無視する
     if(!hasLocalEdit && !aiRunning){
       applyingRemote = true;   // 展開しているあいだに書き戻さないよう先に印をつける
@@ -2346,6 +2384,55 @@ function applyRestorePoint(idx){
       pushData();
       toast(`${r.time} の状態に戻しました`);
     }, {okLabel:'この状態に戻す', danger:false});
+}
+
+/* ---------- 同期の診断 ----------
+   保存できないときに、原因をこちらで推測せずに済むよう、
+   実際の値とエラーをそのまま画面に出す。 */
+async function diagText(){
+  const s = snapshot();
+  let packed = '(圧縮に未対応のブラウザです)';
+  if(typeof CompressionStream === 'function'){
+    try{ packed = (await gzipToB64(s)).length + 'バイト'; }
+    catch(e){ packed = '圧縮に失敗: ' + (e && e.message || e); }
+  }
+  return [
+    `ビルド: ${BUILD_ID}`,
+    `ログイン: ${currentUserEmail || '(なし)'}`,
+    `同期の状態: ${document.getElementById('save-state')?.textContent || '-'}`,
+    `いまのデータ: 会社${contacts.length} / 顧客${clients.length} / タスク${tasks.length} / 案件${taskProjects.length} / 実績${Object.keys(dailyStats).length}日`,
+    `本文の長さ: ${s.length}文字`,
+    `保存する大きさ: ${packed}（上限 ${DOC_LIMIT}バイト）`,
+    `直近の保存: ${lastWriteInfo}`,
+    `直近の受信: ${lastServerInfo}`,
+    `圧縮の対応: ${typeof CompressionStream === 'function' ? 'あり' : 'なし'}`,
+    `ブラウザ: ${navigator.userAgent}`,
+  ].join('\n');
+}
+
+async function showDiag(){
+  const el = document.getElementById('diag-out');
+  if(el) el.textContent = await diagText();
+}
+
+function openDiagModal(){
+  openModal('diag-modal');
+  showDiag();
+}
+
+/* 1回だけ保存を試し、結果をそのまま出す */
+async function runDiagWrite(){
+  const el = document.getElementById('diag-out');
+  if(el) el.textContent = '保存を試しています…';
+  lastSaved = '';           // 変化がなくても必ず書きに行かせる
+  await pushData();
+  showDiag();
+}
+
+function copyDiag(){
+  const t = document.getElementById('diag-out')?.textContent || '';
+  if(navigator.clipboard) navigator.clipboard.writeText(t).then(()=>toast('コピーしました'), ()=>fallbackCopy(t));
+  else fallbackCopy(t);
 }
 
 /* バックアップ（JSONファイルとして書き出し） */
@@ -5085,6 +5172,8 @@ window.addEventListener('fb-ready', ()=>{
     document.getElementById('app').style.display = 'flex';
     const who = document.getElementById('signed-in-as');
     if(who) who.textContent = currentUserEmail;
+    const bid = document.getElementById('build-id');
+    if(bid) bid.textContent = ' / ' + BUILD_ID;
 
     setSaveState('接続しています…', false);
     startSync();
