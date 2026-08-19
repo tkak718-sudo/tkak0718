@@ -744,6 +744,7 @@
       <div class="data-actions">
         <button onclick="exportData()" title="データをJSONファイルに書き出します">バックアップ</button>
         <button onclick="document.getElementById('import-file').click()" title="書き出したファイルから戻します">復元</button>
+        <button onclick="openRestoreModal()" title="この端末に残っている直近の状態に戻します">復元ポイント</button>
         <button class="danger" onclick="doSignOut()" title="ログアウトします">ログアウト</button>
       </div>
       <input type="file" id="import-file" accept=".json" style="display:none" onchange="importData(event)">
@@ -1219,6 +1220,22 @@
 </div>
 
 <!-- Task Modal -->
+<div class="modal-overlay" id="restore-modal">
+  <div class="modal">
+    <div class="modal-head"><h3>復元ポイント</h3><span class="modal-close" onclick="closeModal('restore-modal')">&times;</span></div>
+    <div class="modal-body">
+      <p class="ai-desc" style="font-size:12px; color:var(--text-secondary); line-height:1.7;">
+        同期で内容が差し替わる直前の状態を、この端末に自動で控えています。誤って上書きされた場合はここから戻せます。
+        控えはこの端末にのみ保存され、新しいものから最大8件まで残ります。</p>
+      <div id="rp-list"></div>
+    </div>
+    <div class="modal-foot">
+      <div style="flex:1"></div>
+      <button class="btn" onclick="closeModal('restore-modal')">閉じる</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="project-modal">
   <div class="modal">
     <div class="modal-head"><h3>案件を管理</h3><span class="modal-close" onclick="closeModal('project-modal')">&times;</span></div>
@@ -2137,6 +2154,9 @@ async function pushData(){
 
 /* 受信した内容を画面に反映する */
 function applyRemote(d){
+  // 差し替える前に、いまの内容をこの端末に控えておく。
+  // 誤った上書きが届いた場合でも、直前の状態に戻せるようにするため。
+  if(syncReady) saveRestorePoint(snapshot(), '同期で差し替わる前');
   applyingRemote = true;
   try{
     if(Array.isArray(d.contacts)) contacts = d.contacts;
@@ -2164,14 +2184,20 @@ function applyRemote(d){
 
 function startSync(){
   window.FB.watch(window.FB.docRef(), snap=>{
+    const fromCache = snap.metadata.fromCache;
     if(!snap.exists()){
-      // 初回だけ、いまのサンプルデータを初期値として書き込む
+      // この端末のキャッシュがまだ空なだけの「無い」を、本当に無いと誤認してはいけない。
+      // ここでサンプルデータを書き込むと、サーバー上の実データを丸ごと潰してしまう。
+      // サーバーが「無い」と答えた場合に限って初期化する。
+      if(fromCache){
+        setSaveState('サーバーに接続しています…', false);
+        return;
+      }
       syncReady = true;
       lastSaved = '';
       pushData();
       return;
     }
-    const fromCache = snap.metadata.fromCache;
     const hasLocalEdit = snap.metadata.hasPendingWrites;
     if(!hasLocalEdit && !aiRunning) applyRemote(snap.data());   // 自分の書き込みの反響・AI判定中の上書きは無視する
     syncReady = true;
@@ -2180,6 +2206,85 @@ function startSync(){
     console.error(err);
     setSaveState('同期できません（権限か通信をご確認ください）', true);
   });
+}
+
+/* ---------- 復元ポイント（この端末に残す控え） ----------
+   同期は最後に書き込まれた内容が正になるため、誤った上書きが起きると
+   サーバー側からは元に戻せない。そこで直近の状態をこの端末に積んでおく。 */
+const RESTORE_KEY = 'crmRestorePoints';
+const RESTORE_MAX = 8;
+
+function loadRestorePoints(){
+  try{
+    const v = JSON.parse(localStorage.getItem(RESTORE_KEY) || '[]');
+    return Array.isArray(v) ? v : [];
+  }catch(e){ return []; }
+}
+
+function saveRestorePoint(json, label){
+  try{
+    const list = loadRestorePoints();
+    if(list.length && list[0].data === json) return;   // 中身が同じなら増やさない
+    list.unshift({time: nowDateTimeStr(), label, data: json});
+    let keep = list.slice(0, RESTORE_MAX);
+    // 保存領域に入りきらない場合は、古いものから減らして入るところまで残す
+    while(keep.length){
+      try{ localStorage.setItem(RESTORE_KEY, JSON.stringify(keep)); return; }
+      catch(e){ keep = keep.slice(0, keep.length - 1); }
+    }
+  }catch(e){ /* 控えが取れなくても本来の処理は止めない */ }
+}
+
+/* 復元ポイントの中身を、件数の形で要約して見せる */
+function restorePointSummary(json){
+  try{
+    const d = JSON.parse(json);
+    const c = k => Array.isArray(d[k]) ? d[k].length : 0;
+    return `新規クライアント${c('contacts')} / クライアント${c('clients')} / 取引${c('deals')} / タスク${c('tasks')}`;
+  }catch(e){ return '内容を読み取れません'; }
+}
+
+function openRestoreModal(){
+  const box = document.getElementById('rp-list');
+  const list = loadRestorePoints();
+  if(!list.length){
+    box.innerHTML = '<div class="task-hint">まだ控えがありません。この端末で同期が動くと自動でたまります。</div>';
+  } else {
+    box.innerHTML = list.map((r, i)=>`<div class="pj-row">
+      <div style="flex:1; min-width:0;">
+        <div style="font-size:12.5px; font-weight:700;">${escapeHtml(r.time)}<span style="font-weight:500; color:var(--text-faint);">（${escapeHtml(r.label||'')}）</span></div>
+        <div style="font-size:11.5px; color:var(--text-faint);">${escapeHtml(restorePointSummary(r.data))}</div>
+      </div>
+      <button class="btn btn-sm" onclick="applyRestorePoint(${i})">この状態に戻す</button>
+    </div>`).join('');
+  }
+  openModal('restore-modal');
+}
+
+function applyRestorePoint(idx){
+  const r = loadRestorePoints()[idx];
+  if(!r){ toast('控えが見つかりません'); return; }
+  showConfirm(
+    `${r.time} の状態に戻します。いまの内容は上書きされ、全員の画面に反映されます。よろしいですか?\n\n${restorePointSummary(r.data)}`,
+    ()=>{
+      let d;
+      try{ d = JSON.parse(r.data); }catch(e){ toast('控えを読み取れませんでした'); return; }
+      // 戻す直前の状態も控えておく（戻し方を間違えても引き返せるように）
+      saveRestorePoint(snapshot(), '復元する前');
+      if(Array.isArray(d.contacts)) contacts = d.contacts;
+      if(Array.isArray(d.clients))  clients  = d.clients;
+      if(Array.isArray(d.deals))    deals    = d.deals;
+      if(Array.isArray(d.tasks))    tasks    = d.tasks;
+      if(Array.isArray(d.taskProjects)) taskProjects = d.taskProjects;
+      if(Array.isArray(d.schedule)) schedule = d.schedule;
+      if(d.dailyStats && typeof d.dailyStats === 'object') dailyStats = d.dailyStats;
+      if(d.nextIds && typeof d.nextIds === 'object') nextIds = Object.assign({}, nextIds, d.nextIds);
+      Object.keys(selection).forEach(k=>selection[k].clear());
+      closeModal('restore-modal');
+      renderAll();
+      pushData();
+      toast(`${r.time} の状態に戻しました`);
+    }, {okLabel:'この状態に戻す', danger:false});
 }
 
 /* バックアップ（JSONファイルとして書き出し） */
