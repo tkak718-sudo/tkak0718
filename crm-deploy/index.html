@@ -2137,7 +2137,7 @@ function tickSave(){
 const DOC_LIMIT = 1048576;
 
 /* どの版が動いているかを画面から確かめられるようにする */
-const BUILD_ID = '2026-08-19h';
+const BUILD_ID = '2026-08-19i';
 /* 直近の保存結果と、サーバーから受け取った内容の素性。診断画面で見せる */
 let lastWriteInfo = 'まだ保存していません';
 let lastServerInfo = 'まだ受信していません';
@@ -2256,6 +2256,19 @@ async function pushData(){
     remoteStamp = body.updatedAt;   // 自分の保存を取り直さない
     lastWriteInfo = `成功 ${new Date().toLocaleTimeString('ja-JP')} / ${size}バイト / ${via}`;
     setSaveState('全員と同期済み', false);
+    // 保存できたつもりで古いまま、が今回いちばん困る形だったので読み直して確かめる
+    try{
+      const back = await restRead(true);
+      const got = back && back.fields && back.fields.updatedAt && back.fields.updatedAt.stringValue;
+      if(got !== body.updatedAt){
+        staleReads = true;
+        lastWriteInfo += ` / 確認: 書いた${body.updatedAt} → 読めた${got || '(なし)'}`;
+        setSaveState('保存が反映されていません（診断をご確認ください）', true);
+      } else {
+        staleReads = false;
+        lastWriteInfo += ' / 確認OK';
+      }
+    }catch(e){ lastWriteInfo += ' / 確認できず: ' + (e && e.message || e); }
   } catch(e){
     console.error('保存に失敗しました', e);
     lastWriteInfo = `失敗 ${new Date().toLocaleTimeString('ja-JP')} / code=${e && e.code || '(なし)'} / ${e && e.message || e}`;
@@ -2302,6 +2315,9 @@ function applyRemote(d){
    毎回183KBを取ると重いので、まず更新時刻だけを確かめる。 */
 const POLL_MS = 5000;
 let remoteStamp = '';   // 最後に取り込んだサーバー側の更新時刻
+/* 保存したのに読み直すと古い内容が返る状態。ここに入ったら受信を止める。
+   古い内容で手元の変更を上書きしてしまうのが、いちばん被害が大きいため。 */
+let staleReads = false;
 
 function fsVal(v){
   if('stringValue'    in v) return v.stringValue;
@@ -2330,7 +2346,11 @@ function docUrl(mask){
 /* サーバーの内容を読む。存在しない場合は null を返す */
 async function restRead(mask){
   const token = await window.FB.idToken();
-  const res = await fetch(docUrl(mask), {headers: {'Authorization': 'Bearer ' + token}});
+  // 途中の経路に古い内容を返させない。保存したのに古いままに見える事故を防ぐ
+  const res = await fetch(docUrl(mask), {
+    cache: 'no-store',
+    headers: {'Authorization': 'Bearer ' + token, 'Cache-Control': 'no-cache', 'Pragma': 'no-cache'},
+  });
   if(res.status === 404) return null;
   if(!res.ok) throw Object.assign(new Error((await res.text()).slice(0, 300)), {code: 'HTTP ' + res.status});
   return await res.json();
@@ -2339,6 +2359,10 @@ async function restRead(mask){
 /* サーバーに変化があれば取り込む */
 async function pollRemote(){
   if(pushing || aiRunning || applyingRemote) return;   // 自分の保存中・判定中は触らない
+  if(staleReads){
+    setSaveState('保存が反映されていません（診断をご確認ください）', true);
+    return;
+  }
   try{
     const head = await restRead(true);
     if(!head){
@@ -5332,7 +5356,16 @@ window.addEventListener('fb-ready', ()=>{
     });
 
     setInterval(tickSave, 600);
-    window.addEventListener('beforeunload', ()=>{ if(syncReady) pushData(); });
+    // 保存は1〜10秒ほどかかることがある。終わる前に再読み込みされると変更が消えるため、
+    // 未保存のまま閉じようとしたらブラウザに確認させる。
+    window.addEventListener('beforeunload', ev=>{
+      if(!syncReady) return;
+      if(pushing || snapshot() !== lastSaved){
+        pushData();
+        ev.preventDefault();
+        ev.returnValue = '';
+      }
+    });
     document.addEventListener('visibilitychange', ()=>{ if(document.hidden && syncReady) pushData(); });
   });
 });
