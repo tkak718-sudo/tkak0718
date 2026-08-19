@@ -2318,12 +2318,17 @@ function importData(ev){
     catch(e){ toast('このファイルは読み込めません'); return; }
     if(!d || !Array.isArray(d.contacts)){ toast('バックアップファイルの形式ではありません'); return; }
     showConfirm('いまのデータをバックアップの内容で置き換えます。これは全員の画面に反映されます。よろしいですか?', ()=>{
+      // 置き換える前の状態を控えておく（復元するファイルを間違えても引き返せるように）
+      saveRestorePoint(snapshot(), 'バックアップから復元する前');
       contacts = d.contacts;
       clients  = Array.isArray(d.clients)  ? d.clients  : [];
       deals    = Array.isArray(d.deals)    ? d.deals    : [];
       tasks    = Array.isArray(d.tasks)    ? d.tasks    : [];
       taskProjects = Array.isArray(d.taskProjects) ? d.taskProjects : [];
       schedule = Array.isArray(d.schedule) ? d.schedule : [];
+      // データ分析の日別実績もバックアップに入っている。ここで戻さないと、
+      // 復元したとたんに送信数などの記録だけが空になってしまう。
+      if(d.dailyStats && typeof d.dailyStats === 'object') dailyStats = d.dailyStats;
       if(d.nextIds) nextIds = Object.assign({}, nextIds, d.nextIds);
       Object.keys(selection).forEach(k=>selection[k].clear());
       renderAll();
