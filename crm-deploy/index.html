@@ -703,6 +703,7 @@
 </div>
 
 <div id="app" style="display:none">
+<div id="loading" style="position:fixed; inset:0; z-index:900; display:flex; align-items:center; justify-content:center; background:var(--bg,#fff); font-size:13px; color:#64748b;">データを読み込んでいます…</div>
   <!-- Sidebar -->
   <div class="sidebar">
     <div class="sidebar-brand">
@@ -1807,7 +1808,7 @@ contact@sample.co.jp"></textarea>
 
 <script>
 /* ============================================================
-   crowdbasket CRM — sample in-memory data & app logic
+   crowdbasket CRM — app logic
    ============================================================ */
 
 const SALES_REPS = [
@@ -2078,58 +2079,20 @@ function ownerName(id){
 }
 function initials(name){ return name ? name[0] : '?'; }
 
-/* ---- sample data ---- */
+/* ---- データの入れ物 ----
+   見本データは持たない。読み込みが終わる前に見本が見えてしまううえ、
+   それをサーバーへ書き出してしまう事故が実際に起きたため。 */
 /* 新規クライアントは会社単位で管理する。name が会社名そのもの。 */
-let contacts = [
-  {id:1, name:'株式会社フロンティア', email:'info@frontier.co.jp', phone:'03-1234-5601', inquiryForm:'https://frontier.co.jp/contact', owner:'u1', created:'2026-07-14', status:'未対応', statusUpdated:'2026/07/14 09:20', notes:[]},
-  {id:2, name:'合同会社ブルーム', email:'contact@bloom.co.jp', phone:'06-2345-5602', inquiryForm:'', owner:'u2', created:'2026-07-13', status:'連絡済', statusUpdated:'2026/07/13 14:05', notes:[{text:'初回架電、来週改めて連絡する約束', time:'2026/07/13 14:10', author:'石井 啓章'}]},
-  {id:3, name:'株式会社ナカムラ工芸', email:'', phone:'090-3456-5603', inquiryForm:'https://nakamura-kougei.jp/inquiry', owner:null, created:'2026-07-13', status:'未対応', statusUpdated:'2026/07/13 10:00', notes:[]},
-  {id:4, name:'株式会社サミット物流', email:'info@summit-logi.jp', phone:'052-4567-5604', inquiryForm:'', owner:'u1', created:'2026-07-11', status:'フォロー中', statusUpdated:'2026/07/12 11:30', notes:[{text:'資料送付済み。来週火曜に電話フォロー予定', time:'2026/07/12 11:32', author:'小熊 夢樹'}]},
-  {id:5, name:'加藤製作所株式会社', email:'', phone:'080-5678-5605', inquiryForm:'', owner:null, created:'2026-07-10', status:'未対応', statusUpdated:'2026/07/10 09:00', notes:[]},
-  {id:6, name:'株式会社グリーンテック', email:'info@greentech.jp', phone:'011-6789-5606', inquiryForm:'https://greentech.jp/contact', owner:'u1', created:'2026-07-09', status:'対応完了', statusUpdated:'2026/07/11 16:40', notes:[]},
-  {id:7, name:'ウィズダム株式会社', email:'info@wisdom.co.jp', phone:'092-7890-5607', inquiryForm:'', owner:'u2', created:'2026-07-08', status:'フォロー中', statusUpdated:'2026/07/09 13:15', notes:[]},
-  {id:8, name:'松本デザイン株式会社', email:'', phone:'070-8901-5608', inquiryForm:'', owner:null, created:'2026-07-07', status:'未対応', statusUpdated:'2026/07/07 09:45', notes:[]},
-];
-
-let clients = [
-  {id:1, name:'株式会社ネクストコア', industry:'IT・ソフトウェア', email:'info@nextcore.co.jp', phone:'03-1111-2201', owner:'u1', created:'2026-06-20', status:'対応完了', statusUpdated:'2026/07/02 10:15', notes:[{text:'基幹システム刷新の予算感をヒアリング済み。次回は役員同席予定', time:'2026/07/02 10:20', author:'小熊 夢樹'}], inquiryForm:'https://nextcore.co.jp/contact'},
-  {id:2, name:'扶桑製薬株式会社', industry:'製薬', email:'contact@fuso-pharma.jp', phone:'06-2222-2202', owner:'u2', created:'2026-06-25', status:'フォロー中', statusUpdated:'2026/07/10 15:00', notes:[], inquiryForm:'https://fuso-pharma.jp/inquiry'},
-  {id:3, name:'株式会社ライトハウス建設', industry:'建設', email:'info@lighthouse-c.jp', phone:'092-3333-2203', owner:null, created:'2026-06-28', status:'未対応', statusUpdated:'2026/06/28 09:30', notes:[], inquiryForm:''},
-  {id:4, name:'アオゾラ食品株式会社', industry:'食品製造', email:'info@aozora-foods.jp', phone:'011-4444-2204', owner:'u1', created:'2026-07-01', status:'連絡済', statusUpdated:'2026/07/05 11:00', notes:[], inquiryForm:''},
-  {id:5, name:'株式会社メリディアン商事', industry:'商社', email:'sales@meridian.co.jp', phone:'052-5555-2205', owner:'u1', created:'2026-07-03', status:'フォロー中', statusUpdated:'2026/07/12 09:50', notes:[{text:'在庫管理システムの要件定義書を送付。来週返信予定', time:'2026/07/12 09:55', author:'小熊 夢樹'}], inquiryForm:'https://meridian-shoji.co.jp/contact'},
-  {id:6, name:'とわ美容クリニック', industry:'医療・美容', email:'info@towa-clinic.jp', phone:'03-6666-2206', owner:null, created:'2026-07-06', status:'未対応', statusUpdated:'2026/07/06 13:20', notes:[], inquiryForm:''},
-  {id:7, name:'株式会社ヤマブキ運輸', industry:'運輸・物流', email:'contact@yamabuki-un.jp', phone:'022-7777-2207', owner:'u2', created:'2026-07-09', status:'対応完了', statusUpdated:'2026/07/10 17:10', notes:[], inquiryForm:''},
-];
-
-let deals = [
-  {id:1, clientId:1, client:'株式会社ネクストコア', title:'基幹システム刷新案件', amount:8500000, owner:'u1', updated:'2026-07-15', statusChangedAt:'2026/07/15 10:30', status:'商談予定', notes:[]},
-  {id:2, clientId:2, client:'扶桑製薬株式会社', title:'マーケティングDX支援', amount:4200000, owner:'u2', updated:'2026-07-14', statusChangedAt:'2026/07/14 16:00', status:'見込みあり', notes:[]},
-  {id:3, clientId:4, client:'アオゾラ食品株式会社', title:'ECサイト構築', amount:3100000, owner:'u1', updated:'2026-07-13', statusChangedAt:'2026/07/13 09:40', status:'アポイント設定済', notes:[]},
-  {id:4, clientId:5, client:'株式会社メリディアン商事', title:'在庫管理システム導入', amount:6000000, owner:'u1', updated:'2026-07-12', statusChangedAt:'2026/07/12 14:20', status:'保留', notes:[{text:'先方の予算承認待ち。8月上旬に再確認予定', time:'2026/07/12 14:25', author:'小熊 夢樹'}]},
-  {id:5, clientId:7, client:'株式会社ヤマブキ運輸', title:'配送ルート最適化SaaS', amount:2400000, owner:'u2', updated:'2026-07-10', statusChangedAt:'2026/07/10 17:15', status:'成立', notes:[]},
-  {id:6, clientId:6, client:'とわ美容クリニック', title:'予約管理システム', amount:980000, owner:null, updated:'2026-07-08', statusChangedAt:'2026/07/08 11:00', status:'失注', notes:[]},
-  {id:7, clientId:3, client:'株式会社ライトハウス建設', title:'原価管理ツール導入', amount:5200000, owner:'u2', updated:'2026-07-07', statusChangedAt:'2026/07/07 10:05', status:'商談予定', notes:[]},
-  {id:8, clientId:1, client:'株式会社ネクストコア', title:'広告運用代行', amount:1800000, owner:'u1', updated:'2026-07-05', statusChangedAt:'2026/07/05 09:15', status:'成立', notes:[]},
-];
-
-let tasks = [
-  {id:1, title:'伊藤様へ初回架電', sub:'株式会社フロンティア', owner:'u1', priority:'high', done:false},
-  {id:2, title:'扶桑製薬 見積書送付', sub:'扶桑製薬株式会社', owner:'u2', priority:'high', done:false},
-  {id:3, title:'ネクストコア 商談資料準備', sub:'基幹システム刷新案件', owner:'u1', priority:'mid', done:false},
-  {id:4, title:'メリディアン商事 フォローアップ', sub:'在庫管理システム導入', owner:'u1', priority:'low', done:true},
-  {id:5, title:'小林様に事例資料を送付', sub:'株式会社サミット物流', owner:'u1', priority:'mid', done:false},
-];
+let contacts = [];
+let clients  = [];
+let deals    = [];
+let tasks    = [];
 
 /* スケジュール表示は廃止したが、保存済みの予定を失わないようデータは保持している。
    画面に出す場所は無いため、同期のためだけに読み書きしている。 */
-let schedule = [
-  {id:1, time:'10:00', title:'株式会社ネクストコア 定例MTG', sub:'オンライン / 60分'},
-  {id:2, time:'13:30', title:'扶桑製薬 見積提示', sub:'先方オフィス訪問'},
-  {id:3, time:'15:00', title:'社内マーケティング会議', sub:'会議室A'},
-  {id:4, time:'17:00', title:'アオゾラ食品 架電フォロー', sub:'電話 / 15分'},
-];
+let schedule = [];
 
-let nextIds = {contact: 9, client: 8, deal: 9, task: 6, schedule: 5, project: 1};
+let nextIds = {contact: 1, client: 1, deal: 1, task: 1, schedule: 1, project: 1};
 
 /* 日次実績。キーは 'YYYY-MM-DD'、値は各件数 */
 let dailyStats = {};
@@ -2174,7 +2137,7 @@ function tickSave(){
 const DOC_LIMIT = 1048576;
 
 /* どの版が動いているかを画面から確かめられるようにする */
-const BUILD_ID = '2026-08-19g';
+const BUILD_ID = '2026-08-19h';
 /* 直近の保存結果と、サーバーから受け取った内容の素性。診断画面で見せる */
 let lastWriteInfo = 'まだ保存していません';
 let lastServerInfo = 'まだ受信していません';
@@ -5362,7 +5325,11 @@ window.addEventListener('fb-ready', ()=>{
     if(bid) bid.textContent = ' / ' + BUILD_ID;
 
     setSaveState('接続しています…', false);
-    startSync();
+    // 読み込みが終わるまで中身を見せない。中途半端な状態を本物と誤解させないため
+    startSync().finally(()=>{
+      const ld = document.getElementById('loading');
+      if(ld) ld.remove();
+    });
 
     setInterval(tickSave, 600);
     window.addEventListener('beforeunload', ()=>{ if(syncReady) pushData(); });
