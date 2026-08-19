@@ -1249,6 +1249,7 @@
     <div class="modal-foot">
       <button class="btn" onclick="copyDiag()">この内容をコピー</button>
       <div style="flex:1"></div>
+      <button class="btn" onclick="runNetTest()">通信テスト</button>
       <button class="btn btn-primary" onclick="runDiagWrite()">テスト保存</button>
       <button class="btn" onclick="closeModal('diag-modal')">閉じる</button>
     </div>
@@ -1774,8 +1775,11 @@ contact@sample.co.jp"></textarea>
     // 社内のプロキシやセキュリティ製品が、通常の通信方式（WebChannel）の
     // 送信だけを止めてしまうことがある。受信はできるのに保存だけ終わらない、
     // という症状になるため、通じる方式を自動で選ばせる。
+    // 通常の通信方式(WebChannel)は、社内のプロキシやセキュリティ製品に
+    // 送信だけ止められることがある。受信はできるのに保存だけ終わらない、
+    // という症状が出ていたため、確実に通る方式に固定する。
     const db   = initializeFirestore(app, {
-      experimentalAutoDetectLongPolling: true,
+      experimentalForceLongPolling: true,
       useFetchStreams: false,
     });
     // オフラインでも直前の内容を表示できるようにする（複数タブで開くと片方だけ有効）
@@ -1783,6 +1787,9 @@ contact@sample.co.jp"></textarea>
 
     window.FB = {
       auth, db,
+      projectId: firebaseConfig.projectId,
+      // SDKを通さずに直接試すための材料（診断で使う）
+      idToken: ()=> auth.currentUser ? auth.currentUser.getIdToken() : Promise.resolve(''),
       signIn: (em, pw)=>signInWithEmailAndPassword(auth, em, pw),
       signOut: ()=>signOut(auth),
       onAuth: cb=>onAuthStateChanged(auth, cb),
@@ -2167,7 +2174,7 @@ function tickSave(){
 const DOC_LIMIT = 1048576;
 
 /* どの版が動いているかを画面から確かめられるようにする */
-const BUILD_ID = '2026-08-19d';
+const BUILD_ID = '2026-08-19e';
 /* 直近の保存結果と、サーバーから受け取った内容の素性。診断画面で見せる */
 let lastWriteInfo = 'まだ保存していません';
 let lastServerInfo = 'まだ受信していません';
@@ -2446,6 +2453,55 @@ async function showDiag(){
 function openDiagModal(){
   openModal('diag-modal');
   showDiag();
+}
+
+/* SDKを通さず、素の通信で読み書きを試す。
+   これが通ってSDKだけ止まるなら通信方式の問題、
+   これも止まるなら回線かルールの問題、と切り分けられる。 */
+async function runNetTest(){
+  const el = document.getElementById('diag-out');
+  const log = [];
+  const show = ()=>{ if(el) el.textContent = log.join('\n'); };
+  log.push('通信テストを実行しています…'); show();
+
+  const withLimit = (pr, ms)=>Promise.race([pr,
+    new Promise((_, rej)=>setTimeout(()=>rej(new Error(`応答なし(${ms/1000}秒)`)), ms))]);
+
+  let token = '';
+  try{
+    token = await withLimit(window.FB.idToken(), 15000);
+    log.push(`ログイン情報の取得: OK (${token.length}文字)`);
+  }catch(e){ log.push(`ログイン情報の取得: 失敗 ${e.message || e}`); show(); return; }
+  show();
+
+  const base = `https://firestore.googleapis.com/v1/projects/${window.FB.projectId}/databases/(default)/documents`;
+  const head = {'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json'};
+
+  // 読み込み
+  try{
+    const t0 = Date.now();
+    const res = await withLimit(fetch(`${base}/workspaces/default`, {headers: head}), 20000);
+    const body = await res.text();
+    log.push(`読み込み: HTTP ${res.status} / ${body.length}文字 / ${Date.now()-t0}ms`);
+    if(!res.ok) log.push('　' + body.slice(0, 300));
+  }catch(e){ log.push(`読み込み: 失敗 ${e.message || e}`); }
+  show();
+
+  // 書き込み（本番データには触らない専用の場所に書く）
+  try{
+    const t0 = Date.now();
+    const res = await withLimit(fetch(`${base}/workspaces/_conntest`, {
+      method: 'PATCH', headers: head,
+      body: JSON.stringify({fields: {t: {stringValue: new Date().toISOString()}}}),
+    }), 20000);
+    const body = await res.text();
+    log.push(`書き込み: HTTP ${res.status} / ${Date.now()-t0}ms`);
+    if(!res.ok) log.push('　' + body.slice(0, 300));
+  }catch(e){ log.push(`書き込み: 失敗 ${e.message || e}`); }
+  show();
+
+  log.push('', await diagText());
+  show();
 }
 
 /* 1回だけ保存を試し、結果をそのまま出す */
