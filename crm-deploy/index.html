@@ -2174,7 +2174,7 @@ function tickSave(){
 const DOC_LIMIT = 1048576;
 
 /* どの版が動いているかを画面から確かめられるようにする */
-const BUILD_ID = '2026-08-19f';
+const BUILD_ID = '2026-08-19g';
 /* 直近の保存結果と、サーバーから受け取った内容の素性。診断画面で見せる */
 let lastWriteInfo = 'まだ保存していません';
 let lastServerInfo = 'まだ受信していません';
@@ -2290,6 +2290,7 @@ async function pushData(){
       }
     } finally { clearTimeout(timer); }
     lastSaved = s;
+    remoteStamp = body.updatedAt;   // 自分の保存を取り直さない
     lastWriteInfo = `成功 ${new Date().toLocaleTimeString('ja-JP')} / ${size}バイト / ${via}`;
     setSaveState('全員と同期済み', false);
   } catch(e){
@@ -2332,17 +2333,86 @@ function applyRemote(d){
   }
 }
 
-function startSync(){
-  window.FB.watch(window.FB.docRef(), snap=>{
-    const fromCache = snap.metadata.fromCache;
-    if(!snap.exists()){
-      // この端末のキャッシュがまだ空なだけの「無い」を、本当に無いと誤認してはいけない。
-      // ここでサンプルデータを書き込むと、サーバー上の実データを丸ごと潰してしまう。
-      // サーバーが「無い」と答えた場合に限って初期化する。
-      if(fromCache){
-        setSaveState('サーバーに接続しています…', false);
-        return;
-      }
+/* ---------- 受信もRESTで行う ----------
+   SDKの購読は、この環境では読み込みも通知も返さないことが分かったため使わない。
+   一定間隔でサーバーを見に行き、更新があったときだけ本文を取りにいく。
+   毎回183KBを取ると重いので、まず更新時刻だけを確かめる。 */
+const POLL_MS = 5000;
+let remoteStamp = '';   // 最後に取り込んだサーバー側の更新時刻
+
+function fsVal(v){
+  if('stringValue'    in v) return v.stringValue;
+  if('integerValue'   in v) return Number(v.integerValue);
+  if('doubleValue'    in v) return v.doubleValue;
+  if('booleanValue'   in v) return v.booleanValue;
+  if('nullValue'      in v) return null;
+  if('timestampValue' in v) return v.timestampValue;
+  if('arrayValue'     in v) return (v.arrayValue.values || []).map(fsVal);
+  if('mapValue'       in v) return fromFsFields(v.mapValue.fields);
+  return null;
+}
+
+function fromFsFields(fields){
+  const o = {};
+  for(const [k, v] of Object.entries(fields || {})) o[k] = fsVal(v);
+  return o;
+}
+
+function docUrl(mask){
+  const base = `https://firestore.googleapis.com/v1/projects/${window.FB.projectId}`
+             + `/databases/(default)/documents/workspaces/default`;
+  return mask ? base + '?mask.fieldPaths=updatedAt&mask.fieldPaths=updatedBy' : base;
+}
+
+/* サーバーの内容を読む。存在しない場合は null を返す */
+async function restRead(mask){
+  const token = await window.FB.idToken();
+  const res = await fetch(docUrl(mask), {headers: {'Authorization': 'Bearer ' + token}});
+  if(res.status === 404) return null;
+  if(!res.ok) throw Object.assign(new Error((await res.text()).slice(0, 300)), {code: 'HTTP ' + res.status});
+  return await res.json();
+}
+
+/* サーバーに変化があれば取り込む */
+async function pollRemote(){
+  if(pushing || aiRunning || applyingRemote) return;   // 自分の保存中・判定中は触らない
+  try{
+    const head = await restRead(true);
+    if(!head){
+      lastServerInfo = `確認 ${new Date().toLocaleTimeString('ja-JP')} / サーバーにデータがありません`;
+      return;
+    }
+    const f = head.fields || {};
+    const stamp = (f.updatedAt && f.updatedAt.stringValue) || '';
+    if(stamp && stamp === remoteStamp) return;         // 変化なし
+
+    const full = await restRead(false);
+    if(!full) return;
+    const raw = fromFsFields(full.fields);
+    const d = await unpackDoc(raw);
+    remoteStamp = stamp;
+    lastServerInfo = [
+      `受信 ${new Date().toLocaleTimeString('ja-JP')}`,
+      `形式=${raw.z ? '圧縮あり(' + raw.z.length + '文字)' : '圧縮なし'}`,
+      `更新=${raw.updatedAt || '(なし)'} / ${raw.updatedBy || '(なし)'}`,
+      `会社=${Array.isArray(d.contacts) ? d.contacts.length + '件' : '(なし)'}`,
+    ].join(' / ');
+    setSaveState('全員と同期済み', false);
+    // 自分が保存した内容がそのまま返ってきただけなら、画面を触らない
+    if(JSON.stringify(d) === lastSaved) return;
+    applyRemote(d);
+  }catch(e){
+    console.error('受信できません', e);
+    lastServerInfo = `失敗 ${new Date().toLocaleTimeString('ja-JP')} / code=${e && e.code || '(なし)'} / ${e && e.message || e}`;
+    setSaveState('受信できません（診断をご確認ください）', true);
+  }
+}
+
+async function startSync(){
+  setSaveState('読み込んでいます…', false);
+  try{
+    const full = await restRead(false);
+    if(!full){
       // サンプルデータを書き込んではいけない。実データが一時的に読めないだけの
       // 場合に、見本の内容で全員分を上書きしてしまうため。
       // 画面からもサンプルを消して、空であることが分かるようにする。
@@ -2351,38 +2421,27 @@ function startSync(){
       lastSaved = snapshot();
       renderAll();
       setSaveState('サーバーにデータがありません（「復元」から戻してください）', true);
-      return;
+    } else {
+      const raw = fromFsFields(full.fields);
+      remoteStamp = raw.updatedAt || '';
+      lastServerInfo = [
+        `受信 ${new Date().toLocaleTimeString('ja-JP')}`,
+        `形式=${raw.z ? '圧縮あり(' + raw.z.length + '文字)' : '圧縮なし'}`,
+        `更新=${raw.updatedAt || '(なし)'} / ${raw.updatedBy || '(なし)'}`,
+      ].join(' / ');
+      syncReady = true;
+      applyRemote(await unpackDoc(raw));
+      setSaveState('全員と同期済み', false);
     }
-    const hasLocalEdit = snap.metadata.hasPendingWrites;
-    const raw = snap.data() || {};
-    lastServerInfo = [
-      `受信 ${new Date().toLocaleTimeString('ja-JP')}`,
-      `形式=${raw.z ? '圧縮あり(' + raw.z.length + '文字)' : '圧縮なし'}`,
-      `キャッシュ=${fromCache ? 'この端末' : 'サーバー'}`,
-      `送信待ち=${hasLocalEdit ? 'あり' : 'なし'}`,
-      `更新=${raw.updatedAt || '(なし)'} / ${raw.updatedBy || '(なし)'}`,
-      `会社=${raw.z ? '(圧縮)' : (Array.isArray(raw.contacts) ? raw.contacts.length + '件' : '(なし)')}`,
-    ].join(' / ');
-    // 自分の書き込みの反響・AI判定中の上書きは無視する
-    if(!hasLocalEdit && !aiRunning){
-      applyingRemote = true;   // 展開しているあいだに書き戻さないよう先に印をつける
-      unpackDoc(snap.data()).then(d=>{
-        applyingRemote = false;
-        // 自分が保存した内容がそのまま返ってきただけなら、画面を触らない
-        if(JSON.stringify(d) === lastSaved) return;
-        applyRemote(d);
-      }).catch(e=>{
-        applyingRemote = false;
-        console.error('受信した内容を読み取れません', e);
-        setSaveState('受信した内容を読み取れません', true);
-      });
-    }
-    syncReady = true;
-    setSaveState(fromCache ? 'オフライン（この端末に一時保存）' : '全員と同期済み', fromCache);
-  }, err=>{
-    console.error(err);
-    setSaveState('同期できません（権限か通信をご確認ください）', true);
-  });
+  }catch(e){
+    console.error('読み込めません', e);
+    lastServerInfo = `失敗 ${new Date().toLocaleTimeString('ja-JP')} / code=${e && e.code || '(なし)'} / ${e && e.message || e}`;
+    // ここで syncReady を立てない。中身が分からないまま保存させると、
+    // 見えている見本データでサーバーを上書きしてしまう。
+    setSaveState('読み込めません（診断をご確認ください）', true);
+    return;
+  }
+  setInterval(pollRemote, POLL_MS);
 }
 
 /* ---------- 復元ポイント（この端末に残す控え） ----------
