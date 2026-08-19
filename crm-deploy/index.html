@@ -1768,35 +1768,34 @@ contact@sample.co.jp"></textarea>
     const { initializeApp } = await import(`https://www.gstatic.com/firebasejs/${V}/firebase-app.js`);
     const { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } =
       await import(`https://www.gstatic.com/firebasejs/${V}/firebase-auth.js`);
-    const { initializeFirestore, doc, onSnapshot, setDoc, enableIndexedDbPersistence } =
-      await import(`https://www.gstatic.com/firebasejs/${V}/firebase-firestore.js`);
-
     const app  = initializeApp(firebaseConfig);
     const auth = getAuth(app);
-    // 社内のプロキシやセキュリティ製品が、通常の通信方式（WebChannel）の
-    // 送信だけを止めてしまうことがある。受信はできるのに保存だけ終わらない、
-    // という症状になるため、通じる方式を自動で選ばせる。
-    // 通常の通信方式(WebChannel)は、社内のプロキシやセキュリティ製品に
-    // 送信だけ止められることがある。受信はできるのに保存だけ終わらない、
-    // という症状が出ていたため、確実に通る方式に固定する。
-    const db   = initializeFirestore(app, {
-      experimentalForceLongPolling: true,
-      useFetchStreams: false,
-    });
-    // オフラインでも直前の内容を表示できるようにする（複数タブで開くと片方だけ有効）
-    enableIndexedDbPersistence(db).catch(()=>{});
+
+    /* Firestore の SDK はこのアプリでは使わない。
+       この環境では送受信とも機能しないうえ、端末内に溜まった送信待ちが
+       何時間もあとに突然届き、その時点の古い内容でサーバーを巻き戻す。
+       読み書きはどちらも REST で行う（window.FB.idToken を使う）。
+       残っている送信待ちを消すため、SDKが作った保管領域も削除する。 */
+    try{
+      if(indexedDB.databases){
+        for(const info of await indexedDB.databases()){
+          if(info.name && info.name.startsWith('firestore/')){
+            await new Promise(res=>{
+              const req = indexedDB.deleteDatabase(info.name);
+              req.onsuccess = req.onerror = req.onblocked = ()=>res();
+            });
+          }
+        }
+      }
+    }catch(e){ console.warn('古い保管領域を消せませんでした', e); }
 
     window.FB = {
-      auth, db,
+      auth,
       projectId: firebaseConfig.projectId,
-      // SDKを通さずに直接試すための材料（診断で使う）
       idToken: ()=> auth.currentUser ? auth.currentUser.getIdToken() : Promise.resolve(''),
       signIn: (em, pw)=>signInWithEmailAndPassword(auth, em, pw),
       signOut: ()=>signOut(auth),
       onAuth: cb=>onAuthStateChanged(auth, cb),
-      docRef: ()=>doc(db, 'workspaces', 'default'),
-      watch: (ref, cb, err)=>onSnapshot(ref, {includeMetadataChanges:true}, cb, err),
-      write: (ref, data)=>setDoc(ref, data),
     };
     window.dispatchEvent(new Event('fb-ready'));
   } catch(e){
@@ -2137,7 +2136,7 @@ function tickSave(){
 const DOC_LIMIT = 1048576;
 
 /* どの版が動いているかを画面から確かめられるようにする */
-const BUILD_ID = '2026-08-19j';
+const BUILD_ID = '2026-08-19k';
 /* 直近の保存結果と、サーバーから受け取った内容の素性。診断画面で見せる */
 let lastWriteInfo = 'まだ保存していません';
 let lastServerInfo = 'まだ受信していません';
@@ -2244,16 +2243,14 @@ async function pushData(){
     const limit = new Promise((_, rej)=>{
       timer = setTimeout(()=>rej(Object.assign(new Error('サーバーから応答がありません'), {code:'timeout'})), 30000);
     });
-    let via = 'REST';
     try{
       const done = await Promise.race([restWrite(body), limit]);
-      if(!done){
-        via = 'SDK';
-        await Promise.race([window.FB.write(window.FB.docRef(), body), limit]);
-      }
+      if(!done) throw new Error('このブラウザでは保存できません（圧縮に未対応です）');
     } finally { clearTimeout(timer); }
+    const via = 'REST';
     lastSaved = s;
     remoteStamp = body.updatedAt;   // 自分の保存を取り直さない
+    if(!newestStamp || body.updatedAt > newestStamp) newestStamp = body.updatedAt;
     lastWriteInfo = `成功 ${new Date().toLocaleTimeString('ja-JP')} / ${size}バイト / ${via}`;
     setSaveState('全員と同期済み', false);
     // 保存できたつもりで古いまま、が今回いちばん困る形だったので読み直して確かめる
@@ -2318,6 +2315,15 @@ let remoteStamp = '';   // 最後に取り込んだサーバー側の更新時�
 /* 保存したのに読み直すと古い内容が返る状態。ここに入ったら受信を止める。
    古い内容で手元の変更を上書きしてしまうのが、いちばん被害が大きいため。 */
 let staleReads = false;
+/* これまでに見た最も新しい更新時刻。サーバーがこれより古い内容に
+   なっていたら、どこかの端末の古い送信待ちが今ごろ届いたということ。 */
+let newestStamp = '';
+const ROLLBACK_TOLERANCE_MS = 60000;   // 端末ごとの時計のずれを見込む
+
+function isRollback(stamp){
+  if(!stamp || !newestStamp) return false;
+  return (new Date(newestStamp) - new Date(stamp)) > ROLLBACK_TOLERANCE_MS;
+}
 
 function fsVal(v){
   if('stringValue'    in v) return v.stringValue;
@@ -2376,6 +2382,15 @@ async function pollRemote(){
     const stamp = (f.updatedAt && f.updatedAt.stringValue) || '';
     if(stamp && stamp === remoteStamp) return;         // 変化なし
 
+    if(isRollback(stamp)){
+      // 古い内容で巻き戻されている。取り込まず、手元の内容で書き直す。
+      lastServerInfo = `${new Date().toLocaleTimeString('ja-JP')} / サーバーが古い内容に戻っていました`
+                     + `（${stamp} < ${newestStamp}）。手元の内容で書き直します`;
+      lastSaved = '';
+      await pushData();
+      return;
+    }
+
     const full = await restRead(false);
     if(!full) return;
     if(pushing || lastSaved !== savedAtStart || snapshot() !== lastSaved){
@@ -2386,6 +2401,7 @@ async function pollRemote(){
     const raw = fromFsFields(full.fields);
     const d = await unpackDoc(raw);
     remoteStamp = stamp;
+    if(!newestStamp || stamp > newestStamp) newestStamp = stamp;
     lastServerInfo = [
       `受信 ${new Date().toLocaleTimeString('ja-JP')}`,
       `形式=${raw.z ? '圧縮あり(' + raw.z.length + '文字)' : '圧縮なし'}`,
@@ -2419,6 +2435,7 @@ async function startSync(){
     } else {
       const raw = fromFsFields(full.fields);
       remoteStamp = raw.updatedAt || '';
+      newestStamp = remoteStamp;
       lastServerInfo = [
         `受信 ${new Date().toLocaleTimeString('ja-JP')}`,
         `形式=${raw.z ? '圧縮あり(' + raw.z.length + '文字)' : '圧縮なし'}`,
