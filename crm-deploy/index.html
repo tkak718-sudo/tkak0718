@@ -2134,21 +2134,71 @@ function tickSave(){
   pushData();
 }
 
+/* ---------- 保存する中身の詰め方 ----------
+   Firestoreは1ドキュメントあたり1MiBまで。会社の件数が増えるとそのままでは入らず、
+   書き込みが丸ごと拒否される。拒否された書き込みは端末側でも取り消されるため、
+   「画面では直ったのに、開き直すと元に戻っている」という形で表面化する。
+   そこで本文はgzipで圧縮し、1つの文字列にして持たせる。 */
+const DOC_LIMIT = 1048576;
+
+function bytesToB64(u8){
+  let s = '';
+  const CH = 0x8000;   // 一度に渡す量が多すぎると引数の上限で落ちる
+  for(let i = 0; i < u8.length; i += CH){
+    s += String.fromCharCode.apply(null, u8.subarray(i, i + CH));
+  }
+  return btoa(s);
+}
+
+function b64ToBytes(b64){
+  const bin = atob(b64);
+  const u8 = new Uint8Array(bin.length);
+  for(let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+  return u8;
+}
+
+async function gzipToB64(text){
+  const st = new Blob([text]).stream().pipeThrough(new CompressionStream('gzip'));
+  return bytesToB64(new Uint8Array(await new Response(st).arrayBuffer()));
+}
+
+async function b64ToText(b64){
+  const st = new Blob([b64ToBytes(b64)]).stream().pipeThrough(new DecompressionStream('gzip'));
+  return new TextDecoder().decode(await new Response(st).arrayBuffer());
+}
+
+/* 書き込む中身を作る。圧縮に対応しない古いブラウザではそのままの形にする */
+async function packDoc(s){
+  const meta = {updatedAt: new Date().toISOString(), updatedBy: currentUserEmail};
+  if(typeof CompressionStream === 'function'){
+    return {v: 2, z: await gzipToB64(s), ...meta};
+  }
+  return {...JSON.parse(s), ...meta};
+}
+
+/* 受け取った中身を元に戻す。圧縮していない古い形式もそのまま読める */
+async function unpackDoc(d){
+  if(d && typeof d.z === 'string') return JSON.parse(await b64ToText(d.z));
+  return d;
+}
+
 async function pushData(){
   const s = snapshot();
   if(s === lastSaved) return;
   try{
-    const d = JSON.parse(s);
-    await window.FB.write(window.FB.docRef(), {
-      ...d,
-      updatedAt: new Date().toISOString(),
-      updatedBy: currentUserEmail,
-    });
+    const body = await packDoc(s);
+    const size = body.z ? body.z.length : s.length;
+    if(size > DOC_LIMIT){
+      // ここで止めないと、拒否された書き込みが端末側の変更ごと取り消されてしまう
+      setSaveState('データが大きすぎて保存できません（サポートにご連絡ください）', true);
+      return;
+    }
+    await window.FB.write(window.FB.docRef(), body);
     lastSaved = s;
     setSaveState('全員と同期済み', false);
   } catch(e){
     console.error('保存に失敗しました', e);
-    setSaveState('保存できません（通信を確認してください）', true);
+    setSaveState('保存できません（' + (e && e.code ? e.code : '通信をご確認ください') + '）', true);
   }
 }
 
@@ -2199,7 +2249,18 @@ function startSync(){
       return;
     }
     const hasLocalEdit = snap.metadata.hasPendingWrites;
-    if(!hasLocalEdit && !aiRunning) applyRemote(snap.data());   // 自分の書き込みの反響・AI判定中の上書きは無視する
+    // 自分の書き込みの反響・AI判定中の上書きは無視する
+    if(!hasLocalEdit && !aiRunning){
+      applyingRemote = true;   // 展開しているあいだに書き戻さないよう先に印をつける
+      unpackDoc(snap.data()).then(d=>{
+        applyingRemote = false;
+        applyRemote(d);
+      }).catch(e=>{
+        applyingRemote = false;
+        console.error('受信した内容を読み取れません', e);
+        setSaveState('受信した内容を読み取れません', true);
+      });
+    }
     syncReady = true;
     setSaveState(fromCache ? 'オフライン（この端末に一時保存）' : '全員と同期済み', fromCache);
   }, err=>{
