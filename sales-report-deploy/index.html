@@ -193,13 +193,6 @@
   .sch-in input{min-width:0}
   .anyone{font-size:11px;font-weight:700;color:var(--brand-deep);background:var(--brand-soft);border-radius:20px;padding:2px 10px;white-space:nowrap}
 
-  .tabs{display:flex;gap:4px;align-items:center;flex-wrap:wrap;margin-bottom:18px;border-bottom:1px solid var(--line)}
-  .tab{padding:9px 15px;border:1px solid transparent;border-bottom:none;border-radius:10px 10px 0 0;cursor:pointer;background:none;color:var(--muted);font-weight:700;font-size:13px;position:relative;top:1px}
-  .tab:hover{color:var(--ink);background:var(--panel-2)}
-  .tab.on{background:var(--panel);border-color:var(--line);color:var(--brand-deep)}
-  .tab.on::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:2px;background:var(--panel)}
-  .tab-add{padding:8px 12px;border:1px dashed var(--line);border-radius:9px;background:none;color:var(--muted);cursor:pointer;font-weight:700;font-size:12.5px}
-  .tab-add:hover{border-color:var(--brand);color:var(--brand-deep);background:var(--brand-soft)}
   .ev-head{display:flex;justify-content:space-between;align-items:flex-end;gap:14px;flex-wrap:wrap;margin-bottom:4px}
   .ev-head .meta{font-size:12.5px;color:var(--muted);margin-top:4px}
   .ev-actions{display:flex;gap:8px}
@@ -665,11 +658,10 @@
   }
   function renderPipeline(){
     if((!route.eventId||!state.events.some(function(e){return e.id===route.eventId;}))&&state.events[0])route.eventId=state.events[0].id;
-    var tabs=state.events.map(function(ev){return '<button class="tab'+(ev.id===route.eventId?' on':'')+'" data-tab="'+ev.id+'">'+esc(ev.name)+'</button>';}).join("");
     var ev=state.events.filter(function(e){return e.id===route.eventId;})[0];
     var body;
     if(!ev){
-      body='<div class="panel"><div class="empty"><div class="ei">'+ic("ticket")+'</div><b>イベントがありません</b><p>'+(editable?'「＋ タブを追加」でイベントを作成し、「チケット管理」「注文管理」CSVを取り込むと枚数と売上が表示されます。':'編集モードでイベントを追加できます。')+'</p></div></div>';
+      body='<div class="panel"><div class="empty"><div class="ei">'+ic("ticket")+'</div><b>イベントがありません</b><p>'+(editable?'サイドバーの「＋」でイベントを作成し、「チケット管理」「注文管理」CSVを取り込むと枚数と売上が表示されます。':'編集モードでイベントを追加できます。')+'</p></div></div>';
     }else{
       var tk=ticketOf(ev), sa=salesOf(ev);
       var totalTk=tk?tk.total:0, totalAmt=sa?sa.total:0, cnt=sa?sa.count:0, avg=totalTk?totalAmt/totalTk:0;
@@ -754,7 +746,7 @@
         playerPanel+
         '<div class="sb-meta" style="padding:14px 4px 0">※ チケット管理／注文管理のCSVは、月ごとに分かれていても続けて取り込めば合算されます（7月分→8月分の順に取込）。同じCSVを再度取り込んでも二重計上されず、同じ注文IDは新しい内容で更新されます。<br>※ 選手別CSVも月ごとに分けて取り込めば広告コード単位で合算されます。同じファイル名で取り込み直した場合はその分だけ差し替わります。売上は「累計」ではない列（今回イベント分）を読み込みます。</div>';
     }
-    elView.innerHTML='<div class="tabs">'+tabs+(editable?'<button class="tab-add" id="addTab">＋ タブを追加</button>'+(state.events.length>1?'<button class="tab-add" id="reorderTab">⇅ 並び替え</button>':''):'')+'</div>'+body;
+    elView.innerHTML=body;   // イベントの切替はサイドバーから行う
   }
   function cardEmpty(title,desc){return '<div class="panel"><div class="empty"><div class="ei">'+ic("ticket")+'</div><b>'+esc(title)+'</b><p>'+esc(desc)+'</p></div></div>';}
   function kpi(lab,val,icon,sub){return '<div class="kpi"><div class="kic">'+ic(icon)+'</div><div class="lab">'+esc(lab)+'</div><div class="val num">'+val+'</div>'+(sub?'<div class="sub">'+esc(sub)+'</div>':'')+'</div>';}
@@ -808,7 +800,7 @@
 
   // ================= interactions =================
   document.addEventListener("click",function(e){
-    var t=e.target.closest("[data-go],[data-ev],[data-del],[data-tab],[data-import],[data-editev],[data-edittk],[data-editsales],[data-editplayers],[data-period],#addTab,#addEvTop,#reorderTab,#reorderEvTop,#addAnn,[data-anndel],[data-annedit],#addPrj,[data-addtask],[data-editprj],[data-delprj],[data-edittask],[data-deltask],[data-cycle]");
+    var t=e.target.closest("[data-go],[data-ev],[data-del],[data-import],[data-editev],[data-edittk],[data-editsales],[data-editplayers],[data-period],#addEvTop,#reorderEvTop,#addAnn,[data-anndel],[data-annedit],#addPrj,[data-addtask],[data-editprj],[data-delprj],[data-edittask],[data-deltask],[data-cycle]");
     if(!t)return;
     // --- タスク管理（編集モード不要）---
     if(t.id==="addPrj"){addProjectModal();return;}
@@ -827,9 +819,8 @@
     if(t.hasAttribute("data-editplayers")){editPlayersModal(t.getAttribute("data-editplayers"));return;}
     if(t.hasAttribute("data-go")){route.view=t.getAttribute("data-go");closeSidebar();render();return;}
     if(t.hasAttribute("data-ev")){route.view="pipeline";route.eventId=t.getAttribute("data-ev");closeSidebar();render();return;}
-    if(t.hasAttribute("data-tab")){route.eventId=t.getAttribute("data-tab");render();return;}
-    if(t.id==="addTab"||t.id==="addEvTop"){addEventModal();return;}
-    if(t.id==="reorderTab"||t.id==="reorderEvTop"){reorderModal();return;}
+    if(t.id==="addEvTop"){addEventModal();return;}
+    if(t.id==="reorderEvTop"){reorderModal();return;}
     if(t.hasAttribute("data-editev")){editEventModal(t.getAttribute("data-editev"));return;}
     if(t.hasAttribute("data-import")){importFor=t.getAttribute("data-import");document.getElementById("fileIn").click();return;}
     if(t.id==="addAnn"){addAnnModal();return;}
@@ -912,7 +903,7 @@
 
   function addEventModal(){
     if(!requireEdit())return;
-    openModal('<h3>タブ（イベント）を追加</h3><p class="mh">EVENT名を入力してください。追加後、「チケット管理」「注文管理」CSVを取り込むと枚数と売上が表示されます。</p><label>EVENT名 <span style="color:var(--crit)">*</span></label><input id="m_name" placeholder="例）RISE201 8/29 後楽園ホール"><label>開催日</label><input id="m_date" type="date"><label>会場</label><input id="m_venue" placeholder="例）東京・後楽園ホール"><div class="modal-act"><button class="btn" data-close>キャンセル</button><button class="btn btn-pri" id="m_ok">追加する</button></div>',function(){document.getElementById("m_name").focus();});
+    openModal('<h3>イベントを追加</h3><p class="mh">EVENT名を入力してください。追加後、「チケット管理」「注文管理」CSVを取り込むと枚数と売上が表示されます。</p><label>EVENT名 <span style="color:var(--crit)">*</span></label><input id="m_name" placeholder="例）RISE201 8/29 後楽園ホール"><label>開催日</label><input id="m_date" type="date"><label>会場</label><input id="m_venue" placeholder="例）東京・後楽園ホール"><div class="modal-act"><button class="btn" data-close>キャンセル</button><button class="btn btn-pri" id="m_ok">追加する</button></div>',function(){document.getElementById("m_name").focus();});
     document.getElementById("m_ok").onclick=function(){var name=document.getElementById("m_name").value.trim();if(!name){document.getElementById("m_name").focus();return;}var ev={id:uid(),name:name,date:document.getElementById("m_date").value,venue:document.getElementById("m_venue").value.trim(),ticket:null,dateMap:null,orderRaw:null,sales:null,players:null};state.events.unshift(ev);route.view="pipeline";route.eventId=ev.id;closeModal();commit();toast("イベント「"+name+"」を追加しました");};
   }
   function reorderModal(){
@@ -924,7 +915,7 @@
         return '<div class="ord-row"><span class="oi num">'+(i+1)+'</span><span class="on">'+esc(ev.name)+'</span><span class="ord-btns"><button type="button" data-mv="up" data-i="'+i+'"'+(i===0?" disabled":"")+' title="上へ">↑</button><button type="button" data-mv="down" data-i="'+i+'"'+(i===ord.length-1?" disabled":"")+' title="下へ">↓</button></span></div>';
       }).join("");
     }
-    openModal('<h3>イベントの並び替え</h3><p class="mh">サイドバーとタブに表示される順番を変更します。↑↓で移動し、保存すると全員に反映されます。</p><div class="modal-scroll"><div id="ordCont"></div></div><div class="modal-act"><button class="btn" data-close>キャンセル</button><button class="btn btn-pri" id="ordok">保存</button></div>');
+    openModal('<h3>イベントの並び替え</h3><p class="mh">サイドバーに表示される順番を変更します。↑↓で移動し、保存すると全員に反映されます。</p><div class="modal-scroll"><div id="ordCont"></div></div><div class="modal-act"><button class="btn" data-close>キャンセル</button><button class="btn btn-pri" id="ordok">保存</button></div>');
     var cont=document.getElementById("ordCont");
     draw();
     cont.addEventListener("click",function(e){
