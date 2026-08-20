@@ -231,7 +231,10 @@
   .task-main{flex:1; min-width:0;}
   .task-title{font-size:13.5px; font-weight:600;}
   .task-title.done{text-decoration:line-through; color:var(--text-faint); font-weight:500;}
-  .task-meta{font-size:11.5px; color:var(--text-faint); margin-top:2px;}
+  .task-meta{
+    font-size:11.5px; color:var(--text-faint); margin-top:2px;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
   /* 期日。期限切れ・当日・翌日は色で気づけるようにする */
   .task-due{
     display:inline-block; margin-right:6px; padding:1px 6px; border-radius:5px;
@@ -278,12 +281,21 @@
   }
   .pj-move button:disabled{opacity:.35; cursor:default;}
   .tk-due-row{display:flex; align-items:center; gap:6px; flex-wrap:wrap;}
+  #tk-sub{
+    border:1px solid var(--border-strong); border-radius:6px; padding:8px 10px;
+    font-size:13px; line-height:1.7; background:var(--surface); color:var(--text);
+    font-family:inherit; width:100%; box-sizing:border-box; resize:vertical;
+  }
   .tk-due-row input[type=date]{
     border:1px solid var(--border-strong); border-radius:6px; padding:7px 10px;
     font-size:12.5px; background:var(--surface); color:var(--text); font-family:inherit;
+    /* 開始と終了を1行に並べる。幅を決めないと1つで1行を占めてしまう */
+    flex:1 1 140px; width:auto; min-width:130px;
   }
+  /* 優先度。行の先頭に固定幅で置き、上下で色と位置が揃うようにする */
   .task-badge{
-    font-size:10.5px; font-weight:700; padding:2px 8px; border-radius:20px; flex-shrink:0;
+    font-size:11px; font-weight:800; padding:3px 0; border-radius:20px; flex-shrink:0;
+    width:30px; text-align:center; letter-spacing:.04em;
   }
   .badge-high{background:var(--danger-soft); color:var(--danger);}
   .badge-mid{background:var(--warn-soft); color:var(--warn);}
@@ -804,7 +816,7 @@
         <div class="grid-home">
           <div class="card">
             <div class="card-head">
-              <h2>本日のタスク</h2>
+              <h2>タスク管理</h2>
               <div style="display:flex; align-items:center; gap:10px;">
                 <span class="filter-label" id="task-progress">0 / 0 完了</span>
                 <span class="icon-btn" title="案件を管理" onclick="openProjectModal()">
@@ -1301,7 +1313,7 @@
     <div class="modal-head"><h3 id="task-modal-title">タスクを追加</h3><span class="modal-close" onclick="closeModal('task-modal')">&times;</span></div>
     <div class="modal-body">
       <div class="field"><label>タスク内容 *</label><input type="text" id="tk-title" placeholder="例:伊藤様へ初回架電"></div>
-      <div class="field"><label>関連メモ(会社名・案件名など)</label><input type="text" id="tk-sub" placeholder="例:株式会社フロンティア"></div>
+      <div class="field"><label>メモ</label><textarea id="tk-sub" rows="4" placeholder="会社名・案件名や、やることの詳細など（改行できます）"></textarea></div>
       <div class="field">
         <label>案件</label>
         <div class="tk-due-row">
@@ -1322,12 +1334,17 @@
         </div>
       </div>
       <div class="field">
-        <label>期日</label>
+        <label>期間</label>
         <div class="tk-due-row">
-          <input type="date" id="tk-due">
-          <button class="btn btn-sm" onclick="setTaskDue(0)">今日</button>
-          <button class="btn btn-sm" onclick="setTaskDue(1)">明日</button>
-          <button class="btn btn-sm" onclick="setTaskDue(7)">1週間後</button>
+          <input type="date" id="tk-start" title="開始日">
+          <span style="font-size:12.5px; color:var(--text-faint);">〜</span>
+          <input type="date" id="tk-due" title="終了日（期限）">
+        </div>
+        <div class="tk-due-row" style="margin-top:6px;">
+          <button class="btn btn-sm" onclick="setTaskDue(0)">今日まで</button>
+          <button class="btn btn-sm" onclick="setTaskDue(1)">明日まで</button>
+          <button class="btn btn-sm" onclick="setTaskDue(7)">1週間</button>
+          <button class="btn btn-sm" onclick="setTaskDue(30)">1か月</button>
           <button class="btn btn-sm" onclick="setTaskDue(null)">なし</button>
         </div>
       </div>
@@ -2154,7 +2171,7 @@ function tickSave(){
 const DOC_LIMIT = 1048576;
 
 /* どの版が動いているかを画面から確かめられるようにする */
-const BUILD_ID = '2026-08-19l';
+const BUILD_ID = '2026-08-20a';
 /* 直近の保存結果と、サーバーから受け取った内容の素性。診断画面で見せる */
 let lastWriteInfo = 'まだ保存していません';
 let lastServerInfo = 'まだ受信していません';
@@ -3788,7 +3805,7 @@ function renderHome(){
   const taskList = document.getElementById('task-list');
   taskList.innerHTML = '';
   if(myTasks.length===0){
-    taskList.innerHTML = `<div class="empty"><p>本日のタスクはありません</p></div>`;
+    taskList.innerHTML = `<div class="empty"><p>タスクはありません</p></div>`;
   } else {
     // 案件ごとにまとめ、案件に属さないタスクは最後に置く
     const groups = sortedProjects()
@@ -3836,29 +3853,34 @@ function toggleTask(id){
 function taskRow(t){
   const row = document.createElement('div');
   row.className = 'task-row';
+  // 行のどこを押しても編集に入る（チェックだけは完了の切り替え）
+  row.onclick = ()=>openTaskModal(t.id);
+  const label = PRIORITY_LABEL[t.priority] || '中';
+  // メモは複数行を持てるが、一覧では1行にたたんで見せる
+  const memo = (t.sub || '').replace(/\s*\n\s*/g, ' ');
   row.innerHTML = `
-    <div class="task-check ${t.done?'done':''}" onclick="toggleTask(${t.id})">
+    <div class="task-check ${t.done?'done':''}" onclick="event.stopPropagation(); toggleTask(${t.id})">
       ${t.done?'<svg viewBox="0 0 24 24" fill="none" stroke-width="3"><path d="M5 12l4 4 10-10"/></svg>':''}
     </div>
+    <div class="task-badge badge-${t.priority}" title="優先度 ${label}">${label}</div>
     <div class="task-main">
       <div class="task-title ${t.done?'done':''}">${escapeHtml(t.title)}</div>
-      <div class="task-meta">${dueBadge(t.due, t.done)}${t.owner===SHARED_OWNER?'<span class="task-shared" title="全員の画面に表示される共有タスクです">共有</span>':''}${escapeHtml(t.sub)}</div>
-    </div>
-    <div class="task-badge badge-${t.priority}">${t.priority==='high'?'優先度高':t.priority==='mid'?'優先度中':'優先度低'}</div>
-    <span class="icon-btn row-hover-action" title="編集" onclick="openTaskModal(${t.id})">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/></svg>
-    </span>`;
+      <div class="task-meta">${dueBadge(t.start, t.due, t.done)}${t.owner===SHARED_OWNER?'<span class="task-shared" title="全員の画面に表示される共有タスクです">共有</span>':''}${escapeHtml(memo)}</div>
+    </div>`;
   return row;
 }
 
 /* ---------- タスクの期日 ---------- */
-/* 今日から n 日後の日付を入れる。null なら期日なしにする。 */
+/* 今日から n 日後を終了日に入れる。開始日は空なら今日を入れる。
+   days が null なら期間そのものを消す。 */
 function setTaskDue(days){
-  const el = document.getElementById('tk-due');
-  if(days === null){ el.value = ''; return; }
+  const from = document.getElementById('tk-start');
+  const to   = document.getElementById('tk-due');
+  if(days === null){ from.value = ''; to.value = ''; return; }
   const d = new Date();
   d.setDate(d.getDate() + days);
-  el.value = isoOf(d);
+  to.value = isoOf(d);
+  if(!from.value) from.value = todayISO();
 }
 
 /* 期日までの日数。今日=0、過ぎていればマイナス */
@@ -3868,23 +3890,39 @@ function daysUntil(due){
   return Math.round((target - today) / 86400000);
 }
 
-/* 一覧に出す期日バッジ。完了済みは色を付けない */
-function dueBadge(due, done){
-  if(!due) return '';
-  const n = daysUntil(due);
-  const md = `${parseInt(due.slice(5,7),10)}/${parseInt(due.slice(8,10),10)}`;
-  if(done) return `<span class="task-due done" title="期日 ${due}">${md}</span>`;
-  if(n < 0)  return `<span class="task-due over" title="期日 ${due}">${md} ${-n}日超過</span>`;
-  if(n === 0) return `<span class="task-due today" title="期日 ${due}">今日</span>`;
-  if(n === 1) return `<span class="task-due soon" title="期日 ${due}">明日</span>`;
-  if(n <= 3)  return `<span class="task-due soon" title="期日 ${due}">${md}（あと${n}日）</span>`;
-  return `<span class="task-due" title="期日 ${due}">${md}</span>`;
+function mdOf(iso){
+  return `${parseInt(iso.slice(5,7),10)}/${parseInt(iso.slice(8,10),10)}`;
 }
 
-/* 未完了を上に、期日の早い順。期日なしは同じ区分の最後に置く */
+/* 一覧に出す期間バッジ。開始だけ・終了だけでも出す。完了済みは色を付けない */
+function dueBadge(start, due, done){
+  if(!start && !due) return '';
+  const title = start && due ? `期間 ${start} 〜 ${due}` : (due ? `期限 ${due}` : `開始 ${start}`);
+  // 期間の場合も、色は終了日で決める（超過しているかが一番知りたいため）
+  const text = start && due ? `${mdOf(start)}〜${mdOf(due)}`
+             : start ? `${mdOf(start)}〜`
+             : mdOf(due);
+  const chip = (cls, label)=>`<span class="task-due ${cls}" title="${title}">${label}</span>`;
+  if(done || !due) return chip(done ? 'done' : '', text);
+  const n = daysUntil(due);
+  if(n < 0)   return chip('over', `${text} ${-n}日超過`);
+  if(n === 0) return chip('today', start ? `${text}（今日まで）` : '今日');
+  if(n === 1) return chip('soon',  start ? `${text}（明日まで）` : '明日');
+  if(n <= 3)  return chip('soon',  `${text}（あと${n}日）`);
+  return chip('', text);
+}
+
+/* 未完了を上に、次に優先度の高い順、そのあと期限の早い順。
+   期限なしは同じ区分の最後に置く。 */
+const PRIORITY_ORDER = {high: 0, mid: 1, low: 2};
+const PRIORITY_LABEL = {high: '高', mid: '中', low: '低'};
+
 function sortTasks(list){
   return list.slice().sort((a, b)=>{
     if(!!a.done !== !!b.done) return a.done ? 1 : -1;
+    const pa = PRIORITY_ORDER[a.priority] ?? 1;
+    const pb = PRIORITY_ORDER[b.priority] ?? 1;
+    if(pa !== pb) return pa - pb;
     if(a.due && b.due) return a.due.localeCompare(b.due);
     if(a.due) return -1;
     if(b.due) return 1;
@@ -4014,6 +4052,7 @@ function openTaskModal(id){
   document.getElementById('tk-priority').value = t ? t.priority : 'mid';
   fillProjectSelect();
   document.getElementById('tk-project').value = t && t.projectId ? String(t.projectId) : '';
+  document.getElementById('tk-start').value = t && t.start ? t.start : '';
   document.getElementById('tk-due').value = t && t.due ? t.due : '';
   document.getElementById('tk-delete-btn').style.display = t ? 'inline-flex' : 'none';
   openModal('task-modal');
@@ -4024,16 +4063,19 @@ function saveTask(){
   const sub = document.getElementById('tk-sub').value.trim();
   const owner = document.getElementById('tk-owner').value;
   const priority = document.getElementById('tk-priority').value;
-  const due = document.getElementById('tk-due').value;
+  let start = document.getElementById('tk-start').value;
+  let due   = document.getElementById('tk-due').value;
+  // 逆に入れられていたら入れ替える。入力し直しを求めるほどのことではない。
+  if(start && due && start > due) [start, due] = [due, start];
   const pjVal = document.getElementById('tk-project').value;
   const projectId = pjVal ? parseInt(pjVal, 10) : null;
 
   if(tkCurrentId){
     const t = tasks.find(x=>x.id===tkCurrentId);
-    if(t){ t.title=title; t.sub=sub; t.owner=owner; t.priority=priority; t.due=due; t.projectId=projectId; }
+    if(t){ t.title=title; t.sub=sub; t.owner=owner; t.priority=priority; t.start=start; t.due=due; t.projectId=projectId; }
     toast('タスクを更新しました');
   } else {
-    tasks.push({id: nextIds.task++, title, sub, owner, priority, due, projectId, done:false});
+    tasks.push({id: nextIds.task++, title, sub, owner, priority, start, due, projectId, done:false});
     toast('タスクを追加しました');
   }
   closeModal('task-modal');
