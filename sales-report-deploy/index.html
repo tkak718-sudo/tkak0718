@@ -56,8 +56,15 @@
   #gate{position:fixed;inset:0;z-index:100;display:flex;align-items:center;justify-content:center;background:radial-gradient(1200px 600px at 50% -10%,var(--brand-soft),var(--bg));padding:20px}
   .gate-card{width:100%;max-width:380px;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow-lg);padding:32px 28px;text-align:center}
   .gate-card .logo{margin:0 auto 18px}
-  .gate-card h1{font-size:19px}
+  .gate-card h1{font-size:21px;line-height:1.5}
   .gate-card p{color:var(--muted);margin:6px 0 22px;font-size:13px}
+  .gate-brand{color:var(--muted);margin:12px 0 22px;font-size:13px;line-height:1.9;text-transform:none}
+  /* ログインボタン(.gate-card button)より詳細度を上げて上書きする */
+  .gate-card .pw-copy{display:inline-flex;align-items:center;gap:7px;width:auto;margin:0;font-family:inherit;font-size:14px;font-weight:800;color:var(--brand-deep);background:var(--brand-soft);border:1px dashed color-mix(in srgb,var(--brand) 50%,transparent);border-radius:8px;padding:5px 13px;cursor:pointer;letter-spacing:.02em;text-transform:lowercase}
+  .gate-card .pw-copy::after{content:"コピー";font-size:10px;font-weight:700;opacity:.7;letter-spacing:0}
+  .gate-card .pw-copy:hover{background:color-mix(in srgb,var(--brand) 16%,transparent)}
+  .gate-card .pw-copy.done{background:var(--brand);color:#fff;border-style:solid}
+  .gate-card .pw-copy.done::after{content:""}
   .gate-card input{width:100%;padding:12px 14px;border:1px solid var(--line);border-radius:var(--radius-sm);background:var(--panel-2);color:var(--ink);font-size:15px;text-align:center;letter-spacing:.15em}
   .gate-card input:focus{outline:2px solid var(--brand);outline-offset:1px;border-color:transparent}
   .gate-card button{margin-top:14px;width:100%;padding:12px;border:none;border-radius:var(--radius-sm);background:var(--brand);color:#fff;font-weight:700;font-size:15px;cursor:pointer}
@@ -284,8 +291,8 @@
 <div id="gate">
   <div class="gate-card">
     <div class="logo">cb</div>
-    <h1>クラウドバスケット売上レポート</h1>
-    <p>閲覧にはパスワードが必要です</p>
+    <h1>閲覧にはパスワードが必要です</h1>
+    <p class="gate-brand"><button type="button" class="pw-copy" id="pwCopy" title="クリックでコピーします">crowdbasket</button><br>売り上げレポート</p>
     <input id="pw" type="password" autocomplete="off" placeholder="パスワード" aria-label="パスワード">
     <button id="pwBtn">ログイン</button>
     <div class="gate-err" id="pwErr"></div>
@@ -1266,6 +1273,24 @@
   // ---------- gate ----------
   function unlock(){document.getElementById("gate").style.display="none";document.getElementById("app").classList.add("on");render();}
   function tryPw(){var v=document.getElementById("pw").value;if(v===VIEW_PASSWORD){sessionStorage.setItem("cb_sr_unlocked","1");unlock();}else{document.getElementById("pwErr").textContent="パスワードが正しくありません";document.getElementById("pw").value="";document.getElementById("pw").focus();}}
+  var pwCopy=document.getElementById("pwCopy");
+  if(pwCopy){
+    pwCopy.textContent=VIEW_PASSWORD;
+    pwCopy.onclick=function(){
+      var done=function(){
+        pwCopy.classList.add("done");pwCopy.textContent="コピーしました";
+        setTimeout(function(){pwCopy.classList.remove("done");pwCopy.textContent=VIEW_PASSWORD;},1400);
+      };
+      var fallback=function(){
+        var ta=document.createElement("textarea");ta.value=VIEW_PASSWORD;
+        ta.style.position="fixed";ta.style.opacity="0";document.body.appendChild(ta);
+        ta.select();try{document.execCommand("copy");done();}catch(e){}
+        document.body.removeChild(ta);
+      };
+      if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(VIEW_PASSWORD).then(done,fallback);
+      else fallback();
+    };
+  }
   document.getElementById("pwBtn").onclick=tryPw;
   document.getElementById("pw").addEventListener("keydown",function(e){if(e.key==="Enter")tryPw();});
   if(sessionStorage.getItem("cb_sr_unlocked")==="1")unlock();else document.getElementById("pw").focus();
