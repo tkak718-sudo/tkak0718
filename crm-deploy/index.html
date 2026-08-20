@@ -745,6 +745,7 @@
       <div class="data-actions">
         <button onclick="exportData()" title="データをJSONファイルに書き出します">バックアップ</button>
         <button onclick="document.getElementById('import-file').click()" title="書き出したファイルから戻します">復元</button>
+        <button onclick="openBackupModal()" title="サーバーに自動保管された日ごとの控えに戻します">自動バックアップ</button>
         <button onclick="openRestoreModal()" title="この端末に残っている直近の状態に戻します">復元ポイント</button>
         <button onclick="openDiagModal()" title="保存できない原因を調べます">診断</button>
         <button class="danger" onclick="doSignOut()" title="ログアウトします">ログアウト</button>
@@ -1234,6 +1235,23 @@
     <div class="modal-foot">
       <div style="flex:1"></div>
       <button class="btn" onclick="closeModal('restore-modal')">閉じる</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="backup-modal">
+  <div class="modal">
+    <div class="modal-head"><h3>自動バックアップ</h3><span class="modal-close" onclick="closeModal('backup-modal')">&times;</span></div>
+    <div class="modal-body">
+      <p class="ai-desc" style="font-size:12px; color:var(--text-secondary); line-height:1.7;">
+        保存が行われるたびに、その日の控えをサーバーへ自動で残しています。同じ日の控えは新しい内容で
+        上書きされ、7日より古いものは自動で削除されます。この端末とは別に保管されているため、
+        パソコンを替えても戻せます。</p>
+      <div id="bk-list"></div>
+    </div>
+    <div class="modal-foot">
+      <div style="flex:1"></div>
+      <button class="btn" onclick="closeModal('backup-modal')">閉じる</button>
     </div>
   </div>
 </div>
@@ -2136,7 +2154,7 @@ function tickSave(){
 const DOC_LIMIT = 1048576;
 
 /* どの版が動いているかを画面から確かめられるようにする */
-const BUILD_ID = '2026-08-19k';
+const BUILD_ID = '2026-08-19l';
 /* 直近の保存結果と、サーバーから受け取った内容の素性。診断画面で見せる */
 let lastWriteInfo = 'まだ保存していません';
 let lastServerInfo = 'まだ受信していません';
@@ -2201,15 +2219,14 @@ function toFsFields(o){
   return f;
 }
 
-async function restWrite(body){
+async function restWrite(body, docId){
   const fields = toFsFields(body);
-  if(!fields) return false;                      // 圧縮できない環境。SDKに任せる
+  if(!fields) return false;                      // 圧縮できない環境。保存できない
   const token = await window.FB.idToken();
   if(!token) return false;
   // updateMask を付けないPATCHは、その内容で丸ごと置き換える。
   // 古い形式の項目もこれで一緒に消える。
-  const url = `https://firestore.googleapis.com/v1/projects/${window.FB.projectId}`
-            + `/databases/(default)/documents/workspaces/default`;
+  const url = collUrl() + '/' + (docId || 'default');
   const res = await fetch(url, {
     method: 'PATCH',
     headers: {'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json'},
@@ -2264,6 +2281,7 @@ async function pushData(){
       } else {
         staleReads = false;
         lastWriteInfo += ' / 確認OK';
+        backupAfterSave(body);      // 控えの更新は保存の完了を待たせない
       }
     }catch(e){ lastWriteInfo += ' / 確認できず: ' + (e && e.message || e); }
   } catch(e){
@@ -2343,17 +2361,21 @@ function fromFsFields(fields){
   return o;
 }
 
-function docUrl(mask){
-  const base = `https://firestore.googleapis.com/v1/projects/${window.FB.projectId}`
-             + `/databases/(default)/documents/workspaces/default`;
+function collUrl(){
+  return `https://firestore.googleapis.com/v1/projects/${window.FB.projectId}`
+       + `/databases/(default)/documents/workspaces`;
+}
+
+function docUrl(mask, docId){
+  const base = collUrl() + '/' + (docId || 'default');
   return mask ? base + '?mask.fieldPaths=updatedAt&mask.fieldPaths=updatedBy' : base;
 }
 
 /* サーバーの内容を読む。存在しない場合は null を返す */
-async function restRead(mask){
+async function restRead(mask, docId){
   const token = await window.FB.idToken();
   // 途中の経路に古い内容を返させない。保存したのに古いままに見える事故を防ぐ
-  const res = await fetch(docUrl(mask), {
+  const res = await fetch(docUrl(mask, docId), {
     cache: 'no-store',
     headers: {'Authorization': 'Bearer ' + token, 'Cache-Control': 'no-cache', 'Pragma': 'no-cache'},
   });
@@ -2535,6 +2557,130 @@ function applyRestorePoint(idx){
     }, {okLabel:'この状態に戻す', danger:false});
 }
 
+/* ---------- サーバー側の自動バックアップ ----------
+   保存が通るたびに、その日の控えを別のドキュメントへ残す。
+   同じ日は同じ控えを上書きし、日数が過ぎたものは消す。
+   本体が壊れたり巻き戻ったりしても、日付を選んで戻せるようにするため。 */
+const BACKUP_KEEP_DAYS = 7;
+const BACKUP_INTERVAL_MS = 30 * 60 * 1000;   // 同じ日でも30分に1回は取り直す
+const BACKUP_PREFIX = 'backup-';
+let lastBackupAt = 0;
+let backupInfo = 'まだ取得していません';
+
+function backupId(date){
+  const d = date || new Date();
+  const pad = n => String(n).padStart(2, '0');
+  return `${BACKUP_PREFIX}${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+}
+
+/* workspaces の中にあるドキュメントを一覧する（本文は取らない） */
+async function listBackups(){
+  const token = await window.FB.idToken();
+  const url = collUrl() + '?pageSize=300&mask.fieldPaths=updatedAt&mask.fieldPaths=updatedBy';
+  const res = await fetch(url, {
+    cache: 'no-store',
+    headers: {'Authorization': 'Bearer ' + token, 'Cache-Control': 'no-cache'},
+  });
+  if(!res.ok) throw Object.assign(new Error((await res.text()).slice(0, 300)), {code: 'HTTP ' + res.status});
+  const json = await res.json();
+  return (json.documents || [])
+    .map(d => ({
+      id: d.name.split('/').pop(),
+      updatedAt: (d.fields && d.fields.updatedAt && d.fields.updatedAt.stringValue) || '',
+      updatedBy: (d.fields && d.fields.updatedBy && d.fields.updatedBy.stringValue) || '',
+    }))
+    .filter(x => x.id.startsWith(BACKUP_PREFIX))
+    .sort((a, b) => b.id.localeCompare(a.id));      // 新しい日付が先
+}
+
+async function deleteBackup(id){
+  const token = await window.FB.idToken();
+  const res = await fetch(collUrl() + '/' + id, {
+    method: 'DELETE',
+    headers: {'Authorization': 'Bearer ' + token},
+  });
+  if(!res.ok) throw Object.assign(new Error((await res.text()).slice(0, 300)), {code: 'HTTP ' + res.status});
+}
+
+/* 古い控えを消す。残すのは新しい方から BACKUP_KEEP_DAYS 件 */
+async function pruneBackups(){
+  const list = await listBackups();
+  const old = list.slice(BACKUP_KEEP_DAYS);
+  for(const x of old) await deleteBackup(x.id);
+  return {残す: Math.min(list.length, BACKUP_KEEP_DAYS), 消した: old.length};
+}
+
+/* 保存が通ったあとに呼ぶ。控えの更新に失敗しても本体の保存は妨げない */
+async function backupAfterSave(body){
+  const now = Date.now();
+  if(now - lastBackupAt < BACKUP_INTERVAL_MS) return;
+  lastBackupAt = now;
+  try{
+    const id = backupId();
+    await restWrite(body, id);
+    const r = await pruneBackups();
+    backupInfo = `${new Date().toLocaleString('ja-JP')} / ${id} / 保管${r.残す}件`
+               + (r.消した ? ` / 古い${r.消した}件を削除` : '');
+  }catch(e){
+    console.error('控えを残せませんでした', e);
+    backupInfo = `失敗 ${new Date().toLocaleTimeString('ja-JP')} / code=${e && e.code || '(なし)'} / ${e && e.message || e}`;
+  }
+}
+
+/* 控えの一覧を出す */
+async function openBackupModal(){
+  openModal('backup-modal');
+  const box = document.getElementById('bk-list');
+  box.innerHTML = '<div class="task-hint">読み込んでいます…</div>';
+  try{
+    const list = await listBackups();
+    if(!list.length){
+      box.innerHTML = '<div class="task-hint">まだ控えがありません。保存が行われると自動でたまります。</div>';
+      return;
+    }
+    box.innerHTML = list.map(x=>`<div class="pj-row">
+      <div style="flex:1; min-width:0;">
+        <div style="font-size:12.5px; font-weight:700;">${escapeHtml(x.id.replace(BACKUP_PREFIX, ''))}</div>
+        <div style="font-size:11.5px; color:var(--text-faint);">${escapeHtml(x.updatedAt)} / ${escapeHtml(x.updatedBy)}</div>
+      </div>
+      <button class="btn btn-sm" onclick="applyBackup('${escapeHtml(x.id)}')">この日に戻す</button>
+    </div>`).join('');
+  }catch(e){
+    box.innerHTML = `<div class="task-hint">一覧を取得できませんでした（${escapeHtml(String(e.code || e.message || e))}）</div>`;
+  }
+}
+
+/* 選んだ日の控えで、全員のデータを置き換える */
+async function applyBackup(id){
+  let d;
+  try{
+    const full = await restRead(false, id);
+    if(!full){ toast('その控えが見つかりません'); return; }
+    d = await unpackDoc(fromFsFields(full.fields));
+  }catch(e){ toast('控えを読み取れませんでした'); return; }
+  if(!d || !Array.isArray(d.contacts)){ toast('控えの形式ではありません'); return; }
+  showConfirm(
+    `${id.replace(BACKUP_PREFIX, '')} の控えで、いまのデータを置き換えます。これは全員の画面に反映されます。よろしいですか?\n\n`
+    + `新規クライアント${d.contacts.length} / クライアント${(d.clients||[]).length} / タスク${(d.tasks||[]).length}`,
+    ()=>{
+      saveRestorePoint(snapshot(), '控えから戻す前');
+      contacts = d.contacts;
+      clients  = Array.isArray(d.clients)  ? d.clients  : [];
+      deals    = Array.isArray(d.deals)    ? d.deals    : [];
+      tasks    = Array.isArray(d.tasks)    ? d.tasks    : [];
+      taskProjects = Array.isArray(d.taskProjects) ? d.taskProjects : [];
+      schedule = Array.isArray(d.schedule) ? d.schedule : [];
+      if(d.dailyStats && typeof d.dailyStats === 'object') dailyStats = d.dailyStats;
+      if(d.nextIds && typeof d.nextIds === 'object') nextIds = Object.assign({}, nextIds, d.nextIds);
+      Object.keys(selection).forEach(k=>selection[k].clear());
+      closeModal('backup-modal');
+      renderAll();
+      lastSaved = '';        // 必ず書き戻す
+      pushData();
+      toast('控えから戻しました');
+    }, {okLabel:'この日に戻す', danger:false});
+}
+
 /* ---------- 同期の診断 ----------
    保存できないときに、原因をこちらで推測せずに済むよう、
    実際の値とエラーをそのまま画面に出す。 */
@@ -2554,6 +2700,7 @@ async function diagText(){
     `保存する大きさ: ${packed}（上限 ${DOC_LIMIT}バイト）`,
     `直近の保存: ${lastWriteInfo}`,
     `直近の受信: ${lastServerInfo}`,
+    `自動バックアップ: ${backupInfo}`,
     `圧縮の対応: ${typeof CompressionStream === 'function' ? 'あり' : 'なし'}`,
     `ブラウザ: ${navigator.userAgent}`,
   ].join('\n');
