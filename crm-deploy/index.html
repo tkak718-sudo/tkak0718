@@ -118,15 +118,31 @@
   }
   .save-state.warn{color:var(--danger);}
   .save-state.warn::before{background:var(--danger);}
-  .data-actions{display:flex; gap:5px; margin-bottom:8px;}
-  .data-actions button{
-    flex:1; border:1px solid var(--border-strong); background:var(--surface);
-    color:var(--text-secondary); font-family:inherit; font-size:10.5px; font-weight:600;
-    padding:5px 2px; border-radius:5px; cursor:pointer; white-space:nowrap;
+  /* 同期の状態と設定の歯車を1行に収める。並べていたボタンは設定の中へ移した */
+  .footer-line{display:flex; align-items:center; gap:8px;}
+  .footer-line .save-state{margin-bottom:0; flex:1; min-width:0;}
+  .gear-btn{
+    flex:none; width:30px; height:30px; display:flex; align-items:center; justify-content:center;
+    border:1px solid var(--border-strong); background:var(--surface); color:var(--text-secondary);
+    border-radius:7px; cursor:pointer; padding:0;
   }
-  .data-actions button:hover{background:var(--surface-alt); color:var(--text);}
-  .data-actions button.danger:hover{background:var(--danger-soft); border-color:var(--danger); color:var(--danger);}
+  .gear-btn:hover{background:var(--surface-alt); color:var(--text);}
+  .gear-btn svg{width:15px; height:15px;}
   .footer-ver{font-size:10.5px; color:var(--text-faint);}
+  /* 設定画面の並び */
+  .set-group{margin-bottom:16px;}
+  .set-group h4{
+    margin:0 0 4px; font-size:11px; font-weight:700; letter-spacing:.04em;
+    color:var(--text-faint); text-transform:none;
+  }
+  .set-row{
+    display:flex; align-items:center; gap:10px; padding:9px 2px;
+    border-bottom:1px solid var(--border);
+  }
+  .set-row:last-child{border-bottom:none;}
+  .set-row .set-text{flex:1; min-width:0;}
+  .set-row .set-name{font-size:13px; font-weight:600;}
+  .set-row .set-desc{font-size:11.5px; color:var(--text-faint); margin-top:1px; line-height:1.6;}
 
   .main{flex:1; display:flex; flex-direction:column; min-width:0;}
 
@@ -753,18 +769,16 @@
       </div>
     </div>
     <div class="sidebar-footer">
-      <div class="save-state" id="save-state">この端末に保存されます</div>
-      <div class="data-actions">
-        <button onclick="exportData()" title="データをJSONファイルに書き出します">バックアップ</button>
-        <button onclick="document.getElementById('import-file').click()" title="書き出したファイルから戻します">復元</button>
-        <button onclick="openBackupModal()" title="サーバーに自動保管された日ごとの控えに戻します">自動バックアップ</button>
-        <button onclick="openRestoreModal()" title="この端末に残っている直近の状態に戻します">復元ポイント</button>
-        <button onclick="openDiagModal()" title="保存できない原因を調べます">診断</button>
-        <button class="danger" onclick="doSignOut()" title="ログアウトします">ログアウト</button>
+      <div class="footer-line">
+        <div class="save-state" id="save-state">この端末に保存されます</div>
+        <button class="gear-btn" onclick="openSettingsModal()" title="設定（バックアップ・復元・診断）" aria-label="設定">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09a1.65 1.65 0 00-1.08-1.51 1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 110-4h.09a1.65 1.65 0 001.51-1.08 1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z"/>
+          </svg>
+        </button>
       </div>
       <input type="file" id="import-file" accept=".json" style="display:none" onchange="importData(event)">
-      <div class="footer-ver">ログイン中: <span id="signed-in-as">—</span></div>
-      <div class="footer-ver">crowdbasket CRM v2.0（共有版）<span id="build-id"></span></div>
     </div>
   </div>
 
@@ -1247,6 +1261,71 @@
     <div class="modal-foot">
       <div style="flex:1"></div>
       <button class="btn" onclick="closeModal('restore-modal')">閉じる</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="settings-modal">
+  <div class="modal">
+    <div class="modal-head"><h3>設定</h3><span class="modal-close" onclick="closeModal('settings-modal')">&times;</span></div>
+    <div class="modal-body">
+      <div class="set-group">
+        <h4>バックアップ</h4>
+        <div class="set-row">
+          <div class="set-text">
+            <div class="set-name">自動バックアップ</div>
+            <div class="set-desc">保存のたびにサーバーへ日ごとの控えを残しています。日付を選んで戻せます。</div>
+          </div>
+          <button class="btn btn-sm" onclick="closeModal('settings-modal'); openBackupModal()">開く</button>
+        </div>
+        <div class="set-row">
+          <div class="set-text">
+            <div class="set-name">復元ポイント</div>
+            <div class="set-desc">内容が差し替わる直前の状態を、このパソコンに最大8件ひかえています。</div>
+          </div>
+          <button class="btn btn-sm" onclick="closeModal('settings-modal'); openRestoreModal()">開く</button>
+        </div>
+        <div class="set-row">
+          <div class="set-text">
+            <div class="set-name">ファイルに書き出す</div>
+            <div class="set-desc">いまのデータをJSONファイルとしてダウンロードします。</div>
+          </div>
+          <button class="btn btn-sm" onclick="exportData()">書き出す</button>
+        </div>
+        <div class="set-row">
+          <div class="set-text">
+            <div class="set-name">ファイルから戻す</div>
+            <div class="set-desc">書き出したファイルで、いまのデータを置き換えます。全員の画面に反映されます。</div>
+          </div>
+          <button class="btn btn-sm" onclick="document.getElementById('import-file').click()">ファイルを選ぶ</button>
+        </div>
+      </div>
+
+      <div class="set-group">
+        <h4>同期</h4>
+        <div class="set-row">
+          <div class="set-text">
+            <div class="set-name">診断</div>
+            <div class="set-desc" id="set-sync-state">—</div>
+          </div>
+          <button class="btn btn-sm" onclick="closeModal('settings-modal'); openDiagModal()">開く</button>
+        </div>
+      </div>
+
+      <div class="set-group">
+        <h4>アカウント</h4>
+        <div class="set-row">
+          <div class="set-text">
+            <div class="set-name" id="signed-in-as">—</div>
+            <div class="set-desc">crowdbasket CRM v2.0（共有版）<span id="build-id"></span></div>
+          </div>
+          <button class="btn btn-sm" style="color:var(--danger); border-color:var(--danger-soft);" onclick="closeModal('settings-modal'); doSignOut()">ログアウト</button>
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <div style="flex:1"></div>
+      <button class="btn" onclick="closeModal('settings-modal')">閉じる</button>
     </div>
   </div>
 </div>
@@ -2171,7 +2250,7 @@ function tickSave(){
 const DOC_LIMIT = 1048576;
 
 /* どの版が動いているかを画面から確かめられるようにする */
-const BUILD_ID = '2026-08-20a';
+const BUILD_ID = '2026-08-20b';
 /* 直近の保存結果と、サーバーから受け取った内容の素性。診断画面で見せる */
 let lastWriteInfo = 'まだ保存していません';
 let lastServerInfo = 'まだ受信していません';
@@ -2572,6 +2651,14 @@ function applyRestorePoint(idx){
       pushData();
       toast(`${r.time} の状態に戻しました`);
     }, {okLabel:'この状態に戻す', danger:false});
+}
+
+/* 設定。散らばっていたボタンをここにまとめている */
+function openSettingsModal(){
+  const st = document.getElementById('set-sync-state');
+  if(st) st.textContent = document.getElementById('save-state').textContent
+                        + '／保存できないときはここで原因を確かめられます';
+  openModal('settings-modal');
 }
 
 /* ---------- サーバー側の自動バックアップ ----------
