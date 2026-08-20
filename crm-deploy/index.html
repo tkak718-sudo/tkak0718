@@ -220,7 +220,10 @@
   .page-header p{margin:0; color:var(--text-secondary); font-size:13px;}
 
   /* ---------- Home widgets ---------- */
+  /* グリッドの子は既定で min-width:auto のため、長い1行があると
+     その幅まで広がって画面からはみ出す。0を指定して縮めるようにする。 */
   .grid-home{display:grid; grid-template-columns: 1fr; gap:18px; align-items:start;}
+  .grid-home > *{min-width:0;}
   .card{
     background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
     box-shadow:var(--shadow-sm);
@@ -280,7 +283,7 @@
   .task-group-mark{color:var(--pc,#64748b); font-size:11px; line-height:1;}
   .task-group-name{font-size:12.5px; font-weight:800; letter-spacing:.02em; color:var(--pc-fg,#334155);}
   .task-group-count{font-size:11px; font-weight:700; color:var(--pc-fg,#334155); opacity:.75; margin-left:auto;}
-  .task-group-body{padding:2px 6px;}
+  .task-group-body{padding:2px 6px; min-width:0;}
   .task-group-body .task-row{padding-left:10px;}
   .task-hint{font-size:11.5px; color:var(--text-faint); padding:8px 2px 2px;}
   .pj-row{display:flex; align-items:center; gap:6px; padding:6px 0; border-bottom:1px solid var(--border);}
@@ -1376,7 +1379,8 @@
       <div class="detail-section-label">案件を追加</div>
       <div class="pj-row" style="border-bottom:none;">
         <input type="text" id="pj-new-name" placeholder="例:春の展示会キャンペーン">
-        <select id="pj-new-color"></select>
+        <span class="pj-swatch" id="pj-new-swatch"></span>
+        <select id="pj-new-color" onchange="syncNewColorSwatch()"></select>
         <button class="btn btn-primary btn-sm" onclick="addProject()">追加</button>
       </div>
     </div>
@@ -2161,15 +2165,33 @@ const EVENT_RUBRIC = `あなたは企業リサーチのアシスタントです�
 let currentUser = SALES_REPS[0].id;
 
 /* 案件の色。一覧のバッジ（bg/fg）と、左の線・ひし形（bar）に使う。 */
+/* 案件の色。bg=見出しの背景、fg=見出しの文字、bar=左端の縦線。
+   色相をひと回りする順に並べてあるので、続けて作った案件どうしが
+   近い色にならない。既存のidは変えないこと（保存済みの案件が色を失う）。 */
 const PROJECT_COLORS = [
-  {id:'blue',   name:'ブルー',   bg:'#e0e7ff', fg:'#3730a3', bar:'#4f46e5'},
-  {id:'green',  name:'グリーン', bg:'#dcfce7', fg:'#166534', bar:'#16a34a'},
-  {id:'amber',  name:'イエロー', bg:'#fef3c7', fg:'#92400e', bar:'#d97706'},
-  {id:'rose',   name:'レッド',   bg:'#ffe4e6', fg:'#9f1239', bar:'#e11d48'},
-  {id:'cyan',   name:'シアン',   bg:'#cffafe', fg:'#155e75', bar:'#0891b2'},
-  {id:'purple', name:'パープル', bg:'#f3e8ff', fg:'#6b21a8', bar:'#9333ea'},
-  {id:'slate',  name:'グレー',   bg:'#e2e8f0', fg:'#334155', bar:'#64748b'},
+  {id:'blue',   name:'ブルー',     bg:'#dbeafe', fg:'#1e40af', bar:'#2563eb'},
+  {id:'indigo', name:'インディゴ', bg:'#e0e7ff', fg:'#3730a3', bar:'#4f46e5'},
+  {id:'purple', name:'パープル',   bg:'#f3e8ff', fg:'#6b21a8', bar:'#9333ea'},
+  {id:'pink',   name:'ピンク',     bg:'#fce7f3', fg:'#9d174d', bar:'#db2777'},
+  {id:'rose',   name:'レッド',     bg:'#ffe4e6', fg:'#9f1239', bar:'#e11d48'},
+  {id:'orange', name:'オレンジ',   bg:'#ffedd5', fg:'#9a3412', bar:'#ea580c'},
+  {id:'amber',  name:'イエロー',   bg:'#fef3c7', fg:'#92400e', bar:'#d97706'},
+  {id:'brown',  name:'ブラウン',   bg:'#f0e4d7', fg:'#7c4a21', bar:'#a1652b'},
+  {id:'lime',   name:'ライム',     bg:'#ecfccb', fg:'#3f6212', bar:'#65a30d'},
+  {id:'green',  name:'グリーン',   bg:'#dcfce7', fg:'#166534', bar:'#16a34a'},
+  {id:'teal',   name:'ティール',   bg:'#ccfbf1', fg:'#115e59', bar:'#0d9488'},
+  {id:'cyan',   name:'シアン',     bg:'#cffafe', fg:'#155e75', bar:'#0891b2'},
+  {id:'sky',    name:'スカイ',     bg:'#e0f2fe', fg:'#075985', bar:'#0284c7'},
+  {id:'slate',  name:'グレー',     bg:'#e2e8f0', fg:'#334155', bar:'#64748b'},
 ];
+
+/* まだ使っていない色を返す。全部使い切ったら順番に一巡させる。
+   新しい案件が毎回おなじ色で作られると、色分けの意味がなくなるため。 */
+function nextProjectColor(){
+  const used = new Set(taskProjects.map(p=>p.color));
+  const free = PROJECT_COLORS.find(c=>!used.has(c.id));
+  return (free || PROJECT_COLORS[taskProjects.length % PROJECT_COLORS.length]).id;
+}
 function projectColor(id){
   return PROJECT_COLORS.find(c=>c.id===id) || PROJECT_COLORS[PROJECT_COLORS.length-1];
 }
@@ -2250,7 +2272,7 @@ function tickSave(){
 const DOC_LIMIT = 1048576;
 
 /* どの版が動いているかを画面から確かめられるようにする */
-const BUILD_ID = '2026-08-20b';
+const BUILD_ID = '2026-08-20c';
 /* 直近の保存結果と、サーバーから受け取った内容の素性。診断画面で見せる */
 let lastWriteInfo = 'まだ保存していません';
 let lastServerInfo = 'まだ受信していません';
@@ -4028,6 +4050,12 @@ function fillProjectSelect(){
   if(cur && sortedProjects().some(pj=>String(pj.id)===cur)) sel.value = cur;
 }
 
+/* 追加欄で選んでいる色を、その場の見本に反映する */
+function syncNewColorSwatch(){
+  const sw = document.getElementById('pj-new-swatch');
+  if(sw) sw.style.background = projectColor(document.getElementById('pj-new-color').value).bar;
+}
+
 /* 色の選択肢。どの色か分かるよう名前を出す。 */
 function colorOptions(selected){
   return PROJECT_COLORS.map(c=>
@@ -4036,7 +4064,8 @@ function colorOptions(selected){
 
 function openProjectModal(){
   document.getElementById('pj-new-name').value = '';
-  document.getElementById('pj-new-color').innerHTML = colorOptions(PROJECT_COLORS[0].id);
+  document.getElementById('pj-new-color').innerHTML = colorOptions(nextProjectColor());
+  syncNewColorSwatch();
   renderProjectList();
   openModal('project-modal');
 }
@@ -4074,6 +4103,8 @@ function addProject(){
   const maxOrder = taskProjects.reduce((m,p)=>Math.max(m, p.order||0), 0);
   taskProjects.push({id: nextIds.project++, name, color, order: maxOrder + 1});
   document.getElementById('pj-new-name').value = '';
+  document.getElementById('pj-new-color').innerHTML = colorOptions(nextProjectColor());
+  syncNewColorSwatch();
   renderProjectList();
   renderHome();
   toast(`案件「${name}」を追加しました`);
