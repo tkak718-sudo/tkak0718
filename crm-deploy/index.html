@@ -293,6 +293,18 @@
   }
   .pj-row input[type=text]{flex:1; min-width:0;}
   .pj-swatch{width:14px; height:14px; border-radius:4px; flex:none;}
+  /* テンプレートの項目。1項目を2行（内容の行とメモの行）で見せる */
+  .tpl-item{padding:8px 0; border-bottom:1px solid var(--border);}
+  .tpl-item:last-child{border-bottom:none;}
+  .tpl-item-line{display:flex; align-items:center; gap:6px;}
+  .tpl-item > .tpl-item-line > .task-group-count{margin-left:0; flex:none;}
+  .tpl-item input[type=text], .tpl-item input[type=number], .tpl-item select{
+    border:1px solid var(--border-strong); border-radius:6px; padding:6px 8px;
+    font-size:12.5px; background:var(--surface); color:var(--text); font-family:inherit;
+  }
+  .tpl-days{display:flex; align-items:center; gap:4px; font-size:11.5px; color:var(--text-faint); flex:none;}
+  .tpl-days input[type=number]{width:56px; text-align:right;}
+  .tpl-sub{width:100%; box-sizing:border-box; margin-top:5px;}
   .pj-move{display:flex; flex-direction:column; gap:1px;}
   .pj-move button{
     border:1px solid var(--border-strong); background:var(--surface); color:var(--text-secondary);
@@ -1381,12 +1393,62 @@
         <input type="text" id="pj-new-name" placeholder="例:春の展示会キャンペーン">
         <span class="pj-swatch" id="pj-new-swatch"></span>
         <select id="pj-new-color" onchange="syncNewColorSwatch()"></select>
+      </div>
+      <div class="pj-row" style="border-bottom:none;">
+        <select id="pj-new-template" style="flex:1; min-width:0;"></select>
+        <button class="btn btn-sm" onclick="openTemplateModal()" title="テンプレートの作成・編集">テンプレートを管理</button>
         <button class="btn btn-primary btn-sm" onclick="addProject()">追加</button>
       </div>
+      <div class="task-hint" style="padding-top:0;">
+        テンプレートを選ぶと、案件を作ると同時に決まったタスク一式が入ります。</div>
     </div>
     <div class="modal-foot">
       <div style="flex:1"></div>
       <button class="btn" onclick="closeModal('project-modal')">閉じる</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="template-modal">
+  <div class="modal">
+    <div class="modal-head"><h3>タスクテンプレート</h3><span class="modal-close" onclick="closeModal('template-modal')">&times;</span></div>
+    <div class="modal-body">
+      <p class="ai-desc" style="font-size:12px; color:var(--text-secondary); line-height:1.7;">
+        新しい案件を作るたびに同じタスクを入れ直さずに済むよう、一式をひな形として登録しておけます。
+        案件の追加時に選ぶか、既にある案件へあとから適用できます。</p>
+      <div id="tpl-list"></div>
+      <div class="detail-section-label">テンプレートを追加</div>
+      <div class="pj-row" style="border-bottom:none;">
+        <input type="text" id="tpl-new-name" placeholder="例:新規導入">
+        <button class="btn btn-sm" onclick="addTemplate(true)" title="よくある導入手順を入れた状態で作ります">見本から作る</button>
+        <button class="btn btn-primary btn-sm" onclick="addTemplate(false)">空で作る</button>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <div style="flex:1"></div>
+      <button class="btn" onclick="closeModal('template-modal')">閉じる</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="template-edit-modal">
+  <div class="modal">
+    <div class="modal-head"><h3>テンプレートを編集</h3><span class="modal-close" onclick="closeModal('template-edit-modal')">&times;</span></div>
+    <div class="modal-body">
+      <div class="field"><label>テンプレート名</label>
+        <input type="text" id="tpl-edit-name" onchange="renameTemplate(this.value)"></div>
+      <div class="detail-section-label">タスクの項目</div>
+      <div id="tpl-items"></div>
+      <div class="pj-row" style="border-bottom:none;">
+        <button class="btn btn-sm" onclick="addTemplateItem()">＋ 項目を追加</button>
+      </div>
+      <div class="task-hint" style="padding-top:0;">
+        「日後」は案件に適用した日から数えた期限です。空にすると期限なしになります。
+        担当は適用した人になります。</div>
+    </div>
+    <div class="modal-foot">
+      <div style="flex:1"></div>
+      <button class="btn" onclick="closeModal('template-edit-modal')">閉じる</button>
     </div>
   </div>
 </div>
@@ -2198,6 +2260,11 @@ function projectColor(id){
 
 /* タスクをまとめる案件。order の昇順で表示する。 */
 let taskProjects = [];
+
+/* 新規案件を作ったときに、決まったタスク一式をまとめて起こすためのひな形。
+   {id, name, items:[{title, sub, priority, owner, days}]}
+   days は「今日から何日後を期限にするか」。null なら期限なし。 */
+let taskTemplates = [];
 /* 表示順に並べた案件。order が欠けていても崩れないよう id で補う。 */
 function sortedProjects(){
   return taskProjects.slice().sort((a,b)=> (a.order||0)-(b.order||0) || a.id-b.id);
@@ -2227,7 +2294,7 @@ let tasks    = [];
    画面に出す場所は無いため、同期のためだけに読み書きしている。 */
 let schedule = [];
 
-let nextIds = {contact: 1, client: 1, deal: 1, task: 1, schedule: 1, project: 1};
+let nextIds = {contact: 1, client: 1, deal: 1, task: 1, schedule: 1, project: 1, template: 1};
 
 /* 日次実績。キーは 'YYYY-MM-DD'、値は各件数 */
 let dailyStats = {};
@@ -2246,7 +2313,7 @@ let lastSaved = '';
 let currentUserEmail = '';
 
 function snapshot(){
-  return JSON.stringify({v:1, contacts, clients, deals, tasks, taskProjects, schedule, nextIds, dailyStats});
+  return JSON.stringify({v:1, contacts, clients, deals, tasks, taskProjects, taskTemplates, schedule, nextIds, dailyStats});
 }
 
 function setSaveState(text, warn){
@@ -2272,7 +2339,7 @@ function tickSave(){
 const DOC_LIMIT = 1048576;
 
 /* どの版が動いているかを画面から確かめられるようにする */
-const BUILD_ID = '2026-08-20c';
+const BUILD_ID = '2026-08-20d';
 /* 直近の保存結果と、サーバーから受け取った内容の素性。診断画面で見せる */
 let lastWriteInfo = 'まだ保存していません';
 let lastServerInfo = 'まだ受信していません';
@@ -2424,6 +2491,7 @@ function applyRemote(d){
     if(Array.isArray(d.deals))    deals    = d.deals;
     if(Array.isArray(d.tasks))    tasks    = d.tasks;
     if(Array.isArray(d.taskProjects)) taskProjects = d.taskProjects;
+    if(Array.isArray(d.taskTemplates)) taskTemplates = d.taskTemplates;
     if(Array.isArray(d.schedule)) schedule = d.schedule;
     if(d.dailyStats && typeof d.dailyStats === 'object') dailyStats = d.dailyStats;
     if(d.nextIds && typeof d.nextIds === 'object') nextIds = Object.assign({}, nextIds, d.nextIds);
@@ -2567,7 +2635,7 @@ async function startSync(){
       // サンプルデータを書き込んではいけない。実データが一時的に読めないだけの
       // 場合に、見本の内容で全員分を上書きしてしまうため。
       // 画面からもサンプルを消して、空であることが分かるようにする。
-      contacts = []; clients = []; deals = []; tasks = []; taskProjects = []; schedule = []; dailyStats = {};
+      contacts = []; clients = []; deals = []; tasks = []; taskProjects = []; taskTemplates = []; schedule = []; dailyStats = {};
       syncReady = true;
       lastSaved = snapshot();
       renderAll();
@@ -2664,6 +2732,7 @@ function applyRestorePoint(idx){
       if(Array.isArray(d.deals))    deals    = d.deals;
       if(Array.isArray(d.tasks))    tasks    = d.tasks;
       if(Array.isArray(d.taskProjects)) taskProjects = d.taskProjects;
+      if(Array.isArray(d.taskTemplates)) taskTemplates = d.taskTemplates;
       if(Array.isArray(d.schedule)) schedule = d.schedule;
       if(d.dailyStats && typeof d.dailyStats === 'object') dailyStats = d.dailyStats;
       if(d.nextIds && typeof d.nextIds === 'object') nextIds = Object.assign({}, nextIds, d.nextIds);
@@ -2795,6 +2864,7 @@ async function applyBackup(id){
       deals    = Array.isArray(d.deals)    ? d.deals    : [];
       tasks    = Array.isArray(d.tasks)    ? d.tasks    : [];
       taskProjects = Array.isArray(d.taskProjects) ? d.taskProjects : [];
+      taskTemplates = Array.isArray(d.taskTemplates) ? d.taskTemplates : [];
       schedule = Array.isArray(d.schedule) ? d.schedule : [];
       if(d.dailyStats && typeof d.dailyStats === 'object') dailyStats = d.dailyStats;
       if(d.nextIds && typeof d.nextIds === 'object') nextIds = Object.assign({}, nextIds, d.nextIds);
@@ -2944,6 +3014,7 @@ function importData(ev){
       deals    = Array.isArray(d.deals)    ? d.deals    : [];
       tasks    = Array.isArray(d.tasks)    ? d.tasks    : [];
       taskProjects = Array.isArray(d.taskProjects) ? d.taskProjects : [];
+      taskTemplates = Array.isArray(d.taskTemplates) ? d.taskTemplates : [];
       schedule = Array.isArray(d.schedule) ? d.schedule : [];
       // データ分析の日別実績もバックアップに入っている。ここで戻さないと、
       // 復元したとたんに送信数などの記録だけが空になってしまう。
@@ -4050,6 +4121,220 @@ function fillProjectSelect(){
   if(cur && sortedProjects().some(pj=>String(pj.id)===cur)) sel.value = cur;
 }
 
+/* ---------- タスクのテンプレート ----------
+   新しい案件を作るたびに同じ項目を手で入れ直さずに済むよう、
+   一式をひな形として持っておき、案件にまとめて起こせるようにする。 */
+
+/* 最初の1つを作るときの見本。そのまま使っても、消して作り直してもよい。 */
+const TEMPLATE_SAMPLE = [
+  {title:'申込書・利用規約の送付', sub:'', priority:'high', days:3},
+  {title:'LINE公式アカウント開設or転換', sub:'', priority:'high', days:7},
+  {title:'LINEデベロッパー、LINEオフィシャルマネージャーAPI連携', sub:'', priority:'mid', days:14},
+];
+
+function templateById(id){
+  return taskTemplates.find(t=>t.id === id) || null;
+}
+
+/* テンプレートの選択肢。使う場所が複数あるので関数にしてある。 */
+function templateOptions(selected, emptyLabel){
+  return `<option value="">${escapeHtml(emptyLabel || 'テンプレートなし')}</option>`
+       + taskTemplates.map(t=>
+           `<option value="${t.id}"${String(t.id)===String(selected)?' selected':''}>`
+           + `${escapeHtml(t.name)}（${t.items.length}件）</option>`).join('');
+}
+
+/* 今日から n 日後。null なら空文字（期限なし）。 */
+function dueFromDays(days){
+  if(days === null || days === undefined || days === '') return '';
+  const d = new Date();
+  d.setDate(d.getDate() + Number(days));
+  return isoOf(d);
+}
+
+/* ひな形の項目を、その案件のタスクとして起こす。既存のタスクは触らない。 */
+function applyTemplateToProject(templateId, projectId){
+  const tpl = templateById(Number(templateId));
+  if(!tpl || !tpl.items.length) return 0;
+  tpl.items.forEach(it=>{
+    const due = dueFromDays(it.days);
+    tasks.push({
+      id: nextIds.task++,
+      title: it.title,
+      sub: it.sub || '',
+      owner: it.owner || currentUser,
+      priority: it.priority || 'mid',
+      start: due ? todayISO() : '',
+      due,
+      projectId,
+      done: false,
+    });
+  });
+  return tpl.items.length;
+}
+
+/* 既にある案件へ、あとからひな形を適用する */
+function applyTemplateToExisting(projectId){
+  const sel = document.getElementById('pj-apply-' + projectId);
+  if(!sel || !sel.value){ toast('テンプレートを選んでください'); return; }
+  const tpl = templateById(Number(sel.value));
+  const pj = projectById(projectId);
+  if(!tpl || !pj) return;
+  showConfirm(`案件「${pj.name}」に「${tpl.name}」の${tpl.items.length}件を追加しますか?`, ()=>{
+    const n = applyTemplateToProject(sel.value, projectId);
+    sel.value = '';
+    renderProjectList();
+    renderHome();
+    toast(`${n}件のタスクを追加しました`);
+  }, {okLabel:'追加する', danger:false});
+}
+
+/* ---- ひな形そのものの編集 ---- */
+let tplCurrentId = null;
+
+function openTemplateModal(){
+  renderTemplateList();
+  openModal('template-modal');
+}
+
+function renderTemplateList(){
+  const box = document.getElementById('tpl-list');
+  if(!taskTemplates.length){
+    box.innerHTML = '<div class="task-hint">テンプレートがまだありません。下の欄から追加してください。</div>';
+    return;
+  }
+  box.innerHTML = taskTemplates.map(t=>`<div class="pj-row">
+    <div style="flex:1; min-width:0;">
+      <div style="font-size:13px; font-weight:700;">${escapeHtml(t.name)}</div>
+      <div style="font-size:11.5px; color:var(--text-faint); margin-top:1px;">
+        ${t.items.length ? escapeHtml(t.items.map(i=>i.title).join(' / ')) : '項目なし'}</div>
+    </div>
+    <button class="btn btn-sm" onclick="openTemplateEditor(${t.id})">編集</button>
+    <span class="icon-btn" title="削除" onclick="deleteTemplate(${t.id})">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg>
+    </span>
+  </div>`).join('');
+}
+
+function addTemplate(withSample){
+  const el = document.getElementById('tpl-new-name');
+  const name = el.value.trim() || (withSample ? '新規導入' : '');
+  if(!name){ toast('テンプレート名を入力してください'); return; }
+  const t = {
+    id: nextIds.template++,
+    name,
+    items: withSample ? TEMPLATE_SAMPLE.map(x=>Object.assign({}, x)) : [],
+  };
+  taskTemplates.push(t);
+  el.value = '';
+  renderTemplateList();
+  openTemplateEditor(t.id);
+  toast(`テンプレート「${name}」を追加しました`);
+}
+
+function deleteTemplate(id){
+  const t = templateById(id);
+  if(!t) return;
+  showConfirm(`テンプレート「${t.name}」を削除しますか?\n（作成済みのタスクは消えません）`, ()=>{
+    taskTemplates = taskTemplates.filter(x=>x.id !== id);
+    renderTemplateList();
+    renderProjectList();
+    toast('テンプレートを削除しました');
+  });
+}
+
+function openTemplateEditor(id){
+  tplCurrentId = id;
+  const t = templateById(id);
+  if(!t) return;
+  document.getElementById('tpl-edit-name').value = t.name;
+  renderTemplateItems();
+  openModal('template-edit-modal');
+}
+
+function renderTemplateItems(){
+  const t = templateById(tplCurrentId);
+  const box = document.getElementById('tpl-items');
+  if(!t) return;
+  if(!t.items.length){
+    box.innerHTML = '<div class="task-hint">項目がまだありません。下の「項目を追加」から増やしてください。</div>';
+    return;
+  }
+  box.innerHTML = t.items.map((it, i)=>`<div class="tpl-item">
+    <div class="tpl-item-line">
+      <span class="pj-move">
+        <button onclick="moveTemplateItem(${i},-1)" ${i===0?'disabled':''} title="上へ">▲</button>
+        <button onclick="moveTemplateItem(${i},1)" ${i===t.items.length-1?'disabled':''} title="下へ">▼</button>
+      </span>
+      <input type="text" value="${escapeHtml(it.title)}" placeholder="タスク内容"
+             onchange="editTemplateItem(${i}, 'title', this.value)" style="flex:1; min-width:0;">
+      <select onchange="editTemplateItem(${i}, 'priority', this.value)" title="優先度">
+        <option value="high"${it.priority==='high'?' selected':''}>高</option>
+        <option value="mid"${(it.priority||'mid')==='mid'?' selected':''}>中</option>
+        <option value="low"${it.priority==='low'?' selected':''}>低</option>
+      </select>
+      <span class="tpl-days">
+        <input type="number" min="0" max="999" value="${it.days === null || it.days === undefined ? '' : it.days}"
+               placeholder="—" onchange="editTemplateItem(${i}, 'days', this.value)" title="登録日から何日後を期限にするか">
+        日後
+      </span>
+      <span class="icon-btn" title="削除" onclick="removeTemplateItem(${i})">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg>
+      </span>
+    </div>
+    <input type="text" class="tpl-sub" value="${escapeHtml(it.sub || '')}" placeholder="メモ（任意）"
+           onchange="editTemplateItem(${i}, 'sub', this.value)">
+  </div>`).join('');
+}
+
+function editTemplateItem(i, key, value){
+  const t = templateById(tplCurrentId);
+  if(!t || !t.items[i]) return;
+  if(key === 'days'){
+    const v = String(value).trim();
+    t.items[i].days = v === '' ? null : Math.max(0, parseInt(v, 10) || 0);
+  } else {
+    t.items[i][key] = key === 'title' || key === 'sub' ? String(value).trim() : value;
+  }
+  if(key === 'title' && !t.items[i].title){ toast('タスク内容は空にできません'); renderTemplateItems(); }
+  renderTemplateList();
+}
+
+function addTemplateItem(){
+  const t = templateById(tplCurrentId);
+  if(!t) return;
+  t.items.push({title:'新しい項目', sub:'', priority:'mid', days:null});
+  renderTemplateItems();
+  renderTemplateList();
+}
+
+function removeTemplateItem(i){
+  const t = templateById(tplCurrentId);
+  if(!t) return;
+  t.items.splice(i, 1);
+  renderTemplateItems();
+  renderTemplateList();
+}
+
+function moveTemplateItem(i, dir){
+  const t = templateById(tplCurrentId);
+  if(!t) return;
+  const j = i + dir;
+  if(j < 0 || j >= t.items.length) return;
+  [t.items[i], t.items[j]] = [t.items[j], t.items[i]];
+  renderTemplateItems();
+  renderTemplateList();
+}
+
+function renameTemplate(name){
+  const t = templateById(tplCurrentId);
+  if(!t) return;
+  const v = String(name).trim();
+  if(!v){ toast('テンプレート名は空にできません'); document.getElementById('tpl-edit-name').value = t.name; return; }
+  t.name = v;
+  renderTemplateList();
+}
+
 /* 追加欄で選んでいる色を、その場の見本に反映する */
 function syncNewColorSwatch(){
   const sw = document.getElementById('pj-new-swatch');
@@ -4065,12 +4350,15 @@ function colorOptions(selected){
 function openProjectModal(){
   document.getElementById('pj-new-name').value = '';
   document.getElementById('pj-new-color').innerHTML = colorOptions(nextProjectColor());
+  document.getElementById('pj-new-template').innerHTML = templateOptions('', 'テンプレートを使わない');
   syncNewColorSwatch();
   renderProjectList();
   openModal('project-modal');
 }
 
 function renderProjectList(){
+  const sel = document.getElementById('pj-new-template');
+  if(sel) sel.innerHTML = templateOptions(sel.value, 'テンプレートを使わない');
   const box = document.getElementById('pj-list');
   const list = sortedProjects();
   if(!list.length){
@@ -4080,18 +4368,25 @@ function renderProjectList(){
   box.innerHTML = list.map((pj, i)=>{
     const c = projectColor(pj.color);
     const count = tasks.filter(t=>t.projectId===pj.id).length;
-    return `<div class="pj-row">
-      <span class="pj-move">
-        <button onclick="moveProject(${pj.id},-1)" ${i===0?'disabled':''} title="上へ">▲</button>
-        <button onclick="moveProject(${pj.id},1)" ${i===list.length-1?'disabled':''} title="下へ">▼</button>
-      </span>
-      <span class="pj-swatch" style="background:${c.bar}"></span>
-      <input type="text" value="${escapeHtml(pj.name)}" onchange="renameProject(${pj.id}, this.value)">
-      <select onchange="recolorProject(${pj.id}, this.value)">${colorOptions(pj.color)}</select>
-      <span class="task-group-count">${count}件</span>
-      <span class="icon-btn" title="削除" onclick="deleteProject(${pj.id})">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg>
-      </span>
+    // 1行に詰め込むと名前の欄が潰れるため、テンプレートの適用は下の行に分ける
+    return `<div class="tpl-item">
+      <div class="tpl-item-line">
+        <span class="pj-move">
+          <button onclick="moveProject(${pj.id},-1)" ${i===0?'disabled':''} title="上へ">▲</button>
+          <button onclick="moveProject(${pj.id},1)" ${i===list.length-1?'disabled':''} title="下へ">▼</button>
+        </span>
+        <span class="pj-swatch" style="background:${c.bar}"></span>
+        <input type="text" value="${escapeHtml(pj.name)}" onchange="renameProject(${pj.id}, this.value)" style="flex:1; min-width:0;">
+        <select onchange="recolorProject(${pj.id}, this.value)">${colorOptions(pj.color)}</select>
+        <span class="task-group-count">${count}件</span>
+        <span class="icon-btn" title="削除" onclick="deleteProject(${pj.id})">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg>
+        </span>
+      </div>
+      <div class="tpl-item-line" style="margin-top:5px; padding-left:26px;">
+        <select id="pj-apply-${pj.id}" style="flex:1; min-width:0;" title="この案件にテンプレートを適用する">${templateOptions('', 'テンプレートを適用…')}</select>
+        <button class="btn btn-sm" onclick="applyTemplateToExisting(${pj.id})" title="選んだテンプレートのタスクを追加">適用</button>
+      </div>
     </div>`;
   }).join('');
 }
@@ -4101,13 +4396,17 @@ function addProject(){
   if(!name){ toast('案件名を入力してください'); return; }
   const color = document.getElementById('pj-new-color').value;
   const maxOrder = taskProjects.reduce((m,p)=>Math.max(m, p.order||0), 0);
-  taskProjects.push({id: nextIds.project++, name, color, order: maxOrder + 1});
+  const pjId = nextIds.project++;
+  taskProjects.push({id: pjId, name, color, order: maxOrder + 1});
+  // 選ばれていれば、ひな形のタスクを同時に起こす
+  const tplId = document.getElementById('pj-new-template').value;
+  const made = tplId ? applyTemplateToProject(tplId, pjId) : 0;
   document.getElementById('pj-new-name').value = '';
   document.getElementById('pj-new-color').innerHTML = colorOptions(nextProjectColor());
   syncNewColorSwatch();
   renderProjectList();
   renderHome();
-  toast(`案件「${name}」を追加しました`);
+  toast(made ? `案件「${name}」を追加し、タスク${made}件を作成しました` : `案件「${name}」を追加しました`);
 }
 
 function renameProject(id, name){
