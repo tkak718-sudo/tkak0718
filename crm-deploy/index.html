@@ -311,6 +311,20 @@
     border-radius:4px; line-height:1; font-size:9px; padding:1px 4px; cursor:pointer;
   }
   .pj-move button:disabled{opacity:.35; cursor:default;}
+  .share-bar{display:flex; align-items:center; gap:8px; margin-bottom:8px; flex-wrap:wrap;}
+  .share-url-row{display:flex; align-items:center; gap:6px; margin-bottom:8px;}
+  .share-url-row input{
+    flex:1; min-width:0; border:1px solid var(--border-strong); border-radius:6px; padding:7px 10px;
+    font-size:12px; background:var(--surface-alt); color:var(--text); font-family:inherit;
+  }
+  /* 客先にも出るタスクの印 */
+  .task-open{
+    display:inline-block; margin-right:6px; padding:1px 6px; border-radius:5px;
+    font-size:11px; font-weight:700; white-space:nowrap;
+    background:#dcfce7; color:#166534;
+  }
+  .tk-check{display:flex; align-items:center; gap:7px; font-size:12.5px; color:var(--text-secondary); cursor:pointer;}
+  .tk-check input{width:15px; height:15px; margin:0; cursor:pointer;}
   .tk-due-row{display:flex; align-items:center; gap:6px; flex-wrap:wrap;}
   #tk-sub{
     border:1px solid var(--border-strong); border-radius:6px; padding:8px 10px;
@@ -331,6 +345,25 @@
   .badge-high{background:var(--danger-soft); color:var(--danger);}
   .badge-mid{background:var(--warn-soft); color:var(--warn);}
   .badge-low{background:var(--info-soft); color:var(--info);}
+
+  /* 共有ページ（ログインなしで見る読み取り専用の画面） */
+  .share-page{max-width:820px; margin:0 auto; padding:26px 18px 60px;}
+  .share-head{display:flex; align-items:center; gap:12px; margin-bottom:20px;}
+  .share-client{font-size:18px; font-weight:800;}
+  .share-sub{font-size:11.5px; color:var(--text-faint); margin-top:2px;}
+  .share-foot{margin-top:22px; font-size:11px; color:var(--text-faint); line-height:1.8;}
+  .share-page .task-row{cursor:default;}
+  .share-page .task-row:hover{background:transparent;}
+  .share-state{
+    width:18px; height:18px; border-radius:5px; flex-shrink:0;
+    border:1.5px solid var(--border-strong); display:flex; align-items:center; justify-content:center;
+  }
+  .share-state.done{background:var(--primary); border-color:var(--primary);}
+  .share-state.done svg{width:11px; height:11px; stroke:#fff;}
+  .share-error{
+    max-width:520px; margin:60px auto; padding:22px; border-radius:10px;
+    border:1px solid var(--border); background:var(--surface); font-size:13px; line-height:1.9;
+  }
 
   .empty{padding:34px 18px; text-align:center; color:var(--text-faint);}
   .empty svg{width:30px;height:30px; opacity:0.35; margin-bottom:8px;}
@@ -742,6 +775,20 @@
     <div class="gate-note">
       アカウントはFirebaseコンソールで作成したものをお使いください。この画面から新規登録はできません。
     </div>
+  </div>
+</div>
+
+<div id="share-view" style="display:none">
+  <div class="share-page">
+    <div class="share-head">
+      <div class="brand-mark">cb</div>
+      <div>
+        <div class="share-client" id="sv-client">—</div>
+        <div class="share-sub" id="sv-updated"></div>
+      </div>
+    </div>
+    <div id="sv-body"></div>
+    <div class="share-foot" id="sv-foot"></div>
   </div>
 </div>
 
@@ -1409,6 +1456,28 @@
   </div>
 </div>
 
+<div class="modal-overlay" id="share-help-modal">
+  <div class="modal">
+    <div class="modal-head"><h3>共有URLを使えるようにする</h3><span class="modal-close" onclick="closeModal('share-help-modal')">&times;</span></div>
+    <div class="modal-body">
+      <p class="ai-desc" style="font-size:12.5px; color:var(--text-secondary); line-height:1.9;">
+        共有URLは、ログインしていない人にも読めるようにする必要があります。Firebaseコンソールで
+        <b>Firestore Database → ルール</b> を開き、下の内容に置き換えて「公開」してください。
+        この作業は最初の1回だけです。</p>
+      <p class="ai-desc" style="font-size:12px; color:var(--text-faint); line-height:1.9;">
+        <b>shares</b> は共有用の写しだけを置く場所です。誰でも読めるのはこの場所だけで、
+        URLの合言葉を知らないと開けません。社内のデータ（workspaces）はこれまでどおり
+        ログインした人しか読めません。</p>
+      <pre id="share-rules" style="white-space:pre-wrap; font-size:11.5px; line-height:1.7; background:var(--surface-alt); padding:12px; border-radius:8px; margin:0;"></pre>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" onclick="copyShareRules()">この内容をコピー</button>
+      <div style="flex:1"></div>
+      <button class="btn" onclick="closeModal('share-help-modal')">閉じる</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="template-modal">
   <div class="modal">
     <div class="modal-head"><h3>タスクテンプレート</h3><span class="modal-close" onclick="closeModal('template-modal')">&times;</span></div>
@@ -1465,6 +1534,16 @@
           <select id="tk-project" style="flex:1; min-width:0;"></select>
           <button class="btn btn-sm" onclick="openProjectModal()" title="案件の追加・並べ替え・色の変更">案件を管理</button>
         </div>
+      </div>
+      <div class="field">
+        <label>クライアント</label>
+        <select id="tk-client"></select>
+      </div>
+      <div class="field" id="tk-share-field">
+        <label class="tk-check">
+          <input type="checkbox" id="tk-shared-to-client">
+          <span>クライアントにも表示する（共有URLのタスク管理表に出ます）</span>
+        </label>
       </div>
       <div class="field-row">
         <div class="field"><label>担当者</label>
@@ -1690,6 +1769,27 @@
 
       <div class="detail-section-label">関連する取引</div>
       <div id="cd-deals-list"></div>
+
+      <div class="detail-section-label">タスク管理表</div>
+      <div class="share-bar">
+        <label class="tk-check">
+          <input type="checkbox" id="cd-share-on" onchange="toggleClientShare()">
+          <span>共有URLを発行する</span>
+        </label>
+        <div style="flex:1"></div>
+        <button class="btn btn-sm" onclick="openTaskModal(null, cdCurrentId)">＋ タスクを追加</button>
+      </div>
+      <div class="share-url-row" id="cd-share-row" style="display:none;">
+        <input type="text" id="cd-share-url" readonly onclick="this.select()">
+        <button class="btn btn-sm" onclick="copyShareUrl()">コピー</button>
+        <button class="btn btn-sm" onclick="openShareUrl()">開く</button>
+      </div>
+      <div class="task-hint" id="cd-share-note" style="display:none;"></div>
+      <div class="task-hint" id="cd-share-help" style="display:none; padding-top:0;">
+        <a href="#" onclick="event.preventDefault(); openShareHelp()" style="color:var(--primary-deep); font-weight:700;">
+          共有URLが「権限がありません」と出る場合はこちら</a>
+      </div>
+      <div id="cd-task-list"></div>
     </div>
     <div class="modal-foot">
       <button class="btn" style="color:var(--danger); border-color:var(--danger-soft);" onclick="deleteClient(cdCurrentId)">削除</button>
@@ -1942,6 +2042,10 @@ contact@sample.co.jp"></textarea>
     appId:             "1:917417718363:web:a6fbb7fc9ab323af95c57e"
   };
   /* ▲▲▲ 書き換えるのはここまで ▲▲▲ */
+
+  // 共有ページはログインしないため、SDKの読み込みを待たずに使えるようにしておく
+  window.FB_PUBLIC = {projectId: firebaseConfig.projectId, apiKey: firebaseConfig.apiKey};
+  window.dispatchEvent(new Event('fb-public'));
 
   const V = "10.12.0";
   try{
@@ -2339,7 +2443,7 @@ function tickSave(){
 const DOC_LIMIT = 1048576;
 
 /* どの版が動いているかを画面から確かめられるようにする */
-const BUILD_ID = '2026-08-20d';
+const BUILD_ID = '2026-08-20f';
 /* 直近の保存結果と、サーバーから受け取った内容の素性。診断画面で見せる */
 let lastWriteInfo = 'まだ保存していません';
 let lastServerInfo = 'まだ受信していません';
@@ -2467,6 +2571,7 @@ async function pushData(){
         staleReads = false;
         lastWriteInfo += ' / 確認OK';
         backupAfterSave(body);      // 控えの更新は保存の完了を待たせない
+        publishAllShares();         // 共有URLの中身も追随させる
       }
     }catch(e){ lastWriteInfo += ' / 確認できず: ' + (e && e.message || e); }
   } catch(e){
@@ -3988,33 +4093,7 @@ function renderHome(){
     taskList.innerHTML = `<div class="empty"><p>タスクはありません</p></div>`;
   } else {
     // 案件ごとにまとめ、案件に属さないタスクは最後に置く
-    const groups = sortedProjects()
-      .map(pj => ({pj, list: myTasks.filter(t=>t.projectId === pj.id)}))
-      .filter(g => g.list.length);
-    const loose = myTasks.filter(t=>!t.projectId || !projectById(t.projectId));
-    if(loose.length) groups.push({pj:null, list:loose});
-
-    groups.forEach(g=>{
-      const c = g.pj ? projectColor(g.pj.color) : projectColor('slate');
-      const wrap = document.createElement('div');
-      wrap.className = 'task-group';
-      wrap.style.setProperty('--pc', c.bar);
-      wrap.style.setProperty('--pc-bg', c.bg);
-      wrap.style.setProperty('--pc-fg', c.fg);
-      const doneCount = g.list.filter(t=>t.done).length;
-      const head = document.createElement('div');
-      head.className = 'task-group-head';
-      head.innerHTML = `
-        <span class="task-group-mark">◇</span>
-        <span class="task-group-name">${escapeHtml(g.pj ? g.pj.name : '案件なし')}</span>
-        <span class="task-group-count">${doneCount} / ${g.list.length} 完了</span>`;
-      wrap.appendChild(head);
-      const body = document.createElement('div');
-      body.className = 'task-group-body';
-      g.list.forEach(t=>body.appendChild(taskRow(t)));
-      wrap.appendChild(body);
-      taskList.appendChild(wrap);
-    });
+    taskList.appendChild(buildTaskGroups(myTasks));
     if(!taskProjects.length){
       const hint = document.createElement('div');
       hint.className = 'task-hint';
@@ -4026,11 +4105,15 @@ function renderHome(){
 }
 function toggleTask(id){
   const t = tasks.find(x=>x.id===id);
-  if(t){ t.done = !t.done; renderHome(); }
+  if(!t) return;
+  t.done = !t.done;
+  renderHome();
+  if(cdCurrentId) renderClientTasks(cdCurrentId);
 }
 
 /* タスク1行分。所属する案件は囲みブロック側で示すため、行自体は共通の見た目にする。 */
-function taskRow(t){
+function taskRow(t, opts){
+  const o = opts || {};
   const row = document.createElement('div');
   row.className = 'task-row';
   // 行のどこを押しても編集に入る（チェックだけは完了の切り替え）
@@ -4045,7 +4128,9 @@ function taskRow(t){
     <div class="task-badge badge-${t.priority}" title="優先度 ${label}">${label}</div>
     <div class="task-main">
       <div class="task-title ${t.done?'done':''}">${escapeHtml(t.title)}</div>
-      <div class="task-meta">${dueBadge(t.start, t.due, t.done)}${t.owner===SHARED_OWNER?'<span class="task-shared" title="全員の画面に表示される共有タスクです">共有</span>':''}${escapeHtml(memo)}</div>
+      <div class="task-meta">${dueBadge(t.start, t.due, t.done)}${
+        o.showOpen && !t.internal ? '<span class="task-open" title="共有URLのタスク管理表にも表示されます">客先公開</span>' : ''}${
+        o.showOwner !== false && t.owner===SHARED_OWNER?'<span class="task-shared" title="全員の画面に表示される共有タスクです">共有</span>':''}${escapeHtml(memo)}</div>
     </div>`;
   return row;
 }
@@ -4112,6 +4197,16 @@ function sortTasks(list){
 
 /* ---------- 案件（タスクのグループ）の管理 ---------- */
 
+/* タスクモーダルのクライアントのプルダウン。未選択は「紐づけなし」。 */
+function fillClientSelect(){
+  const sel = document.getElementById('tk-client');
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">クライアントに紐づけない</option>' +
+    clients.slice().sort((a,b)=>a.name.localeCompare(b.name, 'ja'))
+      .map(c=>`<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
+  if(cur && clients.some(c=>String(c.id)===cur)) sel.value = cur;
+}
+
 /* タスクモーダルの案件プルダウン。未選択は「案件なし」。 */
 function fillProjectSelect(){
   const sel = document.getElementById('tk-project');
@@ -4119,6 +4214,208 @@ function fillProjectSelect(){
   sel.innerHTML = '<option value="">案件なし</option>' +
     sortedProjects().map(pj=>`<option value="${pj.id}">${escapeHtml(pj.name)}</option>`).join('');
   if(cur && sortedProjects().some(pj=>String(pj.id)===cur)) sel.value = cur;
+}
+
+/* ---------- クライアントごとのタスク管理表 ----------
+   ホームのタスク一覧と同じ見た目で、そのクライアントに紐づくタスクだけを出す。
+   担当者では絞らない（両担当の動きが1枚で分かるようにするため）。 */
+
+function clientTasks(clientId){
+  return sortTasks(tasks.filter(t=>t.clientId === clientId));
+}
+
+/* 案件ごとの囲みブロックを作る。ホームと共有ページで同じ関数を使う。 */
+function buildTaskGroups(list, opts){
+  const groups = sortedProjects()
+    .map(pj => ({pj, list: list.filter(t=>t.projectId === pj.id)}))
+    .filter(g => g.list.length);
+  const loose = list.filter(t=>!t.projectId || !projectById(t.projectId));
+  if(loose.length) groups.push({pj:null, list:loose});
+
+  const frag = document.createDocumentFragment();
+  groups.forEach(g=>{
+    const c = g.pj ? projectColor(g.pj.color) : projectColor('slate');
+    const wrap = document.createElement('div');
+    wrap.className = 'task-group';
+    wrap.style.setProperty('--pc', c.bar);
+    wrap.style.setProperty('--pc-bg', c.bg);
+    wrap.style.setProperty('--pc-fg', c.fg);
+    const doneCount = g.list.filter(t=>t.done).length;
+    const head = document.createElement('div');
+    head.className = 'task-group-head';
+    head.innerHTML = `
+      <span class="task-group-mark">◇</span>
+      <span class="task-group-name">${escapeHtml(g.pj ? g.pj.name : '案件なし')}</span>
+      <span class="task-group-count">${doneCount} / ${g.list.length} 完了</span>`;
+    wrap.appendChild(head);
+    const body = document.createElement('div');
+    body.className = 'task-group-body';
+    g.list.forEach(t=>body.appendChild(taskRow(t, opts)));
+    wrap.appendChild(body);
+    frag.appendChild(wrap);
+  });
+  return frag;
+}
+
+function renderClientTasks(clientId){
+  const box = document.getElementById('cd-task-list');
+  if(!box) return;
+  const list = clientTasks(clientId);
+  box.innerHTML = '';
+  if(!list.length){
+    box.innerHTML = '<div class="task-hint">このクライアントに紐づくタスクはまだありません。'
+                  + '「＋ タスクを追加」から作成できます。</div>';
+    return;
+  }
+  box.appendChild(buildTaskGroups(list, {showOpen: true}));
+}
+
+/* ---------- 共有URL ----------
+   ログインできない客先にも見せるため、公開用の写しを shares/<合言葉> に置く。
+   URLの合言葉を知っている人だけが読める形にしている。 */
+const SHARE_RULES = `rules_version = '2';
+service cloud.firestore {
+  match /databases/{db}/documents {
+    match /workspaces/{doc} {
+      allow read, write: if request.auth != null;
+    }
+    match /shares/{token} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+  }
+}`;
+
+function makeShareToken(){
+  const a = new Uint8Array(16);
+  crypto.getRandomValues(a);
+  return [...a].map(x=>x.toString(36).padStart(2,'0')).join('').slice(0, 24);
+}
+
+function shareUrlOf(c){
+  return location.origin + location.pathname + '?share=' + c.shareToken;
+}
+
+function renderShareRow(c){
+  const row = document.getElementById('cd-share-row');
+  const note = document.getElementById('cd-share-note');
+  if(c.shareOn && c.shareToken){
+    row.style.display = 'flex';
+    document.getElementById('cd-share-url').value = shareUrlOf(c);
+    note.style.display = 'block';
+    note.textContent = 'このURLを知っている人は、ログインなしで「クライアントにも表示する」を付けたタスクだけを見られます。'
+                     + '編集はできません。社内向けのタスクは表示されません。';
+    document.getElementById('cd-share-help').style.display = 'block';
+  } else {
+    row.style.display = 'none';
+    note.style.display = 'none';
+    document.getElementById('cd-share-help').style.display = 'none';
+  }
+}
+
+function openShareHelp(){
+  document.getElementById('share-rules').textContent = SHARE_RULES;
+  openModal('share-help-modal');
+}
+
+function copyShareRules(){
+  if(navigator.clipboard) navigator.clipboard.writeText(SHARE_RULES).then(()=>toast('コピーしました'), ()=>fallbackCopy(SHARE_RULES));
+  else fallbackCopy(SHARE_RULES);
+}
+
+function toggleClientShare(){
+  const c = clients.find(x=>x.id===cdCurrentId);
+  if(!c) return;
+  const on = document.getElementById('cd-share-on').checked;
+  if(on && !c.shareToken) c.shareToken = makeShareToken();
+  c.shareOn = on;
+  renderShareRow(c);
+  if(on){
+    publishShare(c).then(ok=>{ if(ok) toast('共有URLを発行しました'); });
+  } else {
+    unpublishShare(c).then(()=>toast('共有を停止しました'));
+  }
+  tickSave();
+}
+
+function copyShareUrl(){
+  const c = clients.find(x=>x.id===cdCurrentId);
+  if(!c || !c.shareToken) return;
+  const url = shareUrlOf(c);
+  if(navigator.clipboard) navigator.clipboard.writeText(url).then(()=>toast('コピーしました'), ()=>fallbackCopy(url));
+  else fallbackCopy(url);
+}
+
+function openShareUrl(){
+  const c = clients.find(x=>x.id===cdCurrentId);
+  if(c && c.shareToken) window.open(shareUrlOf(c), '_blank');
+}
+
+/* 客先に見せる分だけを取り出す。社内のみのタスクとメモ以外の項目は含めない。 */
+function shareBoardOf(c){
+  const list = sortTasks(tasks.filter(t=>t.clientId === c.id && !t.internal));
+  const groups = sortedProjects()
+    .map(pj=>({pj, list: list.filter(t=>t.projectId===pj.id)}))
+    .filter(g=>g.list.length);
+  const loose = list.filter(t=>!t.projectId || !projectById(t.projectId));
+  if(loose.length) groups.push({pj:null, list:loose});
+  return {
+    client: c.name,
+    groups: groups.map(g=>({
+      name: g.pj ? g.pj.name : '案件なし',
+      color: g.pj ? g.pj.color : 'slate',
+      items: g.list.map(t=>({
+        title: t.title, sub: t.sub || '', priority: t.priority || 'mid',
+        start: t.start || '', due: t.due || '', done: !!t.done,
+      })),
+    })),
+  };
+}
+
+const sharePublished = {};   // この画面で最後に出した内容。同じなら書き直さない
+
+async function publishShare(c){
+  if(!c.shareOn || !c.shareToken) return false;
+  const json = JSON.stringify(shareBoardOf(c));
+  if(sharePublished[c.id] === json) return false;
+  try{
+    const body = {v: 2, z: await gzipToB64(json), updatedAt: new Date().toISOString(), client: c.name};
+    const token = await window.FB.idToken();
+    const res = await fetch(shareDocUrl(c.shareToken), {
+      method: 'PATCH',
+      headers: {'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json'},
+      body: JSON.stringify({fields: toFsFields(body)}),
+    });
+    if(!res.ok) throw Object.assign(new Error((await res.text()).slice(0,300)), {code: 'HTTP ' + res.status});
+    sharePublished[c.id] = json;
+    return true;
+  }catch(e){
+    console.error('共有URLを更新できません', e);
+    toast('共有URLを更新できませんでした（設定＞診断をご確認ください）');
+    lastWriteInfo += ` / 共有の更新に失敗: ${e && e.code || ''} ${e && e.message || e}`;
+    return false;
+  }
+}
+
+async function unpublishShare(c){
+  if(!c.shareToken) return;
+  try{
+    const token = await window.FB.idToken();
+    await fetch(shareDocUrl(c.shareToken), {method:'DELETE', headers:{'Authorization':'Bearer ' + token}});
+  }catch(e){ console.error(e); }
+  delete sharePublished[c.id];
+}
+
+function shareDocUrl(token){
+  return `https://firestore.googleapis.com/v1/projects/${window.FB.projectId}`
+       + `/databases/(default)/documents/shares/${token}`;
+}
+
+/* 保存が通るたびに、共有中のクライアントの写しを最新にする */
+async function publishAllShares(){
+  for(const c of clients){
+    if(c.shareOn && c.shareToken) await publishShare(c);
+  }
 }
 
 /* ---------- タスクのテンプレート ----------
@@ -4459,7 +4756,7 @@ function deleteProject(id){
 
 /* ---------- task edit/create/delete ---------- */
 let tkCurrentId = null;
-function openTaskModal(id){
+function openTaskModal(id, forClientId){
   tkCurrentId = id || null;
   const t = id ? tasks.find(x=>x.id===id) : null;
   document.getElementById('task-modal-title').textContent = t ? 'タスクを編集' : 'タスクを追加';
@@ -4469,6 +4766,11 @@ function openTaskModal(id){
   document.getElementById('tk-priority').value = t ? t.priority : 'mid';
   fillProjectSelect();
   document.getElementById('tk-project').value = t && t.projectId ? String(t.projectId) : '';
+  fillClientSelect();
+  const cl = t ? t.clientId : (forClientId || null);
+  document.getElementById('tk-client').value = cl ? String(cl) : '';
+  // クライアントの管理表から作るときは、客先にも出す前提で作ることが多い
+  document.getElementById('tk-shared-to-client').checked = t ? !t.internal : !!forClientId;
   document.getElementById('tk-start').value = t && t.start ? t.start : '';
   document.getElementById('tk-due').value = t && t.due ? t.due : '';
   document.getElementById('tk-delete-btn').style.display = t ? 'inline-flex' : 'none';
@@ -4486,17 +4788,23 @@ function saveTask(){
   if(start && due && start > due) [start, due] = [due, start];
   const pjVal = document.getElementById('tk-project').value;
   const projectId = pjVal ? parseInt(pjVal, 10) : null;
+  const clVal = document.getElementById('tk-client').value;
+  const clientId = clVal ? parseInt(clVal, 10) : null;
+  // 既定は社内のみ。うっかり客先に出さないよう、出す方を明示的に選ばせる。
+  const internal = !document.getElementById('tk-shared-to-client').checked;
 
   if(tkCurrentId){
     const t = tasks.find(x=>x.id===tkCurrentId);
-    if(t){ t.title=title; t.sub=sub; t.owner=owner; t.priority=priority; t.start=start; t.due=due; t.projectId=projectId; }
+    if(t){ t.title=title; t.sub=sub; t.owner=owner; t.priority=priority; t.start=start; t.due=due;
+           t.projectId=projectId; t.clientId=clientId; t.internal=internal; }
     toast('タスクを更新しました');
   } else {
-    tasks.push({id: nextIds.task++, title, sub, owner, priority, start, due, projectId, done:false});
+    tasks.push({id: nextIds.task++, title, sub, owner, priority, start, due, projectId, clientId, internal, done:false});
     toast('タスクを追加しました');
   }
   closeModal('task-modal');
   renderHome();
+  if(cdCurrentId) renderClientTasks(cdCurrentId);
 }
 function deleteTaskFromModal(){
   if(!tkCurrentId) return;
@@ -4507,6 +4815,7 @@ function deleteTaskFromModal(){
     closeModal('task-modal');
     toast('タスクを削除しました');
     renderHome();
+    if(cdCurrentId) renderClientTasks(cdCurrentId);
   });
 }
 
@@ -5499,6 +5808,10 @@ function openClientDetail(clientId){
   renderNotesList('cd-notes-list', c.notes);
   document.getElementById('cd-note-input').value = '';
 
+  document.getElementById('cd-share-on').checked = !!c.shareOn;
+  renderShareRow(c);
+  renderClientTasks(clientId);
+
   const relatedDeals = deals.filter(d=>d.clientId===clientId);
   const listEl = document.getElementById('cd-deals-list');
   if(relatedDeals.length===0){
@@ -5964,9 +6277,103 @@ function bootFailed(){
                  + 'このファイルをパソコンで直接開いた場合は動作しません（Firebase Hosting などに配置してご利用ください）。';
 }
 
+/* ---------- 共有ページ ----------
+   ?share=<合言葉> で開かれたときは、ログインを求めずに読み取り専用で表示する。 */
+function shareTokenFromUrl(){
+  const m = location.search.match(/[?&]share=([A-Za-z0-9_-]{8,64})/);
+  return m ? m[1] : '';
+}
+
+function shareFailed(msg){
+  document.getElementById('gate').style.display = 'none';
+  document.getElementById('share-view').style.display = 'block';
+  document.getElementById('sv-body').innerHTML =
+    `<div class="share-error">${escapeHtml(msg)}</div>`;
+  document.getElementById('sv-client').textContent = 'タスク管理表';
+}
+
+async function loadSharePage(token){
+  // 共有ページでは、社内向けの画面が一瞬でも出ないようにしておく
+  document.getElementById('gate').style.display = 'none';
+  document.getElementById('app').style.display = 'none';
+  document.querySelectorAll('.modal-overlay').forEach(el=>el.classList.remove('open'));
+  document.getElementById('share-view').style.display = 'block';
+  document.getElementById('sv-body').innerHTML = '<div class="task-hint">読み込んでいます…</div>';
+  const cfg = window.FB_PUBLIC;
+  const url = `https://firestore.googleapis.com/v1/projects/${cfg.projectId}`
+            + `/databases/(default)/documents/shares/${token}?key=${cfg.apiKey}`;
+  let raw;
+  try{
+    const res = await fetch(url, {cache:'no-store', headers:{'Cache-Control':'no-cache'}});
+    if(res.status === 404){
+      shareFailed('このURLのタスク管理表は見つかりませんでした。共有が停止されたか、URLが違う可能性があります。');
+      return;
+    }
+    if(res.status === 403){
+      shareFailed('このタスク管理表を開く権限がありません。共有元にお問い合わせください。');
+      return;
+    }
+    if(!res.ok) throw new Error('HTTP ' + res.status);
+    raw = fromFsFields((await res.json()).fields);
+  }catch(e){
+    console.error(e);
+    shareFailed('読み込めませんでした。通信環境をご確認のうえ、時間をおいて開き直してください。');
+    return;
+  }
+  let data;
+  try{ data = JSON.parse(await b64ToText(raw.z)); }
+  catch(e){ shareFailed('内容を読み取れませんでした。'); return; }
+  renderSharePage(data, raw.updatedAt);
+}
+
+function renderSharePage(data, updatedAt){
+  document.getElementById('sv-client').textContent = (data.client || '') + ' 様 タスク管理表';
+  document.getElementById('sv-updated').textContent =
+    updatedAt ? '最終更新: ' + new Date(updatedAt).toLocaleString('ja-JP') : '';
+  const box = document.getElementById('sv-body');
+  box.innerHTML = '';
+  const groups = data.groups || [];
+  const total = groups.reduce((n,g)=>n + g.items.length, 0);
+  if(!total){
+    box.innerHTML = '<div class="empty"><p>公開中のタスクはありません</p></div>';
+  }
+  groups.forEach(g=>{
+    const c = projectColor(g.color);
+    const wrap = document.createElement('div');
+    wrap.className = 'task-group';
+    wrap.style.setProperty('--pc', c.bar);
+    wrap.style.setProperty('--pc-bg', c.bg);
+    wrap.style.setProperty('--pc-fg', c.fg);
+    const done = g.items.filter(x=>x.done).length;
+    wrap.innerHTML = `<div class="task-group-head">
+        <span class="task-group-mark">◇</span>
+        <span class="task-group-name">${escapeHtml(g.name)}</span>
+        <span class="task-group-count">${done} / ${g.items.length} 完了</span>
+      </div>
+      <div class="task-group-body">${g.items.map(t=>`
+        <div class="task-row">
+          <div class="share-state ${t.done?'done':''}">${t.done?'<svg viewBox="0 0 24 24" fill="none" stroke-width="3"><path d="M5 12l4 4 10-10"/></svg>':''}</div>
+          <div class="task-badge badge-${t.priority}" title="優先度 ${PRIORITY_LABEL[t.priority]||'中'}">${PRIORITY_LABEL[t.priority]||'中'}</div>
+          <div class="task-main">
+            <div class="task-title ${t.done?'done':''}">${escapeHtml(t.title)}</div>
+            <div class="task-meta">${dueBadge(t.start, t.due, t.done)}${escapeHtml((t.sub||'').replace(/\s*\n\s*/g,' '))}</div>
+          </div>
+        </div>`).join('')}</div>`;
+    box.appendChild(wrap);
+  });
+  document.getElementById('sv-foot').textContent =
+    'この画面は閲覧専用です。内容の反映には少し時間がかかる場合があります。';
+}
+
 window.addEventListener('fb-failed', bootFailed);
 
+window.addEventListener('fb-public', ()=>{
+  const token = shareTokenFromUrl();
+  if(token) loadSharePage(token);
+});
+
 window.addEventListener('fb-ready', ()=>{
+  if(shareTokenFromUrl()) return;    // 共有ページではログイン処理に入らない
   window.FB.onAuth(user=>{
     if(!user){ showGateForm(); return; }
 
