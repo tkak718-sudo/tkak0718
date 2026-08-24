@@ -1456,6 +1456,18 @@
       </div>
 
       <div class="set-group">
+        <h4>受信箱</h4>
+        <div class="set-row">
+          <div class="set-text">
+            <div class="set-name">議事録の下書きを投函してもらう</div>
+            <div class="set-desc" id="set-inbox-desc">—</div>
+          </div>
+          <button class="btn btn-sm" id="set-inbox-copy" onclick="copyInboxToken()" style="display:none;">合言葉をコピー</button>
+          <button class="btn btn-sm" id="set-inbox-issue" onclick="issueInboxToken()">発行する</button>
+        </div>
+      </div>
+
+      <div class="set-group">
         <h4>アカウント</h4>
         <div class="set-row">
           <div class="set-text">
@@ -1556,7 +1568,9 @@
         この作業は最初の1回だけです。</p>
       <p class="ai-desc" style="font-size:12px; color:var(--text-faint); line-height:1.9;">
         <b>shares</b> は共有用の写しだけを置く場所です。誰でも読めるのはこの場所だけで、
-        URLの合言葉を知らないと開けません。社内のデータ（workspaces）はこれまでどおり
+        URLの合言葉を知らないと開けません。<b>importInbox</b> は受信箱（設定 ⚙ から発行）の
+        書き込み専用の入口で、合言葉を知っていれば投函できますが、中身を見たり消したりは
+        ログインした人にしかできません。社内のデータ（workspaces）はこれまでどおり
         ログインした人しか読めません。</p>
       <pre id="share-rules" style="white-space:pre-wrap; font-size:11.5px; line-height:1.7; background:var(--surface-alt); padding:12px; border-radius:8px; margin:0;"></pre>
     </div>
@@ -1620,6 +1634,9 @@
         議事録から抽出したアクションアイテムのJSON、または同じ内容のCSVを取り込みます。
         会議ごとにまとめて表示するので、案件・担当者・期日を確認してから登録してください。
         取り込み済みの項目（IDが一致するもの）は自動でチェックを外しています。</p>
+
+      <div class="detail-section-label">受信箱（Claudeなどが投函したもの）</div>
+      <div id="mi-inbox-list"></div>
 
       <div class="detail-section-label">下書き（読み込み済み・まだ登録していないもの）</div>
       <p class="ai-desc" style="font-size:11.5px; color:var(--text-faint); line-height:1.7; margin-top:0;">
@@ -2560,6 +2577,11 @@ let nextIds = {contact: 1, client: 1, deal: 1, task: 1, schedule: 1, project: 1,
 /* 日次実績。キーは 'YYYY-MM-DD'、値は各件数 */
 let dailyStats = {};
 
+/* 受信箱の合言葉。設定すると、Claudeなど合言葉を知っている相手が
+   議事録の下書きをここへ投函できるようになる（書き込み専用の入口）。
+   合言葉そのものは同期データの中にあるため、ログインしないと読めない。 */
+let importInboxToken = '';
+
 /* ---------- Firestoreによる端末間の同期 ----------
    データ全体を1つのドキュメント(workspaces/default)に入れ、
    onSnapshotで変更を受け取る。片方の端末の変更が、もう一方に即座に反映される。
@@ -2574,7 +2596,7 @@ let lastSaved = '';
 let currentUserEmail = '';
 
 function snapshot(){
-  return JSON.stringify({v:1, contacts, clients, deals, tasks, taskProjects, taskTemplates, meetingImportDrafts, schedule, nextIds, dailyStats});
+  return JSON.stringify({v:1, contacts, clients, deals, tasks, taskProjects, taskTemplates, meetingImportDrafts, schedule, nextIds, dailyStats, importInboxToken});
 }
 
 function setSaveState(text, warn){
@@ -2600,7 +2622,7 @@ function tickSave(){
 const DOC_LIMIT = 1048576;
 
 /* どの版が動いているかを画面から確かめられるようにする */
-const BUILD_ID = '2026-08-20t';
+const BUILD_ID = '2026-08-20u';
 /* 直近の保存結果と、サーバーから受け取った内容の素性。診断画面で見せる */
 let lastWriteInfo = 'まだ保存していません';
 let lastServerInfo = 'まだ受信していません';
@@ -2757,6 +2779,7 @@ function applyRemote(d){
     if(Array.isArray(d.meetingImportDrafts)) meetingImportDrafts = d.meetingImportDrafts;
     if(Array.isArray(d.schedule)) schedule = d.schedule;
     if(d.dailyStats && typeof d.dailyStats === 'object') dailyStats = d.dailyStats;
+    if(typeof d.importInboxToken === 'string') importInboxToken = d.importInboxToken;
     if(d.nextIds && typeof d.nextIds === 'object') nextIds = Object.assign({}, nextIds, d.nextIds);
     const converted = migrateStatuses();
     lastSaved = snapshot();
@@ -2898,7 +2921,7 @@ async function startSync(){
       // サンプルデータを書き込んではいけない。実データが一時的に読めないだけの
       // 場合に、見本の内容で全員分を上書きしてしまうため。
       // 画面からもサンプルを消して、空であることが分かるようにする。
-      contacts = []; clients = []; deals = []; tasks = []; taskProjects = []; taskTemplates = []; meetingImportDrafts = []; schedule = []; dailyStats = {};
+      contacts = []; clients = []; deals = []; tasks = []; taskProjects = []; taskTemplates = []; meetingImportDrafts = []; schedule = []; dailyStats = {}; importInboxToken = '';
       syncReady = true;
       lastSaved = snapshot();
       renderAll();
@@ -2999,6 +3022,7 @@ function applyRestorePoint(idx){
       if(Array.isArray(d.meetingImportDrafts)) meetingImportDrafts = d.meetingImportDrafts;
       if(Array.isArray(d.schedule)) schedule = d.schedule;
       if(d.dailyStats && typeof d.dailyStats === 'object') dailyStats = d.dailyStats;
+      if(typeof d.importInboxToken === 'string') importInboxToken = d.importInboxToken;
       if(d.nextIds && typeof d.nextIds === 'object') nextIds = Object.assign({}, nextIds, d.nextIds);
       Object.keys(selection).forEach(k=>selection[k].clear());
       closeModal('restore-modal');
@@ -3013,6 +3037,7 @@ function openSettingsModal(){
   const st = document.getElementById('set-sync-state');
   if(st) st.textContent = document.getElementById('save-state').textContent
                         + '／保存できないときはここで原因を確かめられます';
+  renderInboxSettings();
   openModal('settings-modal');
 }
 
@@ -3132,6 +3157,7 @@ async function applyBackup(id){
       meetingImportDrafts = Array.isArray(d.meetingImportDrafts) ? d.meetingImportDrafts : [];
       schedule = Array.isArray(d.schedule) ? d.schedule : [];
       if(d.dailyStats && typeof d.dailyStats === 'object') dailyStats = d.dailyStats;
+      if(typeof d.importInboxToken === 'string') importInboxToken = d.importInboxToken;
       if(d.nextIds && typeof d.nextIds === 'object') nextIds = Object.assign({}, nextIds, d.nextIds);
       Object.keys(selection).forEach(k=>selection[k].clear());
       closeModal('backup-modal');
@@ -3285,6 +3311,7 @@ function importData(ev){
       // データ分析の日別実績もバックアップに入っている。ここで戻さないと、
       // 復元したとたんに送信数などの記録だけが空になってしまう。
       if(d.dailyStats && typeof d.dailyStats === 'object') dailyStats = d.dailyStats;
+      if(typeof d.importInboxToken === 'string') importInboxToken = d.importInboxToken;
       if(d.nextIds) nextIds = Object.assign({}, nextIds, d.nextIds);
       Object.keys(selection).forEach(k=>selection[k].clear());
       renderAll();
@@ -4625,6 +4652,7 @@ function openMeetingImportModal(){
   miGroups = [];
   miCurrentDraftId = null;
   renderMiDraftList();
+  renderMiInboxList();
   openModal('meeting-import-modal');
 }
 
@@ -5213,6 +5241,17 @@ service cloud.firestore {
       allow update: if request.auth != null;
       allow delete: if request.auth != null || resource.data.by == 'client';
     }
+    match /importInbox/{token}/items/{itemId} {
+      allow read, update, delete: if request.auth != null;
+      allow create: if request.auth != null || (
+        request.resource.data.keys().hasOnly(['label', 'createdAt', 'source', 'json'])
+        && request.resource.data.label is string && request.resource.data.label.size() <= 200
+        && request.resource.data.source is string && request.resource.data.source.size() <= 50
+        && request.resource.data.json is string && request.resource.data.json.size() > 0
+        && request.resource.data.json.size() <= 200000
+        && request.resource.data.createdAt is string
+      );
+    }
   }
 }`;
 
@@ -5387,6 +5426,134 @@ function noteTime(at){
   const d = new Date(at);
   const pad = n=>String(n).padStart(2,'0');
   return `${d.getMonth()+1}/${d.getDate()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+/* ---------- 受信箱（合言葉を知っている相手が投函できる書き込み専用の入口） ----------
+   shares と同じ考え方で、書き込みは合言葉さえ合っていれば誰でもでき、
+   読み取り・削除はログインした人だけができる。 */
+function inboxUrl(token, itemId){
+  const base = `https://firestore.googleapis.com/v1/projects/${(window.FB || window.FB_PUBLIC).projectId}`
+             + `/databases/(default)/documents/importInbox/${token}/items`;
+  return itemId ? base + '/' + itemId : base;
+}
+
+/* 受信箱の中身を一覧する（ログイン必須） */
+async function listImportInbox(token){
+  if(!token) return [];
+  const t = await window.FB.idToken();
+  const res = await fetch(inboxUrl(token) + '?pageSize=50', {
+    cache: 'no-store', headers: {'Authorization': 'Bearer ' + t, 'Cache-Control': 'no-cache'},
+  });
+  if(res.status === 404) return [];
+  if(!res.ok) throw Object.assign(new Error((await res.text()).slice(0, 300)), {code: 'HTTP ' + res.status});
+  const json = await res.json();
+  return (json.documents || []).map(d=>{
+    const f = fromFsFields(d.fields);
+    return {id: d.name.split('/').pop(), label: f.label || '', createdAt: f.createdAt || '',
+             source: f.source || '', json: f.json || ''};
+  }).sort((a, b)=>(b.createdAt || '').localeCompare(a.createdAt || ''));
+}
+
+async function deleteImportInboxItem(token, id){
+  const t = await window.FB.idToken();
+  const res = await fetch(inboxUrl(token, id), {method: 'DELETE', headers: {'Authorization': 'Bearer ' + t}});
+  if(!res.ok) throw Object.assign(new Error((await res.text()).slice(0, 300)), {code: 'HTTP ' + res.status});
+}
+
+/* いま届いている受信箱の中身。取り込む画面を開くたびに読み直す。 */
+let miInboxItems = [];
+
+async function renderMiInboxList(){
+  const box = document.getElementById('mi-inbox-list');
+  if(!box) return;
+  if(!importInboxToken){
+    box.innerHTML = '<div class="task-hint">受信箱はまだ設定されていません。設定 ⚙ から合言葉を発行してください。</div>';
+    return;
+  }
+  box.innerHTML = '<div class="task-hint">確認しています…</div>';
+  try{
+    miInboxItems = await listImportInbox(importInboxToken);
+  }catch(e){
+    console.error(e);
+    box.innerHTML = `<div class="task-hint">受信箱を確認できませんでした（${escapeHtml(String(e.code || e.message || e))}）</div>`;
+    return;
+  }
+  if(!miInboxItems.length){
+    box.innerHTML = '<div class="task-hint">届いているものはありません。</div>';
+    return;
+  }
+  box.innerHTML = miInboxItems.map(it=>{
+    const when = it.createdAt ? new Date(it.createdAt).toLocaleString('ja-JP') : '';
+    return `<div class="pj-row">
+      <div style="flex:1; min-width:0;">
+        <div style="font-size:12.5px; font-weight:700;">${escapeHtml(it.label || '（無題）')}</div>
+        <div style="font-size:11px; color:var(--text-faint);">${escapeHtml(it.source || '')}から・${escapeHtml(when)}</div>
+      </div>
+      <button class="btn btn-sm btn-primary" onclick="pullImportInboxItem('${escapeHtml(it.id)}')">取り込む</button>
+      <span class="icon-btn" title="削除（内容を使わずに捨てる）" onclick="dismissImportInboxItem('${escapeHtml(it.id)}')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg>
+      </span>
+    </div>`;
+  }).join('');
+}
+
+/* 受信箱の1件を、いつもの確認画面に読み込む。読み込んだらポストからは出す（削除する）。
+   ここではまだ登録しない。中身の確認・修正・登録（または下書き保存）はこのあと普通に行う。 */
+function pullImportInboxItem(id){
+  const it = miInboxItems.find(x=>x.id === id);
+  if(!it) return;
+  document.getElementById('mi-paste').value = it.json;
+  parseMeetingImportInput();
+  deleteImportInboxItem(importInboxToken, id).catch(e=>console.error('受信箱から削除できませんでした', e));
+  miInboxItems = miInboxItems.filter(x=>x.id !== id);
+  renderMiInboxList();
+}
+
+function dismissImportInboxItem(id){
+  showConfirm('この受信箱の項目を、内容を使わずに削除しますか?', async ()=>{
+    try{
+      await deleteImportInboxItem(importInboxToken, id);
+      miInboxItems = miInboxItems.filter(x=>x.id !== id);
+      renderMiInboxList();
+      toast('削除しました');
+    }catch(e){ console.error(e); toast('削除できませんでした'); }
+  });
+}
+
+/* ---------- 受信箱の合言葉の設定（設定 ⚙ から） ---------- */
+function renderInboxSettings(){
+  const el = document.getElementById('set-inbox-desc');
+  const copyBtn = document.getElementById('set-inbox-copy');
+  if(!el) return;
+  const issueBtn = document.getElementById('set-inbox-issue');
+  if(importInboxToken){
+    el.textContent = `発行済み（${importInboxToken.slice(0, 6)}…）。この合言葉をClaudeに伝えると、議事録の下書きを受信箱に投函できるようになります。`;
+    if(copyBtn) copyBtn.style.display = '';
+    if(issueBtn) issueBtn.textContent = '発行し直す';
+  } else {
+    el.textContent = 'まだ発行していません。発行すると、Claudeなど合言葉を知っている相手が議事録の下書きを投函できるようになります（中身は自動では登録されません）。';
+    if(copyBtn) copyBtn.style.display = 'none';
+    if(issueBtn) issueBtn.textContent = '発行する';
+  }
+}
+
+function issueInboxToken(){
+  const doIt = ()=>{
+    importInboxToken = makeShareToken();
+    renderInboxSettings();
+    toast('合言葉を発行しました。「合言葉をコピー」から控えてください');
+  };
+  if(importInboxToken){
+    showConfirm('合言葉を発行し直しますか? 今の合言葉は使えなくなり、それを持っている人（Claudeなど）にも新しい合言葉を伝え直す必要があります。', doIt, {okLabel:'発行し直す', danger:true});
+  } else {
+    doIt();
+  }
+}
+
+function copyInboxToken(){
+  if(!importInboxToken) return;
+  if(navigator.clipboard) navigator.clipboard.writeText(importInboxToken).then(()=>toast('コピーしました'), ()=>fallbackCopy(importInboxToken));
+  else fallbackCopy(importInboxToken);
 }
 
 function shareDocUrl(token){
