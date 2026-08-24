@@ -317,6 +317,21 @@
     flex:1; min-width:0; border:1px solid var(--border-strong); border-radius:6px; padding:7px 10px;
     font-size:12px; background:var(--surface-alt); color:var(--text); font-family:inherit;
   }
+  /* どちら側が対応するかの印 */
+  .task-side{
+    display:inline-block; margin-right:6px; padding:1px 6px; border-radius:5px;
+    font-size:11px; font-weight:700; white-space:nowrap;
+  }
+  .task-side.side-us{background:var(--surface-alt); color:var(--text-secondary);}
+  .task-side.side-client{background:#ffedd5; color:#9a3412;}
+  /* 共有ページの絞り込み */
+  .share-tabs{display:flex; gap:6px; margin-bottom:14px; flex-wrap:wrap;}
+  .share-tabs button{
+    border:1px solid var(--border-strong); background:var(--surface); color:var(--text-secondary);
+    font-family:inherit; font-size:12px; font-weight:700; padding:6px 12px;
+    border-radius:20px; cursor:pointer;
+  }
+  .share-tabs button.on{background:var(--primary); border-color:var(--primary); color:#fff;}
   /* 客先にも出るタスクの印 */
   .task-open{
     display:inline-block; margin-right:6px; padding:1px 6px; border-radius:5px;
@@ -786,6 +801,11 @@
         <div class="share-client" id="sv-client">—</div>
         <div class="share-sub" id="sv-updated"></div>
       </div>
+    </div>
+    <div class="share-tabs" id="sv-tabs" style="display:none;">
+      <button id="sv-tab-all" class="on" onclick="setShareFilter('all')">すべて</button>
+      <button id="sv-tab-client" onclick="setShareFilter('client')">御社対応</button>
+      <button id="sv-tab-us" onclick="setShareFilter('us')">弊社対応</button>
     </div>
     <div id="sv-body"></div>
     <div class="share-foot" id="sv-foot"></div>
@@ -1535,9 +1555,16 @@
           <button class="btn btn-sm" onclick="openProjectModal()" title="案件の追加・並べ替え・色の変更">案件を管理</button>
         </div>
       </div>
-      <div class="field">
-        <label>クライアント</label>
-        <select id="tk-client"></select>
+      <div class="field-row">
+        <div class="field"><label>クライアント</label>
+          <select id="tk-client"></select>
+        </div>
+        <div class="field"><label>対応するのは</label>
+          <select id="tk-side">
+            <option value="us">弊社が対応する</option>
+            <option value="client">クライアントが対応する</option>
+          </select>
+        </div>
       </div>
       <div class="field" id="tk-share-field">
         <label class="tk-check">
@@ -2443,7 +2470,7 @@ function tickSave(){
 const DOC_LIMIT = 1048576;
 
 /* どの版が動いているかを画面から確かめられるようにする */
-const BUILD_ID = '2026-08-20g';
+const BUILD_ID = '2026-08-20h';
 /* 直近の保存結果と、サーバーから受け取った内容の素性。診断画面で見せる */
 let lastWriteInfo = 'まだ保存していません';
 let lastServerInfo = 'まだ受信していません';
@@ -4129,6 +4156,7 @@ function taskRow(t, opts){
     <div class="task-main">
       <div class="task-title ${t.done?'done':''}">${escapeHtml(t.title)}</div>
       <div class="task-meta">${dueBadge(t.start, t.due, t.done)}${
+        o.showSide ? `<span class="task-side side-${sideOf(t)}">${SIDE_LABEL[sideOf(t)]}</span>` : ''}${
         o.showOpen && !t.internal ? '<span class="task-open" title="共有URLのタスク管理表にも表示されます">客先公開</span>' : ''}${
         o.showOwner !== false && t.owner===SHARED_OWNER?'<span class="task-shared" title="全員の画面に表示される共有タスクです">共有</span>':''}${escapeHtml(memo)}</div>
     </div>`;
@@ -4181,6 +4209,12 @@ function dueBadge(start, due, done){
    期限なしは同じ区分の最後に置く。 */
 const PRIORITY_ORDER = {high: 0, mid: 1, low: 2};
 const PRIORITY_LABEL = {high: '高', mid: '中', low: '低'};
+
+/* 対応区分。どちら側がボールを持っているかを示す。
+   社内の画面と客先の画面では呼び方が変わるため、言い方を分けている。 */
+const SIDE_LABEL       = {us: '弊社', client: 'クライアント'};
+const SIDE_LABEL_SHARE = {us: '弊社対応', client: '御社対応'};
+function sideOf(t){ return t.side === 'client' ? 'client' : 'us'; }
 
 function sortTasks(list){
   return list.slice().sort((a, b)=>{
@@ -4267,7 +4301,7 @@ function renderClientTasks(clientId){
                   + '「＋ タスクを追加」から作成できます。</div>';
     return;
   }
-  box.appendChild(buildTaskGroups(list, {showOpen: true}));
+  box.appendChild(buildTaskGroups(list, {showOpen: true, showSide: true}));
 }
 
 /* ---------- 共有URL ----------
@@ -4366,7 +4400,7 @@ function shareBoardOf(c){
       color: g.pj ? g.pj.color : 'slate',
       items: g.list.map(t=>({
         title: t.title, sub: t.sub || '', priority: t.priority || 'mid',
-        start: t.start || '', due: t.due || '', done: !!t.done,
+        start: t.start || '', due: t.due || '', done: !!t.done, side: sideOf(t),
       })),
     })),
   };
@@ -4770,6 +4804,7 @@ function openTaskModal(id, forClientId){
   const cl = t ? t.clientId : (forClientId || null);
   document.getElementById('tk-client').value = cl ? String(cl) : '';
   // クライアントの管理表から作るときは、客先にも出す前提で作ることが多い
+  document.getElementById('tk-side').value = t ? sideOf(t) : 'us';
   document.getElementById('tk-shared-to-client').checked = t ? !t.internal : !!forClientId;
   document.getElementById('tk-start').value = t && t.start ? t.start : '';
   document.getElementById('tk-due').value = t && t.due ? t.due : '';
@@ -4792,14 +4827,15 @@ function saveTask(){
   const clientId = clVal ? parseInt(clVal, 10) : null;
   // 既定は社内のみ。うっかり客先に出さないよう、出す方を明示的に選ばせる。
   const internal = !document.getElementById('tk-shared-to-client').checked;
+  const side = document.getElementById('tk-side').value === 'client' ? 'client' : 'us';
 
   if(tkCurrentId){
     const t = tasks.find(x=>x.id===tkCurrentId);
     if(t){ t.title=title; t.sub=sub; t.owner=owner; t.priority=priority; t.start=start; t.due=due;
-           t.projectId=projectId; t.clientId=clientId; t.internal=internal; }
+           t.projectId=projectId; t.clientId=clientId; t.internal=internal; t.side=side; }
     toast('タスクを更新しました');
   } else {
-    tasks.push({id: nextIds.task++, title, sub, owner, priority, start, due, projectId, clientId, internal, done:false});
+    tasks.push({id: nextIds.task++, title, sub, owner, priority, start, due, projectId, clientId, internal, side, done:false});
     toast('タスクを追加しました');
   }
   closeModal('task-modal');
@@ -6329,16 +6365,42 @@ async function loadSharePage(token){
   renderSharePage(data, raw.updatedAt);
 }
 
+let shareData = null;
+let shareFilter = 'all';
+
+function setShareFilter(v){
+  shareFilter = v;
+  ['all','client','us'].forEach(k=>{
+    document.getElementById('sv-tab-' + k).classList.toggle('on', k === v);
+  });
+  drawShareGroups();
+}
+
 function renderSharePage(data, updatedAt){
+  shareData = data;
   document.getElementById('sv-client').textContent = (data.client || '') + ' 様 タスク管理表';
   document.getElementById('sv-updated').textContent =
     updatedAt ? '最終更新: ' + new Date(updatedAt).toLocaleString('ja-JP') : '';
+  // どちらが対応するか分かれている場合だけ、絞り込みを出す
+  const sides = new Set((data.groups||[]).flatMap(g=>g.items.map(i=>i.side || 'us')));
+  document.getElementById('sv-tabs').style.display = sides.size > 1 ? 'flex' : 'none';
+  setShareFilter('all');
+  document.getElementById('sv-foot').textContent =
+    'この画面は閲覧専用です。内容の反映には少し時間がかかる場合があります。';
+}
+
+function drawShareGroups(){
+  const data = shareData || {groups: []};
   const box = document.getElementById('sv-body');
   box.innerHTML = '';
-  const groups = data.groups || [];
+  const groups = (data.groups || [])
+    .map(g=>({...g, items: g.items.filter(i=>shareFilter === 'all' || (i.side || 'us') === shareFilter)}))
+    .filter(g=>g.items.length);
   const total = groups.reduce((n,g)=>n + g.items.length, 0);
   if(!total){
-    box.innerHTML = '<div class="empty"><p>公開中のタスクはありません</p></div>';
+    box.innerHTML = '<div class="empty"><p>'
+      + (shareFilter === 'all' ? '公開中のタスクはありません' : '該当するタスクはありません')
+      + '</p></div>';
   }
   groups.forEach(g=>{
     const c = projectColor(g.color);
@@ -6359,13 +6421,13 @@ function renderSharePage(data, updatedAt){
           <div class="task-badge badge-${t.priority}" title="優先度 ${PRIORITY_LABEL[t.priority]||'中'}">${PRIORITY_LABEL[t.priority]||'中'}</div>
           <div class="task-main">
             <div class="task-title ${t.done?'done':''}">${escapeHtml(t.title)}</div>
-            <div class="task-meta">${dueBadge(t.start, t.due, t.done)}${escapeHtml((t.sub||'').replace(/\s*\n\s*/g,' '))}</div>
+            <div class="task-meta"><span class="task-side side-${t.side==='client'?'client':'us'}">${
+              SIDE_LABEL_SHARE[t.side==='client'?'client':'us']}</span>${
+              dueBadge(t.start, t.due, t.done)}${escapeHtml((t.sub||'').replace(/\s*\n\s*/g,' '))}</div>
           </div>
         </div>`).join('')}</div>`;
     box.appendChild(wrap);
   });
-  document.getElementById('sv-foot').textContent =
-    'この画面は閲覧専用です。内容の反映には少し時間がかかる場合があります。';
 }
 
 window.addEventListener('fb-failed', bootFailed);
