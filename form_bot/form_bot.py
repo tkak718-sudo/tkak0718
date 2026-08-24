@@ -348,6 +348,46 @@ def run_one(page, row, profile, args, ledger, shot_dir):
         return {**base, 'phase': 'skip', 'reason': f'入力できた項目が{len(filled)}件（下限{args.min_fields}）',
                 'filled': filled, 'shot': shot}
 
+    if args.assist:
+        # 入力だけして、送信ボタンの手前で止める。押すのは人。
+        # 確認画面を挟むフォームは「確認」まで進めておくと、人は最後の1押しで済む
+        step = ''
+        if args.to_confirm:
+            btn, lab = find_button(page, 'confirm')
+            if btn:
+                try:
+                    btn.click()
+                    page.wait_for_load_state('domcontentloaded', timeout=args.timeout * 1000)
+                    page.wait_for_timeout(1200)
+                    step = f'／確認画面まで進めた（{lab}）'
+                except Exception:
+                    step = '／確認ボタンを押せなかった'
+        sbtn, slab = find_button(page, 'submit')
+        print(f'\n  ── {company}')
+        print(f'     {url}')
+        print(f'     入力: {", ".join(f"{k}={v}" for k, v in filled.items() if k != "_note")[:150]}')
+        if filled.get('_note'):
+            print(f'     注記: {filled["_note"]}')
+        print(f'     送信ボタン: {slab or "見つからない（手で探してください）"}{step}')
+        ans = input('     ブラウザで内容を確認し、送信したら Enter ／ '
+                    '送らない場合は s ＋Enter ／ 中断は q ＋Enter > ').strip().lower()
+        if ans == 'q':
+            return {**base, 'phase': 'quit', 'reason': '操作者が中断',
+                    'filled': filled, 'shot': shot}
+        if ans == 's':
+            return {**base, 'phase': 'skip', 'reason': '操作者が送らないと判断',
+                    'filled': filled, 'shot': shot}
+        try:
+            after = os.path.join(shot_dir, f'{key}_after.png')
+            page.screenshot(path=after, full_page=True)
+            shot = after
+        except Exception:
+            pass
+        rec = {**base, 'phase': 'sent-manual', 'reason': '操作者が送信',
+               'filled': filled, 'shot': shot}
+        ledger.write(rec)
+        return rec
+
     if not args.send:
         return {**base, 'phase': 'dry-run', 'reason': '下見のみ。送信していない',
                 'filled': filled, 'shot': shot}
@@ -393,7 +433,11 @@ def main():
     ap.add_argument('--ledger', default='sent_ledger.jsonl')
     ap.add_argument('--out', default='result.csv')
     ap.add_argument('--shots', default='shots')
-    ap.add_argument('--send', action='store_true', help='実際に送信する')
+    ap.add_argument('--assist', action='store_true',
+                    help='自動で入力し、送信ボタンの手前で止める。押すのは人（ブラウザは自動表示）')
+    ap.add_argument('--to-confirm', action='store_true',
+                    help='--assist のとき、確認画面のあるフォームは確認まで進めておく')
+    ap.add_argument('--send', action='store_true', help='送信まで自動でやる')
     ap.add_argument('--yes', action='store_true', help='--send の確認。両方ないと送信しない')
     ap.add_argument('--test-url', help='本番前に自社フォームで1件だけ通す')
     ap.add_argument('--limit', type=int, default=20, help='1回の実行で扱う上限')
@@ -405,6 +449,11 @@ def main():
 
     if args.send and not args.yes:
         sys.exit('送信するには --send と --yes の両方が必要です。まず --send なしで下見してください。')
+    if args.assist and args.send:
+        sys.exit('--assist と --send は同時に使えません。--assist は人が送信する方式です。')
+    if args.assist:
+        args.headed = True          # 画面が見えないと確認できないので必ず表示する
+        args.interval = 0           # 人の操作待ちが間隔になる
 
     profile = json.load(open(args.profile, encoding='utf-8'))
     rows = list(csv.DictReader(open(args.csv, encoding='utf-8-sig')))
@@ -429,8 +478,12 @@ def main():
         for i, row in enumerate(rows, 1):
             r = run_one(page, row, profile, args, ledger, args.shots)
             results.append(r)
-            mark = {'sent': '送信', 'dry-run': '下見', 'skip': '除外', 'failed': '失敗'}.get(r['phase'], r['phase'])
+            mark = {'sent': '送信', 'sent-manual': '手で送信', 'dry-run': '下見',
+                    'skip': '除外', 'failed': '失敗', 'quit': '中断'}.get(r['phase'], r['phase'])
             print(f'[{i}/{len(rows)}] {mark}  {r["company"][:26]}  {r.get("reason","")}')
+            if r['phase'] == 'quit':
+                print('中断しました。ここまでの分は記録済みです。')
+                break
             if args.send and r['phase'] in ('sent', 'unknown'):
                 time.sleep(args.interval)
         browser.close()
@@ -443,7 +496,11 @@ def main():
                         json.dumps(r.get('filled', {}), ensure_ascii=False), r.get('shot', ''), r['time']])
 
     n = lambda k: sum(1 for r in results if r['phase'] == k)
-    print(f'\n下見 {n("dry-run")} / 送信 {n("sent")} / 要目視 {n("unknown")} / 除外 {n("skip")} / 失敗 {n("failed")}')
+    if args.assist:
+        print(f'\n手で送信 {n("sent-manual")} / 送らなかった {n("skip")} / 中断 {n("quit")}')
+    else:
+        print(f'\n下見 {n("dry-run")} / 送信 {n("sent")} / 要目視 {n("unknown")} '
+              f'/ 除外 {n("skip")} / 失敗 {n("failed")}')
     print(f'結果: {args.out}   台帳: {args.ledger}   画面: {args.shots}/')
 
 
