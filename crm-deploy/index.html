@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>crowdbasket CRM — 営業・マーケティング管理システム</title>
+<title>crowdbasket Database</title>
 <!-- タブのアイコン。ロゴと同じ緑グラデ＋「cb」。画像ファイル不要でHTMLに直接埋め込み -->
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%2306C755'/%3E%3Cstop offset='1' stop-color='%2304A947'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='16' fill='url(%23g)'/%3E%3Ctext x='32' y='33' font-family='Arial,sans-serif' font-size='30' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3Ecb%3C/text%3E%3C/svg%3E">
 <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%2306C755'/%3E%3Cstop offset='1' stop-color='%2304A947'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='16' fill='url(%23g)'/%3E%3Ctext x='32' y='33' font-family='Arial,sans-serif' font-size='30' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3Ecb%3C/text%3E%3C/svg%3E">
@@ -2470,7 +2470,7 @@ function tickSave(){
 const DOC_LIMIT = 1048576;
 
 /* どの版が動いているかを画面から確かめられるようにする */
-const BUILD_ID = '2026-08-20h';
+const BUILD_ID = '2026-08-20i';
 /* 直近の保存結果と、サーバーから受け取った内容の素性。診断画面で見せる */
 let lastWriteInfo = 'まだ保存していません';
 let lastServerInfo = 'まだ受信していません';
@@ -6378,6 +6378,8 @@ function setShareFilter(v){
 
 function renderSharePage(data, updatedAt){
   shareData = data;
+  // 客先が開く画面なので、タブの名前も社内の呼び方にしない
+  document.title = (data.client ? data.client + ' 様 ' : '') + 'タスク管理表';
   document.getElementById('sv-client').textContent = (data.client || '') + ' 様 タスク管理表';
   document.getElementById('sv-updated').textContent =
     updatedAt ? '最終更新: ' + new Date(updatedAt).toLocaleString('ja-JP') : '';
