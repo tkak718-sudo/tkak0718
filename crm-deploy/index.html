@@ -2443,7 +2443,7 @@ function tickSave(){
 const DOC_LIMIT = 1048576;
 
 /* どの版が動いているかを画面から確かめられるようにする */
-const BUILD_ID = '2026-08-20f';
+const BUILD_ID = '2026-08-20g';
 /* 直近の保存結果と、サーバーから受け取った内容の素性。診断画面で見せる */
 let lastWriteInfo = 'まだ保存していません';
 let lastServerInfo = 'まだ受信していません';
@@ -6288,7 +6288,7 @@ function shareFailed(msg){
   document.getElementById('gate').style.display = 'none';
   document.getElementById('share-view').style.display = 'block';
   document.getElementById('sv-body').innerHTML =
-    `<div class="share-error">${escapeHtml(msg)}</div>`;
+    `<div class="share-error" style="white-space:pre-wrap;">${escapeHtml(msg)}</div>`;
   document.getElementById('sv-client').textContent = 'タスク管理表';
 }
 
@@ -6310,7 +6310,10 @@ async function loadSharePage(token){
       return;
     }
     if(res.status === 403){
-      shareFailed('このタスク管理表を開く権限がありません。共有元にお問い合わせください。');
+      shareFailed('このタスク管理表を開く権限がありません。共有元にお問い合わせください。\n\n'
+        + '（共有元の方へ：Firestoreのルールで shares の読み取りを許可してください。'
+        + 'CRMのクライアント詳細にある「共有URLが『権限がありません』と出る場合はこちら」に'
+        + '貼り付ける内容が出ています。）');
       return;
     }
     if(!res.ok) throw new Error('HTTP ' + res.status);
