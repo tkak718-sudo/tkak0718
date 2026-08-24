@@ -85,6 +85,17 @@ def key_of(company, url):
     return hashlib.sha1(f'{name}|{host}'.encode()).hexdigest()[:16]
 
 
+def find_file(name):
+    """指定されたファイルを、実行フォルダ→スクリプトのフォルダ→その1つ上 の順に探す。
+       置き場所を間違えても動くようにするため"""
+    here = os.path.dirname(os.path.abspath(__file__))
+    for c in (name, os.path.join(here, os.path.basename(name)),
+              os.path.join(here, '..', os.path.basename(name)), os.path.join(here, name)):
+        if c and os.path.exists(c):
+            return c
+    return None
+
+
 class Ledger:
     """送信済み台帳。二重送信を防ぐ唯一の拠り所なので、送信の直前と直後に書く"""
 
@@ -456,7 +467,12 @@ def main():
         args.interval = 0           # 人の操作待ちが間隔になる
 
     profile = json.load(open(args.profile, encoding='utf-8'))
-    rows = list(csv.DictReader(open(args.csv, encoding='utf-8-sig')))
+    csv_path = find_file(args.csv)
+    if not csv_path:
+        sys.exit(f'CSVが見つかりません: {args.csv}\n'
+                 f'  探した場所: このフォルダ / 1つ上のフォルダ\n'
+                 f'  CSVファイルを form_bot.py と同じフォルダに置いてください。')
+    rows = list(csv.DictReader(open(csv_path, encoding='utf-8-sig')))
     if args.test_url:
         rows = [{'会社名': '【テスト】自社フォーム', 'お問い合わせフォームURL': args.test_url}]
     rows = rows[:args.limit]
