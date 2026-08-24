@@ -29,6 +29,20 @@ NG_PURPOSE = re.compile(r'(採用|求人|エントリー|リクルート)[^。�
                         r'|(技術|製品|カスタマー)?サポート専用'
                         r'|(取材|報道|プレス)専用')
 NG_URL = re.compile(r'(recruit|saiyo|career|entry|support|helpdesk|press)', re.I)
+# 問い合わせ窓口ではないフォーム。ここに営業文を入れると、相手側で実際の
+# 予約・注文・寄付として処理されてしまうので、URLではなく項目名で見分ける。
+NG_FORMTYPE = [
+    ('予約・申込フォーム',
+     r'(ご利用日|来店日|予約日|宿泊日|チェックイン|ご予約|予約フォーム|申込フォーム|'
+     r'お申[しこ]み|申込書|参加申込|受講申込|キャンセル(?:料|ポリシー)|団体・?グループ)'),
+    ('購入・注文フォーム',
+     r'(カートに入れる|注文フォーム|ご注文|購入手続き|決済|お支払い方法|配送先)'),
+    ('寄付・会員登録フォーム', r'(ご寄付|寄附|募金|入会申込|会員登録|入団申込)'),
+    ('資料請求・見学申込', r'(資料請求フォーム|見学申込|体験申込|来場予約)'),
+]
+# これがあれば問い合わせ窓口とみなす（予約語と併存していても送信可とする）
+OK_FORMTYPE = re.compile(r'(お問(?:い)?合わせ内容|お問合せ内容|ご質問|ご相談内容|'
+                         r'メッセージ|お問い合わせ種別)')
 CAPTCHA = re.compile(r'(recaptcha|g-recaptcha|hcaptcha|cf-turnstile|turnstile)', re.I)
 
 # ---------------------------------------------------------------- 項目の対応付け
@@ -319,6 +333,12 @@ def preflight(page, url):
         ng.append('CAPTCHAあり（自動送信しない）')
     if not page.query_selector('form') and not page.query_selector('textarea'):
         ng.append('フォームが見つからない')
+    # 用途が問い合わせでないフォームは、URLでは見分けられないので項目名で判定する
+    if not OK_FORMTYPE.search(text):
+        for label, pat in NG_FORMTYPE:
+            if re.search(pat, text):
+                ng.append(f'{label}（問い合わせ窓口ではない）')
+                break
     return ng
 
 
