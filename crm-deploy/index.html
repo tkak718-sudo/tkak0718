@@ -324,6 +324,31 @@
   }
   .task-side.side-us{background:var(--surface-alt); color:var(--text-secondary);}
   .task-side.side-client{background:#ffedd5; color:#9a3412;}
+  /* タスクにぶら下がるやりとり */
+  .note-thread{padding:2px 12px 10px 60px;}
+  .task-group-body .note-thread{padding-left:58px;}
+  .note-line{
+    display:flex; align-items:baseline; gap:7px; padding:4px 8px; border-radius:6px;
+    font-size:12px; line-height:1.7; margin-bottom:3px;
+  }
+  .note-line.from-client{background:#fff7ed;}
+  .note-line.from-us{background:var(--surface-alt);}
+  .note-who{font-size:10.5px; font-weight:800; flex:none; color:var(--text-secondary);}
+  .note-line.from-client .note-who{color:#9a3412;}
+  .note-text{flex:1; min-width:0; white-space:pre-wrap; word-break:break-word;}
+  .note-at{font-size:10.5px; color:var(--text-faint); flex:none;}
+  .note-add{display:flex; gap:6px; margin-top:4px;}
+  .note-add input{
+    flex:1; min-width:0; border:1px solid var(--border-strong); border-radius:6px;
+    padding:6px 9px; font-size:12px; background:var(--surface); color:var(--text); font-family:inherit;
+  }
+  .note-summary{
+    font-size:12px; font-weight:700; color:var(--text-secondary);
+    padding:6px 10px; border-radius:6px; background:var(--surface-alt); margin-bottom:8px;
+  }
+  .note-summary.has-new{background:#ffedd5; color:#9a3412;}
+  .share-task{border-bottom:1px solid var(--border);}
+  .share-task:last-child{border-bottom:none;}
   /* 共有ページの絞り込み */
   .share-tabs{display:flex; gap:6px; margin-bottom:14px; flex-wrap:wrap;}
   .share-tabs button{
@@ -1811,6 +1836,7 @@
         <button class="btn btn-sm" onclick="copyShareUrl()">コピー</button>
         <button class="btn btn-sm" onclick="openShareUrl()">開く</button>
       </div>
+      <div class="note-summary" id="cd-note-summary" style="display:none;"></div>
       <div class="task-hint" id="cd-share-note" style="display:none;"></div>
       <div class="task-hint" id="cd-share-help" style="display:none; padding-top:0;">
         <a href="#" onclick="event.preventDefault(); openShareHelp()" style="color:var(--primary-deep); font-weight:700;">
@@ -2470,7 +2496,7 @@ function tickSave(){
 const DOC_LIMIT = 1048576;
 
 /* どの版が動いているかを画面から確かめられるようにする */
-const BUILD_ID = '2026-08-20i';
+const BUILD_ID = '2026-08-20k';
 /* 直近の保存結果と、サーバーから受け取った内容の素性。診断画面で見せる */
 let lastWriteInfo = 'まだ保存していません';
 let lastServerInfo = 'まだ受信していません';
@@ -4259,7 +4285,24 @@ function clientTasks(clientId){
 }
 
 /* 案件ごとの囲みブロックを作る。ホームと共有ページで同じ関数を使う。 */
+/* 社内側で見るやりとり。行の下にぶら下げる。 */
+function clientNoteThread(taskId){
+  const el = document.createElement('div');
+  el.className = 'note-thread';
+  const list = cdNotes.filter(n=>n.taskId === taskId);
+  el.innerHTML = list.map(n=>noteLineHtml(n, true)).join('')
+    + `<div class="note-add">
+         <input type="text" id="cn-in-${taskId}" maxlength="2000" placeholder="クライアントへ返信…"
+                onkeydown="if(event.key==='Enter') sendOurNote(${taskId})">
+         <button class="btn btn-sm" onclick="sendOurNote(${taskId})">送信</button>
+       </div>`;
+  // 行の編集が開かないように、この中のクリックは外へ伝えない
+  el.onclick = e=>e.stopPropagation();
+  return el;
+}
+
 function buildTaskGroups(list, opts){
+  const o = opts || {};
   const groups = sortedProjects()
     .map(pj => ({pj, list: list.filter(t=>t.projectId === pj.id)}))
     .filter(g => g.list.length);
@@ -4284,12 +4327,18 @@ function buildTaskGroups(list, opts){
     wrap.appendChild(head);
     const body = document.createElement('div');
     body.className = 'task-group-body';
-    g.list.forEach(t=>body.appendChild(taskRow(t, opts)));
+    g.list.forEach(t=>{
+      body.appendChild(taskRow(t, opts));
+      if(o.notes && !t.internal) body.appendChild(clientNoteThread(t.id));
+    });
     wrap.appendChild(body);
     frag.appendChild(wrap);
   });
   return frag;
 }
+
+/* クライアントから届いたやりとり。クライアント詳細を開いたときに読み込む。 */
+let cdNotes = [];
 
 function renderClientTasks(clientId){
   const box = document.getElementById('cd-task-list');
@@ -4301,7 +4350,71 @@ function renderClientTasks(clientId){
                   + '「＋ タスクを追加」から作成できます。</div>';
     return;
   }
-  box.appendChild(buildTaskGroups(list, {showOpen: true, showSide: true}));
+  box.appendChild(buildTaskGroups(list, {showOpen: true, showSide: true, notes: true}));
+}
+
+/* 共有中のクライアントについて、やりとりを取り込んで画面に出す */
+async function loadClientNotes(c){
+  const line = document.getElementById('cd-note-summary');
+  if(!c.shareOn || !c.shareToken){
+    cdNotes = [];
+    if(line) line.style.display = 'none';
+    return;
+  }
+  try{
+    cdNotes = await fetchShareNotes(c.shareToken);
+  }catch(e){
+    console.error('やりとりを読めません', e);
+    cdNotes = [];
+  }
+  if(cdCurrentId !== c.id) return;      // 別のクライアントに移っていたら反映しない
+  const fromClient = cdNotes.filter(n=>n.by === 'client');
+  const seen = c.notesSeenAt || '';
+  const fresh = fromClient.filter(n=>(n.at || '') > seen).length;
+  if(line){
+    line.style.display = fromClient.length ? 'block' : 'none';
+    line.textContent = `クライアントから ${fromClient.length}件のメモ`
+                     + (fresh ? `（うち新着 ${fresh}件）` : '');
+    line.classList.toggle('has-new', !!fresh);
+  }
+  renderClientTasks(c.id);
+  // 見た時点までを既読にする
+  if(fromClient.length){
+    const latest = fromClient.map(n=>n.at || '').sort().pop();
+    if(latest && latest > seen){ c.notesSeenAt = latest; tickSave(); }
+  }
+}
+
+/* 弊社からの返信 */
+async function sendOurNote(taskId){
+  const c = clients.find(x=>x.id === cdCurrentId);
+  const el = document.getElementById('cn-in-' + taskId);
+  if(!c || !el) return;
+  const text = el.value.trim();
+  if(!text) return;
+  if(!c.shareOn || !c.shareToken){ toast('先に共有URLを発行してください'); return; }
+  el.disabled = true;
+  try{
+    await postShareNote(c.shareToken, taskId, text, 'us');
+    el.value = '';
+    await loadClientNotes(c);
+  }catch(e){
+    console.error(e);
+    toast('送信できませんでした（設定＞診断をご確認ください）');
+  }
+  el.disabled = false;
+}
+
+async function removeClientNote(noteId){
+  const c = clients.find(x=>x.id === cdCurrentId);
+  if(!c || !c.shareToken) return;
+  showConfirm('このメモを削除しますか?（クライアントの画面からも消えます）', async ()=>{
+    try{
+      await deleteShareNote(c.shareToken, noteId);
+      await loadClientNotes(c);
+      toast('メモを削除しました');
+    }catch(e){ console.error(e); toast('削除できませんでした'); }
+  });
 }
 
 /* ---------- 共有URL ----------
@@ -4316,6 +4429,18 @@ service cloud.firestore {
     match /shares/{token} {
       allow read: if true;
       allow write: if request.auth != null;
+    }
+    match /shareNotes/{token}/notes/{noteId} {
+      allow read: if true;
+      allow create: if request.auth != null || (
+        request.resource.data.keys().hasOnly(['taskId', 'text', 'at', 'by'])
+        && request.resource.data.by == 'client'
+        && request.resource.data.taskId is int
+        && request.resource.data.text is string
+        && request.resource.data.text.size() > 0
+        && request.resource.data.text.size() <= 2000
+      );
+      allow update, delete: if request.auth != null;
     }
   }
 }`;
@@ -4365,7 +4490,7 @@ function toggleClientShare(){
   c.shareOn = on;
   renderShareRow(c);
   if(on){
-    publishShare(c).then(ok=>{ if(ok) toast('共有URLを発行しました'); });
+    publishShare(c).then(ok=>{ if(ok) toast('共有URLを発行しました'); loadClientNotes(c); });
   } else {
     unpublishShare(c).then(()=>toast('共有を停止しました'));
   }
@@ -4399,7 +4524,7 @@ function shareBoardOf(c){
       name: g.pj ? g.pj.name : '案件なし',
       color: g.pj ? g.pj.color : 'slate',
       items: g.list.map(t=>({
-        title: t.title, sub: t.sub || '', priority: t.priority || 'mid',
+        id: t.id, title: t.title, sub: t.sub || '', priority: t.priority || 'mid',
         start: t.start || '', due: t.due || '', done: !!t.done, side: sideOf(t),
       })),
     })),
@@ -4438,6 +4563,57 @@ async function unpublishShare(c){
     await fetch(shareDocUrl(c.shareToken), {method:'DELETE', headers:{'Authorization':'Bearer ' + token}});
   }catch(e){ console.error(e); }
   delete sharePublished[c.id];
+}
+
+/* ---------- 共有ページでのやりとり ----------
+   クライアントはログインできないため、書き込みは専用の場所に限る。
+   1件ずつ追加する形にして、既存のメモを消したり書き換えたりできないようにしている。 */
+function shareNotesUrl(token, key){
+  return `https://firestore.googleapis.com/v1/projects/${(window.FB || window.FB_PUBLIC).projectId}`
+       + `/databases/(default)/documents/shareNotes/${token}/notes`
+       + (key ? `?key=${key}&pageSize=300` : '?pageSize=300');
+}
+
+async function fetchShareNotes(token, key){
+  const head = key ? {} : {'Authorization': 'Bearer ' + await window.FB.idToken()};
+  const res = await fetch(shareNotesUrl(token, key), {
+    cache: 'no-store', headers: Object.assign({'Cache-Control':'no-cache'}, head),
+  });
+  if(res.status === 404) return [];
+  if(!res.ok) throw Object.assign(new Error((await res.text()).slice(0,300)), {code:'HTTP ' + res.status});
+  const json = await res.json();
+  return (json.documents || []).map(d=>{
+    const f = fromFsFields(d.fields);
+    return {name: d.name, id: d.name.split('/').pop(), taskId: Number(f.taskId), text: f.text || '',
+            at: f.at || '', by: f.by === 'client' ? 'client' : 'us'};
+  }).sort((a,b)=> (a.at||'').localeCompare(b.at||''));
+}
+
+async function postShareNote(token, taskId, text, by, key){
+  const url = `https://firestore.googleapis.com/v1/projects/${(window.FB || window.FB_PUBLIC).projectId}`
+            + `/databases/(default)/documents/shareNotes/${token}/notes` + (key ? `?key=${key}` : '');
+  const head = {'Content-Type': 'application/json'};
+  if(!key) head['Authorization'] = 'Bearer ' + await window.FB.idToken();
+  const res = await fetch(url, {
+    method: 'POST', headers: head,
+    body: JSON.stringify({fields: toFsFields({taskId: Number(taskId), text, at: new Date().toISOString(), by})}),
+  });
+  if(!res.ok) throw Object.assign(new Error((await res.text()).slice(0,300)), {code:'HTTP ' + res.status});
+  return true;
+}
+
+async function deleteShareNote(token, noteId){
+  const url = `https://firestore.googleapis.com/v1/projects/${window.FB.projectId}`
+            + `/databases/(default)/documents/shareNotes/${token}/notes/${noteId}`;
+  const res = await fetch(url, {method:'DELETE', headers:{'Authorization':'Bearer ' + await window.FB.idToken()}});
+  if(!res.ok) throw Object.assign(new Error((await res.text()).slice(0,300)), {code:'HTTP ' + res.status});
+}
+
+function noteTime(at){
+  if(!at) return '';
+  const d = new Date(at);
+  const pad = n=>String(n).padStart(2,'0');
+  return `${d.getMonth()+1}/${d.getDate()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 function shareDocUrl(token){
@@ -5846,7 +6022,9 @@ function openClientDetail(clientId){
 
   document.getElementById('cd-share-on').checked = !!c.shareOn;
   renderShareRow(c);
+  cdNotes = [];
   renderClientTasks(clientId);
+  loadClientNotes(c);
 
   const relatedDeals = deals.filter(d=>d.clientId===clientId);
   const listEl = document.getElementById('cd-deals-list');
@@ -6362,7 +6540,30 @@ async function loadSharePage(token){
   let data;
   try{ data = JSON.parse(await b64ToText(raw.z)); }
   catch(e){ shareFailed('内容を読み取れませんでした。'); return; }
+  shareToken = token;
+  try{ shareNotes = await fetchShareNotes(token, cfg.apiKey); }catch(e){ console.error(e); }
   renderSharePage(data, raw.updatedAt);
+  // 弊社側の返信や、タスクの更新に追随する
+  setInterval(async ()=>{
+    try{
+      const res = await fetch(url, {cache:'no-store', headers:{'Cache-Control':'no-cache'}});
+      if(res.ok){
+        const r2 = fromFsFields((await res.json()).fields);
+        if(r2.updatedAt !== raw.updatedAt){
+          raw = r2;
+          renderSharePage(JSON.parse(await b64ToText(r2.z)), r2.updatedAt);
+        }
+      }
+    }catch(e){ /* 通信が不調なだけ。次の回で拾う */ }
+    reloadShareNotes();
+  }, 30000);
+}
+
+/* 会社名にすでに敬称が付いている場合に「様 様」とならないようにする */
+function shareClientLabel(name){
+  const n = (name || '').trim();
+  if(!n) return 'タスク管理表';
+  return /(様|御中|殿)$/.test(n) ? `${n} タスク管理表` : `${n} 様 タスク管理表`;
 }
 
 let shareData = null;
@@ -6379,8 +6580,9 @@ function setShareFilter(v){
 function renderSharePage(data, updatedAt){
   shareData = data;
   // 客先が開く画面なので、タブの名前も社内の呼び方にしない
-  document.title = (data.client ? data.client + ' 様 ' : '') + 'タスク管理表';
-  document.getElementById('sv-client').textContent = (data.client || '') + ' 様 タスク管理表';
+  const label = shareClientLabel(data.client);
+  document.title = label;
+  document.getElementById('sv-client').textContent = label;
   document.getElementById('sv-updated').textContent =
     updatedAt ? '最終更新: ' + new Date(updatedAt).toLocaleString('ja-JP') : '';
   // どちらが対応するか分かれている場合だけ、絞り込みを出す
@@ -6388,7 +6590,57 @@ function renderSharePage(data, updatedAt){
   document.getElementById('sv-tabs').style.display = sides.size > 1 ? 'flex' : 'none';
   setShareFilter('all');
   document.getElementById('sv-foot').textContent =
-    'この画面は閲覧専用です。内容の反映には少し時間がかかる場合があります。';
+    'タスクの内容は弊社が更新します。進捗やご連絡は各タスクの入力欄からお送りください。'
+  + '書き込んだ内容は弊社の担当者に届きます。';
+}
+
+/* 1つのタスクにぶら下がるやりとり。共有ページと社内の管理表で同じ見た目にする。 */
+function noteLineHtml(n, canDelete){
+  return `<div class="note-line ${n.by === 'client' ? 'from-client' : 'from-us'}">
+    <span class="note-who">${n.by === 'client' ? 'クライアント' : '弊社'}</span>
+    <span class="note-text">${escapeHtml(n.text)}</span>
+    <span class="note-at">${noteTime(n.at)}</span>
+    ${canDelete ? `<span class="icon-btn" title="削除" onclick="removeClientNote('${escapeHtml(n.id)}')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg></span>` : ''}
+  </div>`;
+}
+
+function noteThreadHtml(taskId){
+  const list = (shareNotes || []).filter(n=>n.taskId === taskId);
+  return list.map(n=>noteLineHtml(n, false)).join('')
+    + `<div class="note-add">
+         <input type="text" id="sn-in-${taskId}" maxlength="2000" placeholder="進捗やご連絡を書く…"
+                onkeydown="if(event.key==='Enter') sendShareNote(${taskId})">
+         <button class="btn btn-sm" onclick="sendShareNote(${taskId})">送信</button>
+       </div>`;
+}
+
+let shareNotes = [];
+let shareToken = '';
+
+async function sendShareNote(taskId){
+  const el = document.getElementById('sn-in-' + taskId);
+  const text = el.value.trim();
+  if(!text) return;
+  el.disabled = true;
+  try{
+    await postShareNote(shareToken, taskId, text, 'client', window.FB_PUBLIC.apiKey);
+    el.value = '';
+    await reloadShareNotes();
+  }catch(e){
+    console.error(e);
+    alert('送信できませんでした。時間をおいてお試しください。');
+  }
+  el.disabled = false;
+  const again = document.getElementById('sn-in-' + taskId);
+  if(again) again.focus();
+}
+
+async function reloadShareNotes(){
+  try{
+    shareNotes = await fetchShareNotes(shareToken, window.FB_PUBLIC.apiKey);
+    drawShareGroups();
+  }catch(e){ console.error('やりとりを読めません', e); }
 }
 
 function drawShareGroups(){
@@ -6418,15 +6670,18 @@ function drawShareGroups(){
         <span class="task-group-count">${done} / ${g.items.length} 完了</span>
       </div>
       <div class="task-group-body">${g.items.map(t=>`
-        <div class="task-row">
-          <div class="share-state ${t.done?'done':''}">${t.done?'<svg viewBox="0 0 24 24" fill="none" stroke-width="3"><path d="M5 12l4 4 10-10"/></svg>':''}</div>
-          <div class="task-badge badge-${t.priority}" title="優先度 ${PRIORITY_LABEL[t.priority]||'中'}">${PRIORITY_LABEL[t.priority]||'中'}</div>
-          <div class="task-main">
-            <div class="task-title ${t.done?'done':''}">${escapeHtml(t.title)}</div>
-            <div class="task-meta"><span class="task-side side-${t.side==='client'?'client':'us'}">${
-              SIDE_LABEL_SHARE[t.side==='client'?'client':'us']}</span>${
-              dueBadge(t.start, t.due, t.done)}${escapeHtml((t.sub||'').replace(/\s*\n\s*/g,' '))}</div>
+        <div class="share-task">
+          <div class="task-row">
+            <div class="share-state ${t.done?'done':''}">${t.done?'<svg viewBox="0 0 24 24" fill="none" stroke-width="3"><path d="M5 12l4 4 10-10"/></svg>':''}</div>
+            <div class="task-badge badge-${t.priority}" title="優先度 ${PRIORITY_LABEL[t.priority]||'中'}">${PRIORITY_LABEL[t.priority]||'中'}</div>
+            <div class="task-main">
+              <div class="task-title ${t.done?'done':''}">${escapeHtml(t.title)}</div>
+              <div class="task-meta"><span class="task-side side-${t.side==='client'?'client':'us'}">${
+                SIDE_LABEL_SHARE[t.side==='client'?'client':'us']}</span>${
+                dueBadge(t.start, t.due, t.done)}${escapeHtml((t.sub||'').replace(/\s*\n\s*/g,' '))}</div>
+            </div>
           </div>
+          <div class="note-thread" id="sn-${t.id}">${noteThreadHtml(t.id)}</div>
         </div>`).join('')}</div>`;
     box.appendChild(wrap);
   });
