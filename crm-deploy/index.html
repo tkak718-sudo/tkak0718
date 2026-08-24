@@ -337,10 +337,11 @@
   .note-line.from-client .note-who{color:#9a3412;}
   .note-text{flex:1; min-width:0; white-space:pre-wrap; word-break:break-word;}
   .note-at{font-size:10.5px; color:var(--text-faint); flex:none;}
-  .note-add{display:flex; gap:6px; margin-top:4px;}
-  .note-add input{
+  .note-add{display:flex; gap:6px; margin-top:4px; align-items:flex-end;}
+  .note-add textarea{
     flex:1; min-width:0; border:1px solid var(--border-strong); border-radius:6px;
-    padding:6px 9px; font-size:12px; background:var(--surface); color:var(--text); font-family:inherit;
+    padding:6px 9px; font-size:12px; line-height:1.7; background:var(--surface); color:var(--text);
+    font-family:inherit; resize:vertical; box-sizing:border-box;
   }
   .note-summary{
     font-size:12px; font-weight:700; color:var(--text-secondary);
@@ -2496,7 +2497,7 @@ function tickSave(){
 const DOC_LIMIT = 1048576;
 
 /* どの版が動いているかを画面から確かめられるようにする */
-const BUILD_ID = '2026-08-20l';
+const BUILD_ID = '2026-08-20m';
 /* 直近の保存結果と、サーバーから受け取った内容の素性。診断画面で見せる */
 let lastWriteInfo = 'まだ保存していません';
 let lastServerInfo = 'まだ受信していません';
@@ -4292,8 +4293,9 @@ function clientNoteThread(taskId){
   const list = cdNotes.filter(n=>n.taskId === taskId);
   el.innerHTML = list.map(n=>noteLineHtml(n, true)).join('')
     + `<div class="note-add">
-         <input type="text" id="cn-in-${taskId}" maxlength="2000" placeholder="クライアントへ返信…"
-                onkeydown="if(event.key==='Enter') sendOurNote(${taskId})">
+         <textarea id="cn-in-${taskId}" maxlength="${NOTE_MAX}" rows="2"
+                   placeholder="クライアントへ返信…（改行できます／Ctrl+Enterで送信）"
+                   onkeydown="if(event.key==='Enter' && (event.ctrlKey||event.metaKey)){event.preventDefault(); sendOurNote(${taskId});}"></textarea>
          <button class="btn btn-sm" onclick="sendOurNote(${taskId})">送信</button>
        </div>`;
   // 行の編集が開かないように、この中のクリックは外へ伝えない
@@ -4440,7 +4442,8 @@ service cloud.firestore {
         && request.resource.data.text.size() > 0
         && request.resource.data.text.size() <= 2000
       );
-      allow update, delete: if request.auth != null;
+      allow update: if request.auth != null;
+      allow delete: if request.auth != null || resource.data.by == 'client';
     }
   }
 }`;
@@ -4602,10 +4605,12 @@ async function postShareNote(token, taskId, text, by, key){
   return true;
 }
 
-async function deleteShareNote(token, noteId){
-  const url = `https://firestore.googleapis.com/v1/projects/${window.FB.projectId}`
-            + `/databases/(default)/documents/shareNotes/${token}/notes/${noteId}`;
-  const res = await fetch(url, {method:'DELETE', headers:{'Authorization':'Bearer ' + await window.FB.idToken()}});
+async function deleteShareNote(token, noteId, key){
+  const url = `https://firestore.googleapis.com/v1/projects/${(window.FB || window.FB_PUBLIC).projectId}`
+            + `/databases/(default)/documents/shareNotes/${token}/notes/${noteId}`
+            + (key ? `?key=${key}` : '');
+  const head = key ? {} : {'Authorization': 'Bearer ' + await window.FB.idToken()};
+  const res = await fetch(url, {method:'DELETE', headers: head});
   if(!res.ok) throw Object.assign(new Error((await res.text()).slice(0,300)), {code:'HTTP ' + res.status});
 }
 
@@ -6595,24 +6600,43 @@ function renderSharePage(data, updatedAt){
 }
 
 /* 1つのタスクにぶら下がるやりとり。共有ページと社内の管理表で同じ見た目にする。 */
-function noteLineHtml(n, canDelete){
+/* 書き込みの上限。ルール側でも同じ数字で弾いている（片方だけ変えないこと） */
+const NOTE_MAX = 2000;
+
+function noteLineHtml(n, canDelete, handler){
   return `<div class="note-line ${n.by === 'client' ? 'from-client' : 'from-us'}">
     <span class="note-who">${n.by === 'client' ? 'クライアント' : '弊社'}</span>
     <span class="note-text">${escapeHtml(n.text)}</span>
     <span class="note-at">${noteTime(n.at)}</span>
-    ${canDelete ? `<span class="icon-btn" title="削除" onclick="removeClientNote('${escapeHtml(n.id)}')">
+    ${canDelete ? `<span class="icon-btn" title="削除" onclick="${handler || 'removeClientNote'}('${escapeHtml(n.id)}')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg></span>` : ''}
   </div>`;
 }
 
 function noteThreadHtml(taskId){
   const list = (shareNotes || []).filter(n=>n.taskId === taskId);
-  return list.map(n=>noteLineHtml(n, false)).join('')
+  // クライアントは自分が書いたものだけ消せる。弊社の書き込みには削除を出さない。
+  return list.map(n=>noteLineHtml(n, n.by === 'client', 'removeShareNote')).join('')
     + `<div class="note-add">
-         <input type="text" id="sn-in-${taskId}" maxlength="2000" placeholder="進捗やご連絡を書く…"
-                onkeydown="if(event.key==='Enter') sendShareNote(${taskId})">
+         <textarea id="sn-in-${taskId}" maxlength="${NOTE_MAX}" rows="2"
+                   placeholder="進捗やご連絡を書く…（改行できます／Ctrl+Enterで送信）"
+                   onkeydown="if(event.key==='Enter' && (event.ctrlKey||event.metaKey)){event.preventDefault(); sendShareNote(${taskId});}"></textarea>
          <button class="btn btn-sm" onclick="sendShareNote(${taskId})">送信</button>
        </div>`;
+}
+
+/* クライアント自身の書き込みを取り消す */
+async function removeShareNote(noteId){
+  if(!confirm('このメモを削除しますか?')) return;
+  try{
+    await deleteShareNote(shareToken, noteId, window.FB_PUBLIC.apiKey);
+    await reloadShareNotes();
+  }catch(e){
+    console.error(e);
+    alert(String(e && e.code) === 'HTTP 403'
+      ? '削除が許可されていません。\n\n共有元の方へ：Firestoreのルールを最新の内容に更新してください。'
+      : `削除できませんでした（${(e && e.code) || '通信エラー'}）。`);
+  }
 }
 
 let shareNotes = [];
