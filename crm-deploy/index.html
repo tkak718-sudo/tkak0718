@@ -333,7 +333,10 @@
   }
   .note-line.from-client{background:#fff7ed;}
   .note-line.from-us{background:var(--surface-alt);}
-  .note-who{font-size:10.5px; font-weight:800; flex:none; color:var(--text-secondary);}
+  .note-who{
+    font-size:10.5px; font-weight:800; flex:none; color:var(--text-secondary);
+    max-width:12em; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  }
   .note-line.from-client .note-who{color:#9a3412;}
   .note-text{flex:1; min-width:0; white-space:pre-wrap; word-break:break-word;}
   .note-at{font-size:10.5px; color:var(--text-faint); flex:none;}
@@ -2507,7 +2510,7 @@ function tickSave(){
 const DOC_LIMIT = 1048576;
 
 /* どの版が動いているかを画面から確かめられるようにする */
-const BUILD_ID = '2026-08-20o';
+const BUILD_ID = '2026-08-20p';
 /* 直近の保存結果と、サーバーから受け取った内容の素性。診断画面で見せる */
 let lastWriteInfo = 'まだ保存していません';
 let lastServerInfo = 'まだ受信していません';
@@ -4430,7 +4433,8 @@ function clientNoteThread(taskId){
   const el = document.createElement('div');
   el.className = 'note-thread';
   const list = cdNotes.filter(n=>n.taskId === taskId);
-  el.innerHTML = list.map(n=>noteLineHtml(n, true)).join('')
+  const c = clients.find(x=>x.id === cdCurrentId);
+  el.innerHTML = list.map(n=>noteLineHtml(n, true, null, c && c.name)).join('')
     + `<div class="note-add">
          <textarea id="cn-in-${taskId}" maxlength="${NOTE_MAX}" rows="2"
                    placeholder="クライアントへ返信…（改行できます／Ctrl+Enterで送信）"
@@ -6758,9 +6762,11 @@ function renderSharePage(data, updatedAt){
 /* 書き込みの上限。ルール側でも同じ数字で弾いている（片方だけ変えないこと） */
 const NOTE_MAX = 2000;
 
-function noteLineHtml(n, canDelete, handler){
+function noteLineHtml(n, canDelete, handler, clientName){
+  // 書き手は会社名で出す。どちらが書いたのか一目で分かるようにするため。
+  const who = n.by === 'client' ? (clientName || 'クライアント') : OUR_NAME;
   return `<div class="note-line ${n.by === 'client' ? 'from-client' : 'from-us'}">
-    <span class="note-who">${n.by === 'client' ? 'クライアント' : OUR_NAME}</span>
+    <span class="note-who">${escapeHtml(who)}</span>
     <span class="note-text">${escapeHtml(n.text)}</span>
     <span class="note-at">${noteTime(n.at)}</span>
     ${canDelete ? `<span class="icon-btn" title="削除" onclick="${handler || 'removeClientNote'}('${escapeHtml(n.id)}')">
@@ -6771,7 +6777,8 @@ function noteLineHtml(n, canDelete, handler){
 function noteThreadHtml(taskId){
   const list = (shareNotes || []).filter(n=>n.taskId === taskId);
   // クライアントは自分が書いたものだけ消せる。弊社の書き込みには削除を出さない。
-  return list.map(n=>noteLineHtml(n, n.by === 'client', 'removeShareNote')).join('')
+  return list.map(n=>noteLineHtml(n, n.by === 'client', 'removeShareNote',
+                                  shareData && shareData.client)).join('')
     + `<div class="note-add">
          <textarea id="sn-in-${taskId}" maxlength="${NOTE_MAX}" rows="2"
                    placeholder="進捗やご連絡を書く…（改行できます／Ctrl+Enterで送信）"
