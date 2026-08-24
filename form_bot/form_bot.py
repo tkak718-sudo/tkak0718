@@ -153,14 +153,22 @@ def label_text(page, el):
             lab = page.query_selector(f'label[for="{eid}"]')
             if lab:
                 bits.append(lab.inner_text())
-        # ラベルで囲まれている書き方と、表組みの見出しセル
+        # ラベルで囲まれている書き方に加え、th/dt が入力欄の「ひとつ上の階層の
+        # 直前の兄弟」になっている作り（表組み、dt/dd、見出しdiv+入力divの
+        # 兄弟並びなど）を、決め打ちの階層ぶんだけ遡って探す
         t = el.evaluate("""e => {
             const L = e.closest('label');
             if (L) return L.innerText;
-            const td = e.closest('td, dd, div.form-item, p');
-            if (!td) return '';
-            const prev = td.previousElementSibling;
-            return prev ? prev.innerText : '';
+            let node = e;
+            for (let i = 0; i < 4 && node; i++) {
+                const prev = node.previousElementSibling;
+                if (prev) {
+                    const s = (prev.innerText || '').trim();
+                    if (s && s.length <= 40) return s;
+                }
+                node = node.parentElement;
+            }
+            return '';
         }""")
         if t:
             bits.append(t)
@@ -318,9 +326,11 @@ def find_button(page, kinds):
 
 
 def pick_target(page):
-    """フォームが外部サービスのiframeで埋め込まれているページに対応する。
-       (例: フォームメーラー等はページ本体ではなくiframe内にformを生成する。
-       本体側だけを見ているとフォームが常に「見つからない」扱いになる)"""
+    """フォームがまだ描画されていない/外部iframeに埋め込まれているページに対応する。
+       (例1: React等で作られたページは読み込み後しばらくしてフォームを生成する
+        例2: フォームメーラー等はページ本体ではなくiframe内にformを生成する
+       どちらも、決め打ちの短い待ち時間だけ見ているとフォームが常に
+       「見つからない」扱いになるので、見つかるまで少し待ちながら探す)"""
     def has_form(fr):
         try:
             return bool(fr.query_selector('form') or fr.query_selector('textarea'))
@@ -328,14 +338,15 @@ def pick_target(page):
             return False
     if has_form(page):
         return page
-    # 埋め込みiframeはJSがDOMContentLoaded後に生成し、さらに中身の読み込みが要るので少し待つ
     for _ in range(5):
+        page.wait_for_timeout(800)
+        if has_form(page):
+            return page
         for fr in page.frames:
             if fr == page.main_frame:
                 continue
             if has_form(fr):
                 return fr
-        page.wait_for_timeout(800)
     return page
 
 
