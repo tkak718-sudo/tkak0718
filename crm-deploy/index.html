@@ -2496,7 +2496,7 @@ function tickSave(){
 const DOC_LIMIT = 1048576;
 
 /* どの版が動いているかを画面から確かめられるようにする */
-const BUILD_ID = '2026-08-20k';
+const BUILD_ID = '2026-08-20l';
 /* 直近の保存結果と、サーバーから受け取った内容の素性。診断画面で見せる */
 let lastWriteInfo = 'まだ保存していません';
 let lastServerInfo = 'まだ受信していません';
@@ -6629,7 +6629,11 @@ async function sendShareNote(taskId){
     await reloadShareNotes();
   }catch(e){
     console.error(e);
-    alert('送信できませんでした。時間をおいてお試しください。');
+    // 何が起きたか分かる形で出す。設定漏れと通信不調は対処がまったく違うため。
+    alert(String(e && e.code) === 'HTTP 403'
+      ? '書き込みが許可されていません。\n\n共有元の方へ：Firestoreのルールに shareNotes の設定を追加し、'
+        + '「公開」を行ってください。CRMのクライアント詳細にある案内に、貼り付ける内容が出ています。'
+      : `送信できませんでした（${(e && e.code) || '通信エラー'}）。時間をおいてお試しください。`);
   }
   el.disabled = false;
   const again = document.getElementById('sn-in-' + taskId);
