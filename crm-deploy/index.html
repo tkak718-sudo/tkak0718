@@ -328,17 +328,18 @@
   .note-thread{padding:2px 12px 10px 60px;}
   .task-group-body .note-thread{padding-left:58px;}
   .note-line{
-    display:flex; align-items:baseline; gap:7px; padding:4px 8px; border-radius:6px;
+    padding:5px 8px 6px; border-radius:6px;
     font-size:12px; line-height:1.7; margin-bottom:3px;
   }
   .note-line.from-client{background:#fff7ed;}
   .note-line.from-us{background:var(--surface-alt);}
+  .note-head{display:flex; align-items:baseline; gap:7px;}
   .note-who{
-    font-size:10.5px; font-weight:800; flex:none; color:var(--text-secondary);
-    max-width:12em; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+    font-size:10.5px; font-weight:800; color:var(--text-secondary);
+    flex:1; min-width:0; white-space:normal; word-break:break-word; line-height:1.5;
   }
   .note-line.from-client .note-who{color:#9a3412;}
-  .note-text{flex:1; min-width:0; white-space:pre-wrap; word-break:break-word;}
+  .note-text{white-space:pre-wrap; word-break:break-word; margin-top:1px;}
   .note-at{font-size:10.5px; color:var(--text-faint); flex:none;}
   .note-add{display:flex; gap:6px; margin-top:4px; align-items:flex-end;}
   .note-add textarea{
@@ -2510,7 +2511,7 @@ function tickSave(){
 const DOC_LIMIT = 1048576;
 
 /* どの版が動いているかを画面から確かめられるようにする */
-const BUILD_ID = '2026-08-20p';
+const BUILD_ID = '2026-08-20q';
 /* 直近の保存結果と、サーバーから受け取った内容の素性。診断画面で見せる */
 let lastWriteInfo = 'まだ保存していません';
 let lastServerInfo = 'まだ受信していません';
@@ -6765,12 +6766,15 @@ const NOTE_MAX = 2000;
 function noteLineHtml(n, canDelete, handler, clientName){
   // 書き手は会社名で出す。どちらが書いたのか一目で分かるようにするため。
   const who = n.by === 'client' ? (clientName || 'クライアント') : OUR_NAME;
+  // 会社名は省略せず全部出す。長い社名は折り返すため、名前と本文は行を分ける。
   return `<div class="note-line ${n.by === 'client' ? 'from-client' : 'from-us'}">
-    <span class="note-who">${escapeHtml(who)}</span>
-    <span class="note-text">${escapeHtml(n.text)}</span>
-    <span class="note-at">${noteTime(n.at)}</span>
-    ${canDelete ? `<span class="icon-btn" title="削除" onclick="${handler || 'removeClientNote'}('${escapeHtml(n.id)}')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg></span>` : ''}
+    <div class="note-head">
+      <span class="note-who">${escapeHtml(who)}</span>
+      <span class="note-at">${noteTime(n.at)}</span>
+      ${canDelete ? `<span class="icon-btn" title="削除" onclick="${handler || 'removeClientNote'}('${escapeHtml(n.id)}')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg></span>` : ''}
+    </div>
+    <div class="note-text">${escapeHtml(n.text)}</div>
   </div>`;
 }
 
