@@ -317,6 +317,28 @@ def find_button(page, kinds):
     return None, ''
 
 
+def pick_target(page):
+    """フォームが外部サービスのiframeで埋め込まれているページに対応する。
+       (例: フォームメーラー等はページ本体ではなくiframe内にformを生成する。
+       本体側だけを見ているとフォームが常に「見つからない」扱いになる)"""
+    def has_form(fr):
+        try:
+            return bool(fr.query_selector('form') or fr.query_selector('textarea'))
+        except Exception:
+            return False
+    if has_form(page):
+        return page
+    # 埋め込みiframeはJSがDOMContentLoaded後に生成し、さらに中身の読み込みが要るので少し待つ
+    for _ in range(5):
+        for fr in page.frames:
+            if fr == page.main_frame:
+                continue
+            if has_form(fr):
+                return fr
+        page.wait_for_timeout(800)
+    return page
+
+
 def preflight(page, url):
     """送信してよい相手かを判定する。ここで弾いたものは送信モードでも絶対に送らない"""
     try:
@@ -361,11 +383,14 @@ def run_one(page, row, profile, args, ledger, shot_dir):
     except Exception as e:
         return {**base, 'phase': 'skip', 'reason': f'到達不可: {str(e)[:60]}'}
 
-    ng = preflight(page, url)
+    # フォームが外部サービスのiframe埋め込みの場合、targetはそのiframe側になる
+    target = pick_target(page)
+
+    ng = preflight(target, url)
     if ng:
         return {**base, 'phase': 'skip', 'reason': ' / '.join(ng)}
 
-    filled, missing = fill_form(page, profile, company)
+    filled, missing = fill_form(target, profile, company)
     shot = os.path.join(shot_dir, f'{key}_filled.png')
     try:
         page.screenshot(path=shot, full_page=True)
@@ -384,16 +409,16 @@ def run_one(page, row, profile, args, ledger, shot_dir):
         # 確認画面を挟むフォームは「確認」まで進めておくと、人は最後の1押しで済む
         step = ''
         if args.to_confirm:
-            btn, lab = find_button(page, 'confirm')
+            btn, lab = find_button(target, 'confirm')
             if btn:
                 try:
                     btn.click()
-                    page.wait_for_load_state('domcontentloaded', timeout=args.timeout * 1000)
+                    target.wait_for_load_state('domcontentloaded', timeout=args.timeout * 1000)
                     page.wait_for_timeout(1200)
                     step = f'／確認画面まで進めた（{lab}）'
                 except Exception:
                     step = '／確認ボタンを押せなかった'
-        sbtn, slab = find_button(page, 'submit')
+        sbtn, slab = find_button(target, 'submit')
         print(f'\n  ── {company}')
         print(f'     {url}')
         print(f'     入力: {", ".join(f"{k}={v}" for k, v in filled.items() if k != "_note")[:150]}')
@@ -426,24 +451,30 @@ def run_one(page, row, profile, args, ledger, shot_dir):
     # ---- ここから先が実送信。台帳に submitting を先に書き、落ちても再送しない
     ledger.write({**base, 'phase': 'submitting', 'filled': filled})
 
-    btn, lab = find_button(page, 'confirm')
+    btn, lab = find_button(target, 'confirm')
     if btn:
         try:
             btn.click()
-            page.wait_for_load_state('domcontentloaded', timeout=args.timeout * 1000)
+            target.wait_for_load_state('domcontentloaded', timeout=args.timeout * 1000)
             page.wait_for_timeout(1200)
         except Exception:
             pass
-    sbtn, slab = find_button(page, 'submit')
+    sbtn, slab = find_button(target, 'submit')
     if not sbtn:
         rec = {**base, 'phase': 'failed', 'reason': '送信ボタンが見つからない', 'filled': filled, 'shot': shot}
         ledger.write(rec)
         return rec
     try:
         sbtn.click()
-        page.wait_for_load_state('domcontentloaded', timeout=args.timeout * 1000)
+        try:
+            target.wait_for_load_state('domcontentloaded', timeout=args.timeout * 1000)
+        except Exception:
+            pass
         page.wait_for_timeout(1500)
-        body = page.inner_text('body')[:4000]
+        try:
+            body = target.inner_text('body')[:4000]
+        except Exception:
+            body = page.inner_text('body')[:4000]
         ok = bool(re.search(r'(送信(が)?完了|受け付けました|ありがとうございました|thank you|完了しました)', body, re.I))
         after = os.path.join(shot_dir, f'{key}_after.png')
         page.screenshot(path=after, full_page=True)
