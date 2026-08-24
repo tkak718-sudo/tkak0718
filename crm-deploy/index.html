@@ -831,7 +831,7 @@
     <div class="share-tabs" id="sv-tabs" style="display:none;">
       <button id="sv-tab-all" class="on" onclick="setShareFilter('all')">すべて</button>
       <button id="sv-tab-client" onclick="setShareFilter('client')">御社対応</button>
-      <button id="sv-tab-us" onclick="setShareFilter('us')">弊社対応</button>
+      <button id="sv-tab-us" onclick="setShareFilter('us')"></button>
     </div>
     <div id="sv-body"></div>
     <div class="share-foot" id="sv-foot"></div>
@@ -1488,6 +1488,9 @@
         <select id="pj-new-color" onchange="syncNewColorSwatch()"></select>
       </div>
       <div class="pj-row" style="border-bottom:none;">
+        <select id="pj-new-client" style="flex:1; min-width:0;" title="この案件はどのクライアントのものか"></select>
+      </div>
+      <div class="pj-row" style="border-bottom:none;">
         <select id="pj-new-template" style="flex:1; min-width:0;"></select>
         <button class="btn btn-sm" onclick="openTemplateModal()" title="テンプレートの作成・編集">テンプレートを管理</button>
         <button class="btn btn-primary btn-sm" onclick="addProject()">追加</button>
@@ -1583,7 +1586,8 @@
       </div>
       <div class="field-row">
         <div class="field"><label>クライアント</label>
-          <select id="tk-client"></select>
+          <select id="tk-client" onchange="updateTaskClientHint()"></select>
+          <div class="detail-sub" id="tk-client-hint" style="margin-top:5px;"></div>
         </div>
         <div class="field"><label>対応するのは</label>
           <select id="tk-side">
@@ -2497,7 +2501,7 @@ function tickSave(){
 const DOC_LIMIT = 1048576;
 
 /* どの版が動いているかを画面から確かめられるようにする */
-const BUILD_ID = '2026-08-20m';
+const BUILD_ID = '2026-08-20n';
 /* 直近の保存結果と、サーバーから受け取った内容の素性。診断画面で見せる */
 let lastWriteInfo = 'まだ保存していません';
 let lastServerInfo = 'まだ受信していません';
@@ -4239,8 +4243,10 @@ const PRIORITY_LABEL = {high: '高', mid: '中', low: '低'};
 
 /* 対応区分。どちら側がボールを持っているかを示す。
    社内の画面と客先の画面では呼び方が変わるため、言い方を分けている。 */
-const SIDE_LABEL       = {us: '弊社', client: 'クライアント'};
-const SIDE_LABEL_SHARE = {us: '弊社対応', client: '御社対応'};
+/* 客先に見える画面での自社の呼び方。ここを変えると共有ページの表記も変わる。 */
+const OUR_NAME = 'active channel';
+const SIDE_LABEL       = {us: '弊社', client: 'クライアント'};   // 社内の画面は短い呼び方のまま
+const SIDE_LABEL_SHARE = {us: OUR_NAME + ' 対応', client: '御社対応'};
 function sideOf(t){ return t.side === 'client' ? 'client' : 'us'; }
 
 function sortTasks(list){
@@ -4259,16 +4265,50 @@ function sortTasks(list){
 /* ---------- 案件（タスクのグループ）の管理 ---------- */
 
 /* タスクモーダルのクライアントのプルダウン。未選択は「紐づけなし」。 */
+function sortedClients(){
+  return clients.slice().sort((a,b)=>a.name.localeCompare(b.name, 'ja'));
+}
+
+function clientOptions(selected, emptyLabel){
+  return `<option value="">${escapeHtml(emptyLabel || 'クライアントに紐づけない')}</option>`
+       + sortedClients().map(c=>
+           `<option value="${c.id}"${String(c.id)===String(selected)?' selected':''}>`
+           + `${escapeHtml(c.name)}</option>`).join('');
+}
+
+function setProjectClient(projectId, value){
+  const pj = projectById(projectId);
+  if(!pj) return;
+  pj.clientId = value ? parseInt(value, 10) : null;
+  renderProjectList();
+  renderHome();
+  if(cdCurrentId) renderClientTasks(cdCurrentId);
+  toast(pj.clientId ? `案件「${pj.name}」を ${clients.find(c=>c.id===pj.clientId).name} に紐づけました`
+                    : `案件「${pj.name}」のクライアント紐づけを外しました`);
+}
+
 function fillClientSelect(){
   const sel = document.getElementById('tk-client');
   const cur = sel.value;
-  sel.innerHTML = '<option value="">クライアントに紐づけない</option>' +
-    clients.slice().sort((a,b)=>a.name.localeCompare(b.name, 'ja'))
-      .map(c=>`<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
+  sel.innerHTML = clientOptions(cur, 'クライアントに紐づけない');
   if(cur && clients.some(c=>String(c.id)===cur)) sel.value = cur;
 }
 
 /* タスクモーダルの案件プルダウン。未選択は「案件なし」。 */
+/* 案件にクライアントが紐づいていれば、個別に指定しなくても引き継がれることを伝える */
+function updateTaskClientHint(){
+  const hint = document.getElementById('tk-client-hint');
+  if(!hint) return;
+  const own = document.getElementById('tk-client').value;
+  const pjVal = document.getElementById('tk-project').value;
+  const pj = pjVal ? projectById(parseInt(pjVal, 10)) : null;
+  const inherited = pj && pj.clientId ? clients.find(c=>c.id === pj.clientId) : null;
+  if(own){ hint.textContent = ''; return; }
+  hint.textContent = inherited
+    ? `案件「${pj.name}」の ${inherited.name} に含まれます`
+    : '';
+}
+
 function fillProjectSelect(){
   const sel = document.getElementById('tk-project');
   const cur = sel.value;
@@ -4281,8 +4321,16 @@ function fillProjectSelect(){
    ホームのタスク一覧と同じ見た目で、そのクライアントに紐づくタスクだけを出す。
    担当者では絞らない（両担当の動きが1枚で分かるようにするため）。 */
 
+/* そのタスクがどのクライアントのものか。
+   タスク自身に指定がなければ、所属する案件の紐づけを引き継ぐ。 */
+function taskClientId(t){
+  if(t.clientId) return t.clientId;
+  const pj = t.projectId ? projectById(t.projectId) : null;
+  return (pj && pj.clientId) || null;
+}
+
 function clientTasks(clientId){
-  return sortTasks(tasks.filter(t=>t.clientId === clientId));
+  return sortTasks(tasks.filter(t=>taskClientId(t) === clientId));
 }
 
 /* 案件ごとの囲みブロックを作る。ホームと共有ページで同じ関数を使う。 */
@@ -4515,7 +4563,7 @@ function openShareUrl(){
 
 /* 客先に見せる分だけを取り出す。社内のみのタスクとメモ以外の項目は含めない。 */
 function shareBoardOf(c){
-  const list = sortTasks(tasks.filter(t=>t.clientId === c.id && !t.internal));
+  const list = sortTasks(tasks.filter(t=>taskClientId(t) === c.id && !t.internal));
   const groups = sortedProjects()
     .map(pj=>({pj, list: list.filter(t=>t.projectId===pj.id)}))
     .filter(g=>g.list.length);
@@ -4863,6 +4911,7 @@ function openProjectModal(){
   document.getElementById('pj-new-name').value = '';
   document.getElementById('pj-new-color').innerHTML = colorOptions(nextProjectColor());
   document.getElementById('pj-new-template').innerHTML = templateOptions('', 'テンプレートを使わない');
+  document.getElementById('pj-new-client').innerHTML = clientOptions('', 'クライアント未設定');
   syncNewColorSwatch();
   renderProjectList();
   openModal('project-modal');
@@ -4896,6 +4945,10 @@ function renderProjectList(){
         </span>
       </div>
       <div class="tpl-item-line" style="margin-top:5px; padding-left:26px;">
+        <select style="flex:1; min-width:0;" title="この案件はどのクライアントのものか"
+                onchange="setProjectClient(${pj.id}, this.value)">${clientOptions(pj.clientId, 'クライアント未設定')}</select>
+      </div>
+      <div class="tpl-item-line" style="margin-top:5px; padding-left:26px;">
         <select id="pj-apply-${pj.id}" style="flex:1; min-width:0;" title="この案件にテンプレートを適用する">${templateOptions('', 'テンプレートを適用…')}</select>
         <button class="btn btn-sm" onclick="applyTemplateToExisting(${pj.id})" title="選んだテンプレートのタスクを追加">適用</button>
       </div>
@@ -4909,15 +4962,19 @@ function addProject(){
   const color = document.getElementById('pj-new-color').value;
   const maxOrder = taskProjects.reduce((m,p)=>Math.max(m, p.order||0), 0);
   const pjId = nextIds.project++;
-  taskProjects.push({id: pjId, name, color, order: maxOrder + 1});
+  const clVal = document.getElementById('pj-new-client').value;
+  taskProjects.push({id: pjId, name, color, order: maxOrder + 1,
+                     clientId: clVal ? parseInt(clVal, 10) : null});
   // 選ばれていれば、ひな形のタスクを同時に起こす
   const tplId = document.getElementById('pj-new-template').value;
   const made = tplId ? applyTemplateToProject(tplId, pjId) : 0;
   document.getElementById('pj-new-name').value = '';
   document.getElementById('pj-new-color').innerHTML = colorOptions(nextProjectColor());
+  document.getElementById('pj-new-client').value = '';
   syncNewColorSwatch();
   renderProjectList();
   renderHome();
+  if(cdCurrentId) renderClientTasks(cdCurrentId);
   toast(made ? `案件「${name}」を追加し、タスク${made}件を作成しました` : `案件「${name}」を追加しました`);
 }
 
@@ -4963,6 +5020,7 @@ function deleteProject(id){
   showConfirm(msg, ()=>{
     tasks.forEach(t=>{ if(t.projectId===id) t.projectId = null; });
     taskProjects = taskProjects.filter(p=>p.id!==id);
+    if(cdCurrentId) renderClientTasks(cdCurrentId);
     renderProjectList();
     renderHome();
     toast('案件を削除しました');
@@ -4981,6 +5039,8 @@ function openTaskModal(id, forClientId){
   document.getElementById('tk-priority').value = t ? t.priority : 'mid';
   fillProjectSelect();
   document.getElementById('tk-project').value = t && t.projectId ? String(t.projectId) : '';
+  document.getElementById('tk-project').onchange = updateTaskClientHint;
+  updateTaskClientHint();
   fillClientSelect();
   const cl = t ? t.clientId : (forClientId || null);
   document.getElementById('tk-client').value = cl ? String(cl) : '';
@@ -6575,6 +6635,7 @@ let shareData = null;
 let shareFilter = 'all';
 
 function setShareFilter(v){
+  document.getElementById('sv-tab-us').textContent = SIDE_LABEL_SHARE.us;
   shareFilter = v;
   ['all','client','us'].forEach(k=>{
     document.getElementById('sv-tab-' + k).classList.toggle('on', k === v);
@@ -6595,8 +6656,8 @@ function renderSharePage(data, updatedAt){
   document.getElementById('sv-tabs').style.display = sides.size > 1 ? 'flex' : 'none';
   setShareFilter('all');
   document.getElementById('sv-foot').textContent =
-    'タスクの内容は弊社が更新します。進捗やご連絡は各タスクの入力欄からお送りください。'
-  + '書き込んだ内容は弊社の担当者に届きます。';
+    `タスクの内容は ${OUR_NAME} が更新します。進捗やご連絡は各タスクの入力欄からお送りください。`
+  + `書き込んだ内容は ${OUR_NAME} の担当者に届きます。`;
 }
 
 /* 1つのタスクにぶら下がるやりとり。共有ページと社内の管理表で同じ見た目にする。 */
@@ -6605,7 +6666,7 @@ const NOTE_MAX = 2000;
 
 function noteLineHtml(n, canDelete, handler){
   return `<div class="note-line ${n.by === 'client' ? 'from-client' : 'from-us'}">
-    <span class="note-who">${n.by === 'client' ? 'クライアント' : '弊社'}</span>
+    <span class="note-who">${n.by === 'client' ? 'クライアント' : OUR_NAME}</span>
     <span class="note-text">${escapeHtml(n.text)}</span>
     <span class="note-at">${noteTime(n.at)}</span>
     ${canDelete ? `<span class="icon-btn" title="削除" onclick="${handler || 'removeClientNote'}('${escapeHtml(n.id)}')">
