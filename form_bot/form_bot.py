@@ -82,7 +82,7 @@ FIELDS = [
     ('address',  r'(住所|所在地|address|jusho)'),
     ('url',      r'(URL|ホームページ|サイト|website|homepage)'),
     ('subject',  r'(件名|題名|タイトル|subject|title|用件)'),
-    ('body',     r'(お問(い)?合わせ内容|お問合せ内容|内容|本文|ご相談|詳細|message|content|honbun|naiyo|備考)'),
+    ('body',     r'(お問(い)?合わせ内容|お問合せ内容|内容|本文|ご相談|詳細|メッセージ|message|content|honbun|naiyo|備考)'),
 ]
 # 選択肢から選ぶ「お問い合わせ種別」で、営業・提案に近いものを優先して選ぶ
 CATEGORY_PREF = ['提案', '営業', 'サービス', '協業', 'ご提案', 'その他', 'そのほか', 'other']
