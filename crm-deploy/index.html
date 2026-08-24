@@ -354,6 +354,34 @@
   .note-summary.has-new{background:#ffedd5; color:#9a3412;}
   .share-task{border-bottom:1px solid var(--border);}
   .share-task:last-child{border-bottom:none;}
+  /* 議事録タスクの取り込み */
+  .mi-group{border:1px solid var(--border); border-radius:8px; margin-bottom:12px; overflow:hidden;}
+  .mi-group-head{
+    display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding:8px 10px;
+    background:var(--surface-alt); font-size:12px;
+  }
+  .mi-group-title{font-weight:800; flex:1 1 220px; min-width:0;}
+  .mi-group-head select, .mi-group-head input[type=text]{
+    border:1px solid var(--border-strong); border-radius:6px; padding:5px 7px;
+    font-size:11.5px; background:var(--surface); color:var(--text); font-family:inherit;
+  }
+  .mi-row{display:flex; gap:8px; align-items:flex-start; padding:8px 10px; border-top:1px solid var(--border);}
+  .mi-row.done-imported{opacity:.5;}
+  .mi-row-main{flex:1; min-width:0;}
+  .mi-row-main input[type=text]{
+    width:100%; box-sizing:border-box; border:1px solid var(--border-strong); border-radius:6px;
+    padding:5px 8px; font-size:12.5px; background:var(--surface); color:var(--text); font-family:inherit;
+  }
+  .mi-row-memo{font-size:11px; color:var(--text-faint); margin-top:3px; white-space:pre-wrap; line-height:1.6;}
+  .mi-row-fields{display:flex; gap:6px; flex-wrap:wrap; margin-top:5px;}
+  .mi-row-fields select, .mi-row-fields input[type=date]{
+    border:1px solid var(--border-strong); border-radius:6px; padding:4px 6px;
+    font-size:11px; background:var(--surface); color:var(--text); font-family:inherit;
+  }
+  .mi-tag{
+    display:inline-block; font-size:10.5px; font-weight:700; padding:1px 6px; border-radius:5px;
+    background:var(--surface-alt); color:var(--text-faint); margin-left:6px;
+  }
   /* 共有ページの絞り込み */
   .share-tabs{display:flex; gap:6px; margin-bottom:14px; flex-wrap:wrap;}
   .share-tabs button{
@@ -945,6 +973,9 @@
               <h2>タスク管理</h2>
               <div style="display:flex; align-items:center; gap:10px;">
                 <span class="filter-label" id="task-progress">0 / 0 完了</span>
+                <span class="icon-btn" title="議事録から取り込む" onclick="openMeetingImportModal()">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
+                </span>
                 <span class="icon-btn" title="案件を管理" onclick="openProjectModal()">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7h18M3 12h18M3 17h11"/></svg>
                 </span>
@@ -1577,6 +1608,36 @@
     <div class="modal-foot">
       <div style="flex:1"></div>
       <button class="btn" onclick="closeModal('template-edit-modal')">閉じる</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="meeting-import-modal">
+  <div class="modal modal-wide">
+    <div class="modal-head"><h3>議事録タスクの取り込み</h3><span class="modal-close" onclick="closeModal('meeting-import-modal')">&times;</span></div>
+    <div class="modal-body">
+      <p class="ai-desc" style="font-size:12px; color:var(--text-secondary); line-height:1.7;">
+        議事録から抽出したアクションアイテムのJSON、または同じ内容のCSVを取り込みます。
+        会議ごとにまとめて表示するので、案件・担当者・期日を確認してから登録してください。
+        取り込み済みの項目（IDが一致するもの）は自動でチェックを外しています。</p>
+      <div class="pj-row" style="border-bottom:none;">
+        <button class="btn btn-sm" onclick="document.getElementById('mi-file').click()">ファイルを選ぶ（.json / .csv）</button>
+        <span class="detail-sub" id="mi-file-name"></span>
+      </div>
+      <textarea id="mi-paste" rows="4" placeholder="ここにJSONまたはCSVを貼り付けることもできます"
+                style="width:100%; box-sizing:border-box; font-family:monospace; font-size:11.5px; border:1px solid var(--border-strong); border-radius:8px; padding:8px 10px; margin-top:8px;"></textarea>
+      <input type="file" id="mi-file" accept=".json,.csv,.txt" style="display:none" onchange="handleMeetingFilePick(event)">
+      <div class="pj-row" style="border-bottom:none; margin-top:6px;">
+        <div style="flex:1"></div>
+        <button class="btn btn-sm btn-primary" onclick="parseMeetingImportInput()">解析する</button>
+      </div>
+      <div class="ai-status" id="mi-status" style="display:none;"></div>
+      <div id="mi-groups" style="margin-top:10px;"></div>
+    </div>
+    <div class="modal-foot">
+      <div class="detail-sub" id="mi-count" style="flex:1;"></div>
+      <button class="btn" onclick="closeModal('meeting-import-modal')">閉じる</button>
+      <button class="btn btn-primary" id="mi-commit-btn" onclick="commitMeetingImport()" disabled>選択したタスクを登録する</button>
     </div>
   </div>
 </div>
@@ -2511,7 +2572,7 @@ function tickSave(){
 const DOC_LIMIT = 1048576;
 
 /* どの版が動いているかを画面から確かめられるようにする */
-const BUILD_ID = '2026-08-20q';
+const BUILD_ID = '2026-08-20r';
 /* 直近の保存結果と、サーバーから受け取った内容の素性。診断画面で見せる */
 let lastWriteInfo = 'まだ保存していません';
 let lastServerInfo = 'まだ受信していません';
@@ -4410,6 +4471,281 @@ function fillProjectSelect(){
   sel.innerHTML = '<option value="">案件なし</option>' +
     sortedProjects().map(pj=>`<option value="${pj.id}">${escapeHtml(pj.name)}</option>`).join('');
   if(cur && sortedProjects().some(pj=>String(pj.id)===cur)) sel.value = cur;
+}
+
+/* ---------- 議事録タスクの取り込み ----------
+   Gemini/Notta等が起こした議事録要約から、Claudeが抽出したアクションアイテムの
+   JSON（{tasks:[...], meetings:[...]}）や同じ内容のCSVを読み、タスクとして
+   まとめて登録する。会議ごとにグループ表示し、案件・担当者・期日・優先度を
+   確認してから登録する（貼り付けてそのまま入る、にはしていない）。 */
+
+const MEETING_PRIORITY_MAP = {high:'high', medium:'mid', mid:'mid', low:'low', '高':'high', '中':'mid', '低':'low'};
+function meetingPriority(v){
+  return MEETING_PRIORITY_MAP[String(v||'').trim().toLowerCase()] || MEETING_PRIORITY_MAP[String(v||'').trim()] || 'mid';
+}
+function meetingDueConfidence(v){
+  const k = String(v||'').trim();
+  if(k === 'explicit' || k === '明示') return 'explicit';
+  if(k === 'estimated' || k === '推定') return 'estimated';
+  return 'none';
+}
+function meetingIsDone(v){ return /完了|done|complete|済み?$/i.test(String(v||'').trim()); }
+
+/* このタスクのメモ欄に入れる内容。詳細・原文の担当・期限のメモ・タグ・出典をまとめる。
+   期日がきちんと日付として取り込めた分は due 欄に入るので、ここでは繰り返さない。 */
+function meetingTaskMemo(rec){
+  const parts = [];
+  if(rec.detail) parts.push(rec.detail);
+  if(rec.ownerRaw) parts.push(`担当（原文）: ${rec.ownerRaw}`);
+  if(rec.dueText && rec.dueText !== '記載なし' && (!rec.dueDate || rec.dueConfidence === 'estimated')){
+    parts.push(`期限メモ: ${rec.dueText}` + (rec.dueConfidence === 'estimated' ? '（推定）' : ''));
+  }
+  if(rec.tags && rec.tags.length) parts.push('タグ: ' + rec.tags.join(' / '));
+  if(rec.meetingTitle) parts.push(`会議: ${rec.meetingTitle}${rec.meetingDate ? '（' + rec.meetingDate + '）' : ''}`);
+  if(rec.sourceUrl) parts.push(rec.sourceUrl);
+  return parts.join('\n');
+}
+
+/* JSON形式（{tasks:[...], meetings:[...]}、またはタスクの配列だけ）を読む */
+function parseMeetingJson(obj){
+  if(Array.isArray(obj)) obj = {tasks: obj};
+  const meetings = {};
+  (obj.meetings || []).forEach(m=>{ if(m && m.meeting_id) meetings[m.meeting_id] = m; });
+  return (obj.tasks || []).map(t=>{
+    const m = meetings[t.meeting_id] || {};
+    const rec = {
+      extId: (t.id || '').trim(),
+      title: (t.title || '').trim(),
+      detail: (t.detail || '').trim(),
+      ownerRaw: (t.owner || '').trim(),
+      dueDate: (t.due_date || '').trim(),
+      dueText: (t.due_text || '').trim(),
+      dueConfidence: meetingDueConfidence(t.due_confidence),
+      done: meetingIsDone(t.status),
+      priority: meetingPriority(t.priority),
+      meetingId: (t.meeting_id || '').trim(),
+      meetingTitle: m.title || t.meeting_id || '',
+      meetingDate: m.date || '',
+      tags: Array.isArray(t.tags) ? t.tags.filter(Boolean) : [],
+      sourceUrl: m.source_url || '',
+    };
+    rec.memo = meetingTaskMemo(rec);
+    return rec;
+  }).filter(r=>r.title);
+}
+
+/* CSV（ID,タスク名,詳細,担当,期日,期日(原文),期日の確からしさ,ステータス,優先度,会議名,会議日,タグ,出典URL）を読む */
+function parseMeetingCsv(text){
+  const lines = text.split(/\r?\n/).filter(l=>l.trim());
+  if(!lines.length) return [];
+  let rows = lines.map(splitRow);
+  if(rows.length && /^(id|タスク名)/i.test((rows[0][0]||'').trim())) rows = rows.slice(1);
+  return rows.map(cells=>{
+    const rec = {
+      extId: (cells[0]||'').trim(),
+      title: (cells[1]||'').trim(),
+      detail: (cells[2]||'').trim(),
+      ownerRaw: (cells[3]||'').trim(),
+      dueDate: (cells[4]||'').trim(),
+      dueText: (cells[5]||'').trim(),
+      dueConfidence: meetingDueConfidence(cells[6]),
+      done: meetingIsDone(cells[7]),
+      priority: meetingPriority(cells[8]),
+      meetingId: '',
+      meetingTitle: (cells[9]||'').trim(),
+      meetingDate: (cells[10]||'').trim(),
+      tags: (cells[11]||'').split(/[\/、]/).map(s=>s.trim()).filter(Boolean),
+      sourceUrl: (cells[12]||'').trim(),
+    };
+    rec.memo = meetingTaskMemo(rec);
+    return rec;
+  }).filter(r=>r.title);
+}
+
+/* 中身がJSONかCSVかを見て振り分ける */
+function parseMeetingImportText(text){
+  const t = text.trim();
+  if(!t) return [];
+  if(t[0] === '{' || t[0] === '['){
+    let obj;
+    try{ obj = JSON.parse(t); }
+    catch(e){ throw new Error('JSONとして読み取れませんでした（' + e.message + '）'); }
+    return parseMeetingJson(obj);
+  }
+  return parseMeetingCsv(t);
+}
+
+let miGroups = [];   // 解析結果。会議ごとにまとめてある
+
+function openMeetingImportModal(){
+  document.getElementById('mi-paste').value = '';
+  document.getElementById('mi-file-name').textContent = '';
+  document.getElementById('mi-status').style.display = 'none';
+  document.getElementById('mi-groups').innerHTML = '';
+  document.getElementById('mi-count').textContent = '';
+  document.getElementById('mi-commit-btn').disabled = true;
+  miGroups = [];
+  openModal('meeting-import-modal');
+}
+
+async function handleMeetingFilePick(ev){
+  const file = ev.target.files && ev.target.files[0];
+  ev.target.value = '';
+  if(!file) return;
+  document.getElementById('mi-file-name').textContent = file.name;
+  try{
+    document.getElementById('mi-paste').value = await readTextFile(file);
+    parseMeetingImportInput();
+  }catch(e){
+    console.error(e);
+    showMiStatus('ファイルを読み込めませんでした: ' + e.message, 'error');
+  }
+}
+
+function showMiStatus(msg, kind){
+  const el = document.getElementById('mi-status');
+  el.className = 'ai-status' + (kind ? ' ' + kind : '');
+  el.textContent = msg;
+  el.style.display = 'flex';
+}
+
+function parseMeetingImportInput(){
+  const raw = document.getElementById('mi-paste').value;
+  if(!raw.trim()){ showMiStatus('JSONまたはCSVを貼り付けるか、ファイルを選んでください。', 'error'); return; }
+
+  let records;
+  try{ records = parseMeetingImportText(raw); }
+  catch(e){ showMiStatus(e.message, 'error'); return; }
+
+  if(!records.length){ showMiStatus('取り込めるタスクが見つかりませんでした。', 'error'); return; }
+
+  // 取り込み済み（同じIDのタスクが既にある）かどうかを調べる
+  const already = new Set(tasks.map(t=>t.importId).filter(Boolean));
+  records.forEach(r=>{ r.alreadyImported = !!(r.extId && already.has(r.extId)); });
+
+  // 会議ごとにまとめる。会議IDが無いCSVでは会議名でまとめる
+  const byKey = new Map();
+  records.forEach((r, i)=>{
+    r.rowKey = 'r' + i;
+    const key = r.meetingId || r.meetingTitle || '(会議未設定)';
+    if(!byKey.has(key)) byKey.set(key, {key, title: r.meetingTitle || '（会議名なし）', date: r.meetingDate, rows: []});
+    byKey.get(key).rows.push(r);
+  });
+  miGroups = [...byKey.values()];
+
+  const skipCount = records.filter(r=>r.alreadyImported).length;
+  showMiStatus(
+    `${records.length}件を読み込みました（${miGroups.length}件の会議）。`
+    + (skipCount ? `取り込み済みとみて${skipCount}件のチェックを外しています。` : ''),
+    'ok'
+  );
+  renderMeetingImportGroups();
+}
+
+function renderMeetingImportGroups(){
+  const box = document.getElementById('mi-groups');
+  box.innerHTML = miGroups.map(g=>{
+    const projSel = `<select id="mi-proj-${g.key}" onchange="onMiProjectChange('${g.key}')">`
+      + `<option value="">案件なし</option>`
+      + sortedProjects().map(pj=>`<option value="${pj.id}">${escapeHtml(pj.name)}</option>`).join('')
+      + `<option value="__new__" selected>新しい案件として作る</option>`
+      + `</select>`;
+    const nameField = `<input type="text" id="mi-proj-name-${g.key}" value="${escapeHtml(g.title)}" style="min-width:180px;">`;
+    return `<div class="mi-group">
+      <div class="mi-group-head">
+        <span class="mi-group-title">◇ ${escapeHtml(g.title)}${g.date ? `<span class="mi-tag">${escapeHtml(g.date)}</span>` : ''}<span class="mi-tag">${g.rows.length}件</span></span>
+        ${projSel}
+        <span id="mi-proj-name-wrap-${g.key}">${nameField}</span>
+      </div>
+      ${g.rows.map(r=>miRowHtml(r)).join('')}
+    </div>`;
+  }).join('');
+  document.getElementById('mi-commit-btn').disabled = false;
+  updateMiCount();
+}
+
+/* 「新しい案件として作る」以外を選んだら、案件名の入力欄を隠す */
+function onMiProjectChange(key){
+  const sel = document.getElementById('mi-proj-' + key);
+  const wrap = document.getElementById('mi-proj-name-wrap-' + key);
+  if(wrap) wrap.style.display = sel.value === '__new__' ? '' : 'none';
+}
+
+function miRowHtml(r){
+  const ownerOpts = SALES_REPS.map(x=>`<option value="${x.id}"${x.id===currentUser?' selected':''}>${escapeHtml(x.name)}</option>`).join('')
+    + `<option value="${SHARED_OWNER}">共有（全員に表示）</option>`;
+  const priorityOpts = ['high','mid','low'].map(p=>
+    `<option value="${p}"${p===r.priority?' selected':''}>${PRIORITY_LABEL[p]}</option>`).join('');
+  return `<div class="mi-row ${r.alreadyImported ? 'done-imported' : ''}">
+    <div style="padding-top:6px;">
+      <input type="checkbox" id="mi-check-${r.rowKey}" ${r.alreadyImported ? '' : 'checked'} ${r.alreadyImported ? 'disabled' : ''}>
+    </div>
+    <div class="mi-row-main">
+      <input type="text" id="mi-title-${r.rowKey}" value="${escapeHtml(r.title)}">
+      ${r.memo ? `<div class="mi-row-memo">${escapeHtml(r.memo)}</div>` : ''}
+      ${r.alreadyImported ? `<span class="mi-tag">取込済み</span>` : ''}
+      <div class="mi-row-fields">
+        <select id="mi-priority-${r.rowKey}">${priorityOpts}</select>
+        <select id="mi-owner-${r.rowKey}">${ownerOpts}</select>
+        <input type="date" id="mi-due-${r.rowKey}" value="${escapeHtml(r.dueDate || '')}" title="期日">
+      </div>
+    </div>
+  </div>`;
+}
+
+function updateMiCount(){
+  const total = miGroups.reduce((n,g)=>n+g.rows.length, 0);
+  document.getElementById('mi-count').textContent = `${total}件を表示中`;
+}
+
+/* 実際にタスクとして登録する。チェックが入っている行だけを対象にする。
+   案件を「新しい案件として作る」にした会議は、この時点で1つだけ作る
+   （行ごとに何度も作らないよう、会議単位でまとめて処理する）。 */
+function commitMeetingImport(){
+  let created = 0;
+  miGroups.forEach(g=>{
+    const sel = document.getElementById('mi-proj-' + g.key);
+    let projectId = null;
+    if(sel && sel.value === '__new__'){
+      const nameEl = document.getElementById('mi-proj-name-' + g.key);
+      const name = (nameEl && nameEl.value.trim()) || g.title || '新しい案件';
+      const maxOrder = taskProjects.reduce((m,p)=>Math.max(m, p.order||0), 0);
+      const pj = {id: nextIds.project++, name, color: nextProjectColor(), order: maxOrder + 1};
+      taskProjects.push(pj);
+      projectId = pj.id;
+    } else if(sel && sel.value){
+      projectId = parseInt(sel.value, 10);
+    }
+
+    g.rows.forEach(r=>{
+      const cb = document.getElementById('mi-check-' + r.rowKey);
+      if(!cb || !cb.checked || cb.disabled) return;
+      const title = (document.getElementById('mi-title-' + r.rowKey).value || '').trim();
+      if(!title) return;
+      const due = document.getElementById('mi-due-' + r.rowKey).value;
+      tasks.push({
+        id: nextIds.task++,
+        title,
+        sub: r.memo,
+        owner: document.getElementById('mi-owner-' + r.rowKey).value,
+        priority: document.getElementById('mi-priority-' + r.rowKey).value,
+        start: '',
+        due,
+        projectId,
+        clientId: null,
+        internal: true,
+        side: 'us',
+        done: !!r.done,
+        importId: r.extId || undefined,   // 同じ議事録を読み込み直したときに二重登録しないための印
+      });
+      created++;
+    });
+  });
+
+  closeModal('meeting-import-modal');
+  renderHome();
+  renderProjectList();
+  toast(created ? `${created}件のタスクを取り込みました` : 'チェックの入った項目がありませんでした');
 }
 
 /* ---------- クライアントごとのタスク管理表 ----------
