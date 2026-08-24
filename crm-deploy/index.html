@@ -1621,6 +1621,12 @@
         会議ごとにまとめて表示するので、案件・担当者・期日を確認してから登録してください。
         取り込み済みの項目（IDが一致するもの）は自動でチェックを外しています。</p>
 
+      <div class="detail-section-label">下書き（読み込み済み・まだ登録していないもの）</div>
+      <p class="ai-desc" style="font-size:11.5px; color:var(--text-faint); line-height:1.7; margin-top:0;">
+        下で読み込んだ内容は、登録せずに下書きとして残しておけます。両担当のどちらの画面からでも
+        開いて選び、少しずつ登録できます。登録した分だけ下書きから減っていきます。</p>
+      <div id="mi-draft-list"></div>
+
       <div class="detail-section-label">① 議事録の原文から抽出する（AI・新しい会議1件ずつ向け）</div>
       <p class="ai-desc" style="font-size:11.5px; color:var(--text-faint); line-height:1.7; margin-top:0;">
         Gemini・Nottaなどの議事録要約をそのまま貼り付けると、Claudeがアクションアイテムを抜き出します。
@@ -1654,6 +1660,7 @@
     <div class="modal-foot">
       <div class="detail-sub" id="mi-count" style="flex:1;"></div>
       <button class="btn" onclick="closeModal('meeting-import-modal')">閉じる</button>
+      <button class="btn" id="mi-draft-btn" onclick="saveMeetingImportDraft()" disabled>下書きとして保存する</button>
       <button class="btn btn-primary" id="mi-commit-btn" onclick="commitMeetingImport()" disabled>選択したタスクを登録する</button>
     </div>
   </div>
@@ -2515,6 +2522,10 @@ let taskProjects = [];
    {id, name, items:[{title, sub, priority, owner, days}]}
    days は「今日から何日後を期限にするか」。null なら期限なし。 */
 let taskTemplates = [];
+
+/* 議事録から解析したが、まだ登録していない下書き。両担当のどちらでも
+   選んで登録できるよう、同期対象に入れておく。 */
+let meetingImportDrafts = [];
 /* 表示順に並べた案件。order が欠けていても崩れないよう id で補う。 */
 function sortedProjects(){
   return taskProjects.slice().sort((a,b)=> (a.order||0)-(b.order||0) || a.id-b.id);
@@ -2544,7 +2555,7 @@ let tasks    = [];
    画面に出す場所は無いため、同期のためだけに読み書きしている。 */
 let schedule = [];
 
-let nextIds = {contact: 1, client: 1, deal: 1, task: 1, schedule: 1, project: 1, template: 1};
+let nextIds = {contact: 1, client: 1, deal: 1, task: 1, schedule: 1, project: 1, template: 1, draft: 1};
 
 /* 日次実績。キーは 'YYYY-MM-DD'、値は各件数 */
 let dailyStats = {};
@@ -2563,7 +2574,7 @@ let lastSaved = '';
 let currentUserEmail = '';
 
 function snapshot(){
-  return JSON.stringify({v:1, contacts, clients, deals, tasks, taskProjects, taskTemplates, schedule, nextIds, dailyStats});
+  return JSON.stringify({v:1, contacts, clients, deals, tasks, taskProjects, taskTemplates, meetingImportDrafts, schedule, nextIds, dailyStats});
 }
 
 function setSaveState(text, warn){
@@ -2589,7 +2600,7 @@ function tickSave(){
 const DOC_LIMIT = 1048576;
 
 /* どの版が動いているかを画面から確かめられるようにする */
-const BUILD_ID = '2026-08-20s';
+const BUILD_ID = '2026-08-20t';
 /* 直近の保存結果と、サーバーから受け取った内容の素性。診断画面で見せる */
 let lastWriteInfo = 'まだ保存していません';
 let lastServerInfo = 'まだ受信していません';
@@ -2743,6 +2754,7 @@ function applyRemote(d){
     if(Array.isArray(d.tasks))    tasks    = d.tasks;
     if(Array.isArray(d.taskProjects)) taskProjects = d.taskProjects;
     if(Array.isArray(d.taskTemplates)) taskTemplates = d.taskTemplates;
+    if(Array.isArray(d.meetingImportDrafts)) meetingImportDrafts = d.meetingImportDrafts;
     if(Array.isArray(d.schedule)) schedule = d.schedule;
     if(d.dailyStats && typeof d.dailyStats === 'object') dailyStats = d.dailyStats;
     if(d.nextIds && typeof d.nextIds === 'object') nextIds = Object.assign({}, nextIds, d.nextIds);
@@ -2886,7 +2898,7 @@ async function startSync(){
       // サンプルデータを書き込んではいけない。実データが一時的に読めないだけの
       // 場合に、見本の内容で全員分を上書きしてしまうため。
       // 画面からもサンプルを消して、空であることが分かるようにする。
-      contacts = []; clients = []; deals = []; tasks = []; taskProjects = []; taskTemplates = []; schedule = []; dailyStats = {};
+      contacts = []; clients = []; deals = []; tasks = []; taskProjects = []; taskTemplates = []; meetingImportDrafts = []; schedule = []; dailyStats = {};
       syncReady = true;
       lastSaved = snapshot();
       renderAll();
@@ -2984,6 +2996,7 @@ function applyRestorePoint(idx){
       if(Array.isArray(d.tasks))    tasks    = d.tasks;
       if(Array.isArray(d.taskProjects)) taskProjects = d.taskProjects;
       if(Array.isArray(d.taskTemplates)) taskTemplates = d.taskTemplates;
+      if(Array.isArray(d.meetingImportDrafts)) meetingImportDrafts = d.meetingImportDrafts;
       if(Array.isArray(d.schedule)) schedule = d.schedule;
       if(d.dailyStats && typeof d.dailyStats === 'object') dailyStats = d.dailyStats;
       if(d.nextIds && typeof d.nextIds === 'object') nextIds = Object.assign({}, nextIds, d.nextIds);
@@ -3116,6 +3129,7 @@ async function applyBackup(id){
       tasks    = Array.isArray(d.tasks)    ? d.tasks    : [];
       taskProjects = Array.isArray(d.taskProjects) ? d.taskProjects : [];
       taskTemplates = Array.isArray(d.taskTemplates) ? d.taskTemplates : [];
+      meetingImportDrafts = Array.isArray(d.meetingImportDrafts) ? d.meetingImportDrafts : [];
       schedule = Array.isArray(d.schedule) ? d.schedule : [];
       if(d.dailyStats && typeof d.dailyStats === 'object') dailyStats = d.dailyStats;
       if(d.nextIds && typeof d.nextIds === 'object') nextIds = Object.assign({}, nextIds, d.nextIds);
@@ -3266,6 +3280,7 @@ function importData(ev){
       tasks    = Array.isArray(d.tasks)    ? d.tasks    : [];
       taskProjects = Array.isArray(d.taskProjects) ? d.taskProjects : [];
       taskTemplates = Array.isArray(d.taskTemplates) ? d.taskTemplates : [];
+      meetingImportDrafts = Array.isArray(d.meetingImportDrafts) ? d.meetingImportDrafts : [];
       schedule = Array.isArray(d.schedule) ? d.schedule : [];
       // データ分析の日別実績もバックアップに入っている。ここで戻さないと、
       // 復元したとたんに送信数などの記録だけが空になってしまう。
@@ -4594,6 +4609,8 @@ function parseMeetingImportText(text){
 
 let miGroups = [];   // 解析結果。会議ごとにまとめてある
 
+let miCurrentDraftId = null;   // 開いている下書きのid。無関係な新規読み込み中はnull
+
 function openMeetingImportModal(){
   document.getElementById('mi-paste').value = '';
   document.getElementById('mi-file-name').textContent = '';
@@ -4601,11 +4618,123 @@ function openMeetingImportModal(){
   document.getElementById('mi-groups').innerHTML = '';
   document.getElementById('mi-count').textContent = '';
   document.getElementById('mi-commit-btn').disabled = true;
+  document.getElementById('mi-draft-btn').disabled = true;
   document.getElementById('mi-raw-text').value = '';
   document.getElementById('mi-ai-key').value = localStorage.getItem('anthropicApiKey') || '';
   document.getElementById('mi-ai-status').style.display = 'none';
   miGroups = [];
+  miCurrentDraftId = null;
+  renderMiDraftList();
   openModal('meeting-import-modal');
+}
+
+/* ---------- 下書き（読み込んだが、まだ登録していないもの） ---------- */
+function renderMiDraftList(){
+  const box = document.getElementById('mi-draft-list');
+  if(!box) return;
+  if(!meetingImportDrafts.length){
+    box.innerHTML = '<div class="task-hint">保存されている下書きはありません。①か②で読み込んだあと'
+                   + '「下書きとして保存する」で残せます。</div>';
+    return;
+  }
+  box.innerHTML = meetingImportDrafts.slice()
+    .sort((a,b)=>(b.savedAt||'').localeCompare(a.savedAt||''))
+    .map(d=>{
+      const count = d.groups.reduce((n,g)=>n + g.rows.length, 0);
+      const when = d.savedAt ? new Date(d.savedAt).toLocaleString('ja-JP') : '';
+      return `<div class="pj-row">
+        <div style="flex:1; min-width:0;">
+          <div style="font-size:12.5px; font-weight:700;">${escapeHtml(d.label || '（無題）')}</div>
+          <div style="font-size:11px; color:var(--text-faint);">${count}件・${escapeHtml(d.savedBy || '')}が保存・${escapeHtml(when)}</div>
+        </div>
+        <button class="btn btn-sm" onclick="openMeetingImportDraft(${d.id})">開く</button>
+        <span class="icon-btn" title="削除" onclick="deleteMeetingImportDraft(${d.id})">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg>
+        </span>
+      </div>`;
+    }).join('');
+}
+
+/* 下書きを開く。元のデータは複製してから使う（保存し直すまで下書き本体を書き換えないため） */
+function openMeetingImportDraft(id){
+  const d = meetingImportDrafts.find(x=>x.id===id);
+  if(!d) return;
+  miCurrentDraftId = id;
+  document.getElementById('mi-status').style.display = 'none';
+  // 開いた時点で、別の場所から既に登録されていないか改めて確認する
+  const already = new Set(tasks.map(t=>t.importId).filter(Boolean));
+  miGroups = JSON.parse(JSON.stringify(d.groups));
+  miGroups.forEach(g=>g.rows.forEach(r=>{
+    r.alreadyImported = !!(r.extId && already.has(r.extId));
+    // 開き直すたびに、残っている行はチェック済みの状態から選び直せるようにする。
+    // 前回外したチェックをそのまま覚えていると、外した行が二度と出てこなくなるため。
+    r.checked = !r.alreadyImported;
+  }));
+  renderMeetingImportGroups();
+  document.getElementById('mi-groups').scrollIntoView({behavior:'smooth', block:'nearest'});
+}
+
+function deleteMeetingImportDraft(id){
+  const d = meetingImportDrafts.find(x=>x.id===id);
+  if(!d) return;
+  showConfirm(`下書き「${d.label || '（無題）'}」を削除しますか?`, ()=>{
+    meetingImportDrafts = meetingImportDrafts.filter(x=>x.id !== id);
+    if(miCurrentDraftId === id){
+      miCurrentDraftId = null;
+      miGroups = [];
+      document.getElementById('mi-groups').innerHTML = '';
+      document.getElementById('mi-count').textContent = '';
+      document.getElementById('mi-commit-btn').disabled = true;
+      document.getElementById('mi-draft-btn').disabled = true;
+    }
+    renderMiDraftList();
+    toast('下書きを削除しました');
+  });
+}
+
+/* 画面に出ている入力欄の値を、いま持っているデータ(miGroups)に書き戻す。
+   下書きの保存にも、実際の登録にも、この関数で最新の状態をそろえてから使う。 */
+function collectMiState(){
+  miGroups.forEach(g=>{
+    const sel = document.getElementById('mi-proj-' + g.key);
+    if(sel) g.projectValue = sel.value;
+    const nameEl = document.getElementById('mi-proj-name-' + g.key);
+    if(nameEl) g.projectName = nameEl.value.trim() || g.title;
+    g.rows.forEach(r=>{
+      const cb = document.getElementById('mi-check-' + r.rowKey);
+      if(cb) r.checked = cb.checked && !cb.disabled;
+      const t = document.getElementById('mi-title-' + r.rowKey);
+      if(t) r.title = t.value.trim();
+      const pr = document.getElementById('mi-priority-' + r.rowKey);
+      if(pr) r.priority = pr.value;
+      const ow = document.getElementById('mi-owner-' + r.rowKey);
+      if(ow) r.owner = ow.value;
+      const du = document.getElementById('mi-due-' + r.rowKey);
+      if(du) r.dueDate = du.value;
+    });
+  });
+  return miGroups;
+}
+
+function saveMeetingImportDraft(){
+  if(!miGroups.length){ toast('保存する内容がありません'); return; }
+  collectMiState();
+  const label = miGroups.map(g=>g.title).join(' / ');
+  if(miCurrentDraftId){
+    const d = meetingImportDrafts.find(x=>x.id === miCurrentDraftId);
+    if(d){
+      d.groups = miGroups; d.label = label;
+      d.savedAt = new Date().toISOString(); d.savedBy = ownerName(currentUser);
+    }
+  } else {
+    miCurrentDraftId = nextIds.draft++;
+    meetingImportDrafts.push({
+      id: miCurrentDraftId, label, groups: miGroups,
+      savedAt: new Date().toISOString(), savedBy: ownerName(currentUser),
+    });
+  }
+  renderMiDraftList();
+  toast('下書きとして保存しました。あとでこの画面から選んで登録できます');
 }
 
 function showMiAiStatus(msg, kind){
@@ -4754,17 +4883,25 @@ function parseMeetingImportInput(){
 
   // 取り込み済み（同じIDのタスクが既にある）かどうかを調べる
   const already = new Set(tasks.map(t=>t.importId).filter(Boolean));
-  records.forEach(r=>{ r.alreadyImported = !!(r.extId && already.has(r.extId)); });
+  records.forEach(r=>{
+    r.alreadyImported = !!(r.extId && already.has(r.extId));
+    r.checked = !r.alreadyImported;   // 画面上のチェック状態は、この時点から入力欄と関係なくデータ側で持つ
+    r.owner = currentUser;
+  });
 
   // 会議ごとにまとめる。会議IDが無いCSVでは会議名でまとめる
   const byKey = new Map();
   records.forEach((r, i)=>{
     r.rowKey = 'r' + i;
     const key = r.meetingId || r.meetingTitle || '(会議未設定)';
-    if(!byKey.has(key)) byKey.set(key, {key, title: r.meetingTitle || '（会議名なし）', date: r.meetingDate, rows: []});
+    if(!byKey.has(key)){
+      byKey.set(key, {key, title: r.meetingTitle || '（会議名なし）', date: r.meetingDate,
+                       projectValue: '__new__', projectName: r.meetingTitle || '（会議名なし）', rows: []});
+    }
     byKey.get(key).rows.push(r);
   });
   miGroups = [...byKey.values()];
+  miCurrentDraftId = null;   // 新しく読み込んだ内容は、まだどの下書きとも紐づいていない
 
   const skipCount = records.filter(r=>r.alreadyImported).length;
   showMiStatus(
@@ -4778,12 +4915,13 @@ function parseMeetingImportInput(){
 function renderMeetingImportGroups(){
   const box = document.getElementById('mi-groups');
   box.innerHTML = miGroups.map(g=>{
+    const pv = g.projectValue == null ? '__new__' : g.projectValue;
     const projSel = `<select id="mi-proj-${g.key}" onchange="onMiProjectChange('${g.key}')">`
-      + `<option value="">案件なし</option>`
-      + sortedProjects().map(pj=>`<option value="${pj.id}">${escapeHtml(pj.name)}</option>`).join('')
-      + `<option value="__new__" selected>新しい案件として作る</option>`
+      + `<option value=""${pv===''?' selected':''}>案件なし</option>`
+      + sortedProjects().map(pj=>`<option value="${pj.id}"${pv===String(pj.id)?' selected':''}>${escapeHtml(pj.name)}</option>`).join('')
+      + `<option value="__new__"${pv==='__new__'?' selected':''}>新しい案件として作る</option>`
       + `</select>`;
-    const nameField = `<input type="text" id="mi-proj-name-${g.key}" value="${escapeHtml(g.title)}" style="min-width:180px;">`;
+    const nameField = `<input type="text" id="mi-proj-name-${g.key}" value="${escapeHtml(g.projectName || g.title)}" style="min-width:180px;${pv==='__new__'?'':' display:none;'}">`;
     return `<div class="mi-group">
       <div class="mi-group-head">
         <span class="mi-group-title">◇ ${escapeHtml(g.title)}${g.date ? `<span class="mi-tag">${escapeHtml(g.date)}</span>` : ''}<span class="mi-tag">${g.rows.length}件</span></span>
@@ -4794,6 +4932,7 @@ function renderMeetingImportGroups(){
     </div>`;
   }).join('');
   document.getElementById('mi-commit-btn').disabled = false;
+  document.getElementById('mi-draft-btn').disabled = false;
   updateMiCount();
 }
 
@@ -4805,13 +4944,15 @@ function onMiProjectChange(key){
 }
 
 function miRowHtml(r){
-  const ownerOpts = SALES_REPS.map(x=>`<option value="${x.id}"${x.id===currentUser?' selected':''}>${escapeHtml(x.name)}</option>`).join('')
-    + `<option value="${SHARED_OWNER}">共有（全員に表示）</option>`;
+  const owner = r.owner || currentUser;
+  const ownerOpts = SALES_REPS.map(x=>`<option value="${x.id}"${x.id===owner?' selected':''}>${escapeHtml(x.name)}</option>`).join('')
+    + `<option value="${SHARED_OWNER}"${owner===SHARED_OWNER?' selected':''}>共有（全員に表示）</option>`;
   const priorityOpts = ['high','mid','low'].map(p=>
     `<option value="${p}"${p===r.priority?' selected':''}>${PRIORITY_LABEL[p]}</option>`).join('');
+  const checked = r.checked !== false && !r.alreadyImported;
   return `<div class="mi-row ${r.alreadyImported ? 'done-imported' : ''}">
     <div style="padding-top:6px;">
-      <input type="checkbox" id="mi-check-${r.rowKey}" ${r.alreadyImported ? '' : 'checked'} ${r.alreadyImported ? 'disabled' : ''}>
+      <input type="checkbox" id="mi-check-${r.rowKey}" ${checked ? 'checked' : ''} ${r.alreadyImported ? 'disabled' : ''}>
     </div>
     <div class="mi-row-main">
       <input type="text" id="mi-title-${r.rowKey}" value="${escapeHtml(r.title)}">
@@ -4833,47 +4974,61 @@ function updateMiCount(){
 
 /* 実際にタスクとして登録する。チェックが入っている行だけを対象にする。
    案件を「新しい案件として作る」にした会議は、この時点で1つだけ作る
-   （行ごとに何度も作らないよう、会議単位でまとめて処理する）。 */
+   （行ごとに何度も作らないよう、会議単位でまとめて処理する）。
+   下書きから開いた場合、登録した行だけを取り除き、残りは下書きとして更新する
+   （少しずつ選んで登録できるようにするため）。下書きでない場合、
+   チェックを外した行はここで捨てる（従来どおり）。 */
 function commitMeetingImport(){
+  collectMiState();
   let created = 0;
+
   miGroups.forEach(g=>{
-    const sel = document.getElementById('mi-proj-' + g.key);
     let projectId = null;
-    if(sel && sel.value === '__new__'){
-      const nameEl = document.getElementById('mi-proj-name-' + g.key);
-      const name = (nameEl && nameEl.value.trim()) || g.title || '新しい案件';
+    if(g.projectValue === '__new__'){
+      const name = g.projectName || g.title || '新しい案件';
       const maxOrder = taskProjects.reduce((m,p)=>Math.max(m, p.order||0), 0);
       const pj = {id: nextIds.project++, name, color: nextProjectColor(), order: maxOrder + 1};
       taskProjects.push(pj);
       projectId = pj.id;
-    } else if(sel && sel.value){
-      projectId = parseInt(sel.value, 10);
+    } else if(g.projectValue){
+      projectId = parseInt(g.projectValue, 10);
     }
 
+    const remaining = [];
     g.rows.forEach(r=>{
-      const cb = document.getElementById('mi-check-' + r.rowKey);
-      if(!cb || !cb.checked || cb.disabled) return;
-      const title = (document.getElementById('mi-title-' + r.rowKey).value || '').trim();
-      if(!title) return;
-      const due = document.getElementById('mi-due-' + r.rowKey).value;
-      tasks.push({
-        id: nextIds.task++,
-        title,
-        sub: r.memo,
-        owner: document.getElementById('mi-owner-' + r.rowKey).value,
-        priority: document.getElementById('mi-priority-' + r.rowKey).value,
-        start: '',
-        due,
-        projectId,
-        clientId: null,
-        internal: true,
-        side: 'us',
-        done: !!r.done,
-        importId: r.extId || undefined,   // 同じ議事録を読み込み直したときに二重登録しないための印
-      });
-      created++;
+      if(r.checked && r.title){
+        tasks.push({
+          id: nextIds.task++,
+          title: r.title,
+          sub: r.memo,
+          owner: r.owner || currentUser,
+          priority: r.priority,
+          start: '',
+          due: r.dueDate || '',
+          projectId,
+          clientId: null,
+          internal: true,
+          side: 'us',
+          done: !!r.done,
+          importId: r.extId || undefined,   // 同じ議事録を読み込み直したときに二重登録しないための印
+        });
+        created++;
+      } else {
+        remaining.push(r);   // 登録しなかった行は残す
+      }
     });
+    g.rows = remaining;
   });
+  miGroups = miGroups.filter(g=>g.rows.length > 0);
+
+  if(miCurrentDraftId){
+    if(miGroups.length){
+      const d = meetingImportDrafts.find(x=>x.id === miCurrentDraftId);
+      if(d) d.groups = miGroups;   // 登録した分だけ減らして、残りは下書きに置いておく
+    } else {
+      meetingImportDrafts = meetingImportDrafts.filter(x=>x.id !== miCurrentDraftId);
+    }
+  }
 
   closeModal('meeting-import-modal');
   renderHome();
