@@ -1480,15 +1480,21 @@
     <div class="modal-body">
       <p class="ai-desc" style="font-size:12px; color:var(--text-secondary); line-height:1.7;">
         タスクをまとめる案件です。色はタスク一覧の色分けに使われ、並び順はそのまま一覧の表示順になります。</p>
+      <div class="share-bar" style="margin-bottom:6px;">
+        <div style="flex:1"></div>
+        <button class="btn btn-sm" onclick="autoLinkProjects()"
+                title="案件名と似た名前のクライアントを探して、未設定の案件に紐づけます">クライアントを自動で紐づける</button>
+      </div>
       <div id="pj-list"></div>
       <div class="detail-section-label">案件を追加</div>
       <div class="pj-row" style="border-bottom:none;">
-        <input type="text" id="pj-new-name" placeholder="例:春の展示会キャンペーン">
+        <input type="text" id="pj-new-name" placeholder="例:春の展示会キャンペーン" oninput="suggestClientForNewProject()">
         <span class="pj-swatch" id="pj-new-swatch"></span>
         <select id="pj-new-color" onchange="syncNewColorSwatch()"></select>
       </div>
       <div class="pj-row" style="border-bottom:none;">
-        <select id="pj-new-client" style="flex:1; min-width:0;" title="この案件はどのクライアントのものか"></select>
+        <select id="pj-new-client" style="flex:1; min-width:0;" title="この案件はどのクライアントのものか"
+                onchange="this.dataset.touched='1'"></select>
       </div>
       <div class="pj-row" style="border-bottom:none;">
         <select id="pj-new-template" style="flex:1; min-width:0;"></select>
@@ -2501,7 +2507,7 @@ function tickSave(){
 const DOC_LIMIT = 1048576;
 
 /* どの版が動いているかを画面から確かめられるようにする */
-const BUILD_ID = '2026-08-20n';
+const BUILD_ID = '2026-08-20o';
 /* 直近の保存結果と、サーバーから受け取った内容の素性。診断画面で見せる */
 let lastWriteInfo = 'まだ保存していません';
 let lastServerInfo = 'まだ受信していません';
@@ -4276,6 +4282,91 @@ function clientOptions(selected, emptyLabel){
            + `${escapeHtml(c.name)}</option>`).join('');
 }
 
+/* ---------- 案件名からクライアントを推測する ----------
+   「エイベックスライヴクリエイティブ株式会社様」と
+   「エイベックス・ライヴ・クリエイティヴ株式会社」のように、
+   同じ会社でも書き方が揺れるため、比べる前に形をそろえる。 */
+function normalizeCompanyName(v){
+  return String(v || '')
+    // 全角の英数字を半角にする
+    .replace(/[Ａ-Ｚａ-ｚ０-９]/g, c=>String.fromCharCode(c.charCodeAt(0) - 0xFEE0))
+    .toLowerCase()
+    // 法人格・敬称は会社を見分ける手がかりにならないので落とす
+    .replace(/(株式会社|有限会社|合同会社|合資会社|合名会社|一般社団法人|一般財団法人|公益社団法人|公益財団法人|特定非営利活動法人|社会福祉法人|学校法人|医療法人|独立行政法人|地方独立行政法人)/g, '')
+    .replace(/(御中|様|さま|殿)/g, '')
+    // 記号・空白・かっこ・中黒は表記揺れが大きい
+    .replace(/[（）()【】\[\]「」『』〈〉《》]/g, '')
+    .replace(/[・･,、.。\-ー―‐_/／\\|｜'"’”`\s　]/g, '')
+    // 「ヴ」と「ブ」は同じ音を書き分けているだけのことが多い
+    .replace(/ヴ/g, 'ブ');
+}
+
+function bigramsOf(v){
+  const out = [];
+  for(let i = 0; i < v.length - 1; i++) out.push(v.slice(i, i + 2));
+  return out;
+}
+
+/* 2つの名前の近さを 0〜1 で返す */
+function nameScore(a, b){
+  if(!a || !b) return 0;
+  if(a === b) return 1;
+  const short = a.length <= b.length ? a : b;
+  const long  = a.length <= b.length ? b : a;
+  if(short.length >= 3 && long.includes(short)) return 0.9;
+  // 先頭が一致する分だけ数える。案件名は「会社名＋用件」の形が多いため。
+  let pre = 0;
+  while(pre < short.length && short[pre] === long[pre]) pre++;
+  if(pre >= 4) return Math.min(0.89, 0.6 + pre / short.length * 0.29);
+  const ba = bigramsOf(a), bb = bigramsOf(b).slice();
+  let hit = 0;
+  ba.forEach(g=>{ const i = bb.indexOf(g); if(i >= 0){ hit++; bb.splice(i, 1); } });
+  return (ba.length + bigramsOf(b).length) ? (2 * hit) / (ba.length + bigramsOf(b).length) : 0;
+}
+
+/* その案件名に一番近いクライアント。紛らわしい場合は返さない。 */
+function guessClientFor(name){
+  const n = normalizeCompanyName(name);
+  if(n.length < 2) return null;
+  const scored = clients.map(c=>({c, score: nameScore(n, normalizeCompanyName(c.name))}))
+                        .sort((x, y)=> y.score - x.score);
+  if(!scored.length || scored[0].score < 0.6) return null;
+  // 2番目と僅差なら、どちらか決めきれないので自動では紐づけない
+  if(scored[1] && scored[0].score - scored[1].score < 0.1) return null;
+  return scored[0].c;
+}
+
+/* クライアント未設定の案件をまとめて紐づける */
+function autoLinkProjects(){
+  const targets = sortedProjects().filter(pj=>!pj.clientId);
+  if(!targets.length){ toast('クライアント未設定の案件はありません'); return; }
+  const found = targets.map(pj=>({pj, c: guessClientFor(pj.name)})).filter(x=>x.c);
+  if(!found.length){
+    toast('案件名から判断できるクライアントが見つかりませんでした');
+    return;
+  }
+  const skipped = targets.length - found.length;
+  showConfirm(
+    `次のとおり紐づけます。よろしいですか?\n\n`
+    + found.map(x=>`・${x.pj.name}\n　　→ ${x.c.name}`).join('\n')
+    + (skipped ? `\n\n（判断できなかった${skipped}件はそのままにします）` : ''),
+    ()=>{
+      found.forEach(x=>{ x.pj.clientId = x.c.id; });
+      renderProjectList();
+      renderHome();
+      if(cdCurrentId) renderClientTasks(cdCurrentId);
+      toast(`${found.length}件の案件をクライアントに紐づけました`);
+    }, {okLabel:'紐づける', danger:false});
+}
+
+/* 新しい案件名を打っている最中に、当てはまるクライアントを先に選んでおく */
+function suggestClientForNewProject(){
+  const sel = document.getElementById('pj-new-client');
+  if(!sel || sel.dataset.touched === '1') return;   // 手で選んだあとは邪魔しない
+  const c = guessClientFor(document.getElementById('pj-new-name').value);
+  sel.value = c ? String(c.id) : '';
+}
+
 function setProjectClient(projectId, value){
   const pj = projectById(projectId);
   if(!pj) return;
@@ -4911,7 +5002,9 @@ function openProjectModal(){
   document.getElementById('pj-new-name').value = '';
   document.getElementById('pj-new-color').innerHTML = colorOptions(nextProjectColor());
   document.getElementById('pj-new-template').innerHTML = templateOptions('', 'テンプレートを使わない');
-  document.getElementById('pj-new-client').innerHTML = clientOptions('', 'クライアント未設定');
+  const nc = document.getElementById('pj-new-client');
+  nc.innerHTML = clientOptions('', 'クライアント未設定');
+  nc.dataset.touched = '';
   syncNewColorSwatch();
   renderProjectList();
   openModal('project-modal');
@@ -4970,7 +5063,8 @@ function addProject(){
   const made = tplId ? applyTemplateToProject(tplId, pjId) : 0;
   document.getElementById('pj-new-name').value = '';
   document.getElementById('pj-new-color').innerHTML = colorOptions(nextProjectColor());
-  document.getElementById('pj-new-client').value = '';
+  const nc2 = document.getElementById('pj-new-client');
+  nc2.value = ''; nc2.dataset.touched = '';
   syncNewColorSwatch();
   renderProjectList();
   renderHome();
