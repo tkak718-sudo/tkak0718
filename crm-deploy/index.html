@@ -2622,7 +2622,7 @@ function tickSave(){
 const DOC_LIMIT = 1048576;
 
 /* どの版が動いているかを画面から確かめられるようにする */
-const BUILD_ID = '2026-08-20u';
+const BUILD_ID = '2026-08-20v';
 /* 直近の保存結果と、サーバーから受け取った内容の素性。診断画面で見せる */
 let lastWriteInfo = 'まだ保存していません';
 let lastServerInfo = 'まだ受信していません';
@@ -5497,16 +5497,17 @@ async function renderMiInboxList(){
   }).join('');
 }
 
-/* 受信箱の1件を、いつもの確認画面に読み込む。読み込んだらポストからは出す（削除する）。
-   ここではまだ登録しない。中身の確認・修正・登録（または下書き保存）はこのあと普通に行う。 */
+/* 受信箱の1件を、いつもの確認画面に読み込む。
+   受信箱からは消さない（「取り込む」を押しただけで消えると、確認画面を閉じたときに
+   内容ごと失われるため）。消すのは、明示的に「削除」を押したときだけにする。
+   登録済みの項目を再度取り込んでも、取り込み済みの行は自動でチェックが外れるだけなので、
+   同じものを重ねて登録してしまうことはない。 */
 function pullImportInboxItem(id){
   const it = miInboxItems.find(x=>x.id === id);
   if(!it) return;
   document.getElementById('mi-paste').value = it.json;
   parseMeetingImportInput();
-  deleteImportInboxItem(importInboxToken, id).catch(e=>console.error('受信箱から削除できませんでした', e));
-  miInboxItems = miInboxItems.filter(x=>x.id !== id);
-  renderMiInboxList();
+  toast('受信箱の内容を確認画面に読み込みました（受信箱にはまだ残っています）');
 }
 
 function dismissImportInboxItem(id){
