@@ -1620,6 +1620,23 @@
         議事録から抽出したアクションアイテムのJSON、または同じ内容のCSVを取り込みます。
         会議ごとにまとめて表示するので、案件・担当者・期日を確認してから登録してください。
         取り込み済みの項目（IDが一致するもの）は自動でチェックを外しています。</p>
+
+      <div class="detail-section-label">① 議事録の原文から抽出する（AI・新しい会議1件ずつ向け）</div>
+      <p class="ai-desc" style="font-size:11.5px; color:var(--text-faint); line-height:1.7; margin-top:0;">
+        Gemini・Nottaなどの議事録要約をそのまま貼り付けると、Claudeがアクションアイテムを抜き出します。
+        最新の会議1件だけ追加したいときは、その会議の議事録だけを貼り付けてください。</p>
+      <textarea id="mi-raw-text" rows="6" placeholder="議事録の本文をそのまま貼り付け…"
+                style="width:100%; box-sizing:border-box; font-size:12px; line-height:1.7; border:1px solid var(--border-strong); border-radius:8px; padding:8px 10px;"></textarea>
+      <div class="field" style="margin-top:6px;"><label>Anthropic APIキー</label>
+        <input type="password" id="mi-ai-key" placeholder="sk-ant-..."></div>
+      <label class="opt-line"><input type="checkbox" id="mi-ai-save-key" checked> このキーをこの端末に保存する</label>
+      <div class="pj-row" style="border-bottom:none; margin-top:6px;">
+        <div style="flex:1"></div>
+        <button class="btn btn-sm btn-primary" id="mi-ai-run" onclick="extractMeetingFromRawText()">AIで抽出する</button>
+      </div>
+      <div class="ai-status" id="mi-ai-status" style="display:none;"></div>
+
+      <div class="detail-section-label">② すでにJSON・CSVがある場合</div>
       <div class="pj-row" style="border-bottom:none;">
         <button class="btn btn-sm" onclick="document.getElementById('mi-file').click()">ファイルを選ぶ（.json / .csv）</button>
         <span class="detail-sub" id="mi-file-name"></span>
@@ -2572,7 +2589,7 @@ function tickSave(){
 const DOC_LIMIT = 1048576;
 
 /* どの版が動いているかを画面から確かめられるようにする */
-const BUILD_ID = '2026-08-20r';
+const BUILD_ID = '2026-08-20s';
 /* 直近の保存結果と、サーバーから受け取った内容の素性。診断画面で見せる */
 let lastWriteInfo = 'まだ保存していません';
 let lastServerInfo = 'まだ受信していません';
@@ -4584,8 +4601,124 @@ function openMeetingImportModal(){
   document.getElementById('mi-groups').innerHTML = '';
   document.getElementById('mi-count').textContent = '';
   document.getElementById('mi-commit-btn').disabled = true;
+  document.getElementById('mi-raw-text').value = '';
+  document.getElementById('mi-ai-key').value = localStorage.getItem('anthropicApiKey') || '';
+  document.getElementById('mi-ai-status').style.display = 'none';
   miGroups = [];
   openModal('meeting-import-modal');
+}
+
+function showMiAiStatus(msg, kind){
+  const el = document.getElementById('mi-ai-status');
+  el.className = 'ai-status' + (kind ? ' ' + kind : '');
+  el.textContent = msg;
+  el.style.display = 'flex';
+}
+
+/* 議事録の原文からアクションアイテムを抜き出す。web検索は使わず、渡した文章だけを見て判断させる。
+   会議のタイトル・日付・タスク一覧をJSONで返させ、既存のインポート画面にそのまま渡す。 */
+async function callMeetingExtractAI(apiKey, rawText){
+  const sys = `あなたは会議の議事録から、実行すべきアクションアイテムだけを抽出するアシスタントです。
+単なる話題・決定事項・雑談ではなく、「次に誰かがやるべきこと」だけを対象にしてください。
+原文に無い担当者や期限を作らないこと。期限を推測した場合は due_confidence を estimated にし、
+根拠を due_text に残すこと。
+
+出力は次のJSONオブジェクトのみとする（説明文・コードブロック記号は付けない）:
+{
+  "meeting": {"title": "会議の議題を要約した短い日本語タイトル", "date": "YYYY-MM-DD形式の日付。本文中に無ければ null"},
+  "tasks": [
+    {
+      "title": "タスクの内容（簡潔な日本語）",
+      "detail": "背景や補足。無ければ空文字",
+      "owner": "担当者・担当側を表す原文の言葉（例:先方、両社、〇〇側）。不明なら空文字",
+      "due_date": "YYYY-MM-DD。本文中で日付が明確に特定できる場合のみ。それ以外は null",
+      "due_text": "期限に関する原文の表現。無ければ空文字",
+      "due_confidence": "explicit（明確な日付が書かれている）|estimated（推測で日付を出した）|none（期限の言及なし）",
+      "priority": "high|medium|low（緊急度・重要度の言い回しから推測。判断できなければ medium）",
+      "tags": ["関連する短いキーワードを1〜3個"]
+    }
+  ]
+}`;
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true',
+    },
+    body: JSON.stringify({
+      model: EVENT_MODEL,
+      max_tokens: 8192,
+      system: sys,
+      messages: [{ role: 'user', content: '次の議事録からアクションアイテムを抽出してください:\n\n' + rawText }],
+    }),
+  });
+  if(!res.ok){
+    const t = await res.text();
+    throw new Error('API ' + res.status + '：' + t.slice(0, 300));
+  }
+  const data = await res.json();
+  const text = (data.content || []).filter(b=>b.type==='text').map(b=>b.text).join('');
+  let t = text.trim().replace(/^```(?:json)?/i, '').replace(/```$/,'').trim();
+  const s2 = t.indexOf('{'), e2 = t.lastIndexOf('}');
+  if(s2 < 0 || e2 <= s2) throw new Error('JSONが取得できませんでした: ' + text.slice(0, 150));
+  return JSON.parse(t.slice(s2, e2 + 1));
+}
+
+/* 抽出結果を、既存のインポート画面が読める形（meetings/tasks の配列）に組み立てる。
+   会議ID・タスクIDはここで採番する（AIには振らせない。重複や欠番を避けるため）。 */
+function buildMeetingImportJson(extracted){
+  const meeting = extracted.meeting || {};
+  const date = (meeting.date && /^\d{4}-\d{2}-\d{2}$/.test(meeting.date)) ? meeting.date : '';
+  const meetingId = 'extract-' + (date || todayISO()) + '-' + Math.random().toString(36).slice(2, 6);
+  const pad = n => String(n).padStart(2, '0');
+  const tasks = (extracted.tasks || []).map((t, i)=>({
+    id: meetingId + '-' + pad(i + 1),
+    meeting_id: meetingId,
+    title: t.title || '',
+    detail: t.detail || '',
+    owner: t.owner || '',
+    due_date: t.due_date || null,
+    due_text: t.due_text || '',
+    due_confidence: t.due_confidence || 'none',
+    status: '未着手',
+    priority: t.priority || 'medium',
+    tags: Array.isArray(t.tags) ? t.tags : [],
+  }));
+  return {
+    meetings: [{ meeting_id: meetingId, title: meeting.title || '（会議名なし）', date }],
+    tasks,
+  };
+}
+
+async function extractMeetingFromRawText(){
+  const raw = document.getElementById('mi-raw-text').value.trim();
+  if(!raw){ showMiAiStatus('議事録の本文を貼り付けてください。', 'error'); return; }
+  const key = document.getElementById('mi-ai-key').value.trim();
+  if(!key){ showMiAiStatus('Anthropic APIキーを入力してください。', 'error'); return; }
+  if(document.getElementById('mi-ai-save-key').checked) localStorage.setItem('anthropicApiKey', key);
+  else localStorage.removeItem('anthropicApiKey');
+
+  const btn = document.getElementById('mi-ai-run');
+  btn.disabled = true;
+  showMiAiStatus('議事録を読み取っています…');
+  try{
+    const extracted = await callMeetingExtractAI(key, raw);
+    const obj = buildMeetingImportJson(extracted);
+    if(!obj.tasks.length){
+      showMiAiStatus('アクションアイテムが見つかりませんでした。議事録の内容をご確認ください。', 'error');
+      return;
+    }
+    document.getElementById('mi-paste').value = JSON.stringify(obj, null, 2);
+    showMiAiStatus(`「${obj.meetings[0].title}」から${obj.tasks.length}件を抽出しました。内容を確認してください。`, 'ok');
+    parseMeetingImportInput();
+  }catch(err){
+    console.error(err);
+    showMiAiStatus('抽出できませんでした: ' + err.message, 'error');
+  }finally{
+    btn.disabled = false;
+  }
 }
 
 async function handleMeetingFilePick(ev){
