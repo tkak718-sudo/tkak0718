@@ -165,6 +165,17 @@ def label_text(page, el):
                 if (prev) {
                     const s = (prev.innerText || '').trim();
                     if (s && s.length <= 40) return s;
+                } else if (node.parentElement) {
+                    // 兄弟要素が無い場合、「<p>氏名<span>必須<input/></span></p>」
+                    // のように、親要素の中で最初の子要素より前にある文字だけを見る
+                    for (const child of node.parentElement.childNodes) {
+                        if (child.nodeType === 3) {
+                            const s = child.textContent.trim();
+                            if (s) { if (s.length <= 40) return s; break; }
+                        } else if (child.nodeType === 1) {
+                            break;
+                        }
+                    }
                 }
                 node = node.parentElement;
             }
@@ -223,6 +234,31 @@ def body_for(el, profile, company_name, notes):
     return ''
 
 
+def is_search_widget(el):
+    """サイト内検索の入力欄かどうか。name/id/placeholderがs・q・searchのような
+       検索特有の書き方で、囲むformにもsearchの印がある場合に絞って判定する
+       (誤検出を避けるため、複数条件が揃ったときだけ真とする)"""
+    try:
+        name = (el.get_attribute('name') or '').strip().lower()
+        eid = (el.get_attribute('id') or '').strip().lower()
+        ph = (el.get_attribute('placeholder') or '')
+        looks_like_search = (name in ('s', 'q', 'query', 'search', 'keyword') or
+                              eid in ('s', 'q', 'search') or
+                              re.search(r'検索|search', ph, re.I) is not None)
+        if not looks_like_search:
+            return False
+        in_search_form = el.evaluate("""e => {
+            const f = e.closest('form');
+            if (!f) return false;
+            const sig = (f.getAttribute('role') || '') + ' ' + (f.id || '') + ' ' +
+                        (f.className || '') + ' ' + (f.action || '');
+            return /search|検索/i.test(sig);
+        }""")
+        return bool(in_search_form)
+    except Exception:
+        return False
+
+
 def fill_form(page, profile, company_name):
     """フォームに値を入れる。何をどこへ入れたかと、埋め残した必須項目を返す"""
     values = dict(profile['fields'])
@@ -244,6 +280,11 @@ def fill_form(page, profile, company_name):
                 continue
             typ = (el.get_attribute('type') or el.evaluate('e => e.tagName.toLowerCase()')).lower()
             if typ in ('hidden', 'submit', 'button', 'image', 'file', 'reset'):
+                continue
+            # サイト内検索ボックスは無視する。required属性が付いているだけで
+            # お問い合わせフォームと誤認し、会社まるごと「必須項目が埋まらない」に
+            # なってしまうサイトがある(WordPressテーマ等で時々見る)
+            if typ == 'search' or is_search_widget(el):
                 continue
 
             text = label_text(page, el)
