@@ -728,7 +728,7 @@
           : "広告コード別 ・ 売上の多い順";
         // どの列を売上として読んだかを常時表示する（取込メッセージは消えてしまうため）
         var pbInfo=pbs.length?'<div class="sb-meta" style="padding:12px 16px 4px;line-height:1.7">'+pbs.map(function(b){
-          return '<b>'+esc(b.k)+'</b> → 売上として '+(b.pos||"?")+' 列目「'+esc(b.col||"?")+'」を使用'+(b.how?'（'+esc(b.how)+'）':'')+
+          return '<b>'+esc(b.k)+'</b>'+(b.f?' ［集計期間 '+esc(perLabel({f:b.f,t:b.t}))+'］':'')+' → 売上として '+(b.pos||"?")+' 列目「'+esc(b.col||"?")+'」を使用'+(b.how?'（'+esc(b.how)+'）':'')+
             (b.heads?'<br><span style="color:var(--faint)">列: '+esc(b.heads)+'</span>':'');
         }).join('<br>')+'</div>':'';
         playerPanel='<div class="panel" style="margin-top:16px"><div class="panel-h"><h3>選手別 売上</h3>'+hRight('<span class="sub"'+(pbs.length?' title="'+esc(pbNames)+'"':'')+'>'+plSub+'</span>'+plEditBtn)+'</div><div class="tbl-wrap"><table><thead><tr><th>選手名</th><th>アクセス</th><th>クリック</th><th>枚数</th><th>件数</th><th>売上</th><th>構成比</th></tr></thead><tbody>'+pTrs+'</tbody><tfoot><tr><td>合計</td><td class="num">—</td><td class="num">—</td><td class="num">—</td><td class="num">—</td><td class="num">'+yen(pTot)+'</td><td class="num">100%</td></tr></tfoot></table></div>'+pbInfo+'</div>';
@@ -1055,7 +1055,8 @@
       }
       else if(kind==="player"){
         var r3=importPlayers(ev,tbl,f.name); if(r3.cancelled)return; if(r3.error){toast(r3.error);return;} commit();
-        toast((r3.reimport?"選手別を再取込："+r3.key+" を差し替え":(r3.merged?"選手別を追加取込："+r3.key:"選手別を取込："+r3.key))
+        toast((r3.reimport?"選手別を再取込："+r3.key+" を差し替え":(r3.replaced?"選手別を置き換え取込："+r3.key+"（重複"+r3.replaced+"件を除外）":(r3.merged?"選手別を追加取込："+r3.key:"選手別を取込："+r3.key)))
+          +(r3.period?"［"+r3.period+"］":"")
           +" ／ "+(r3.files>1?nf(r3.files)+"ファイル合算 ":"")+nf(r3.rows)+"名（売上あり "+nf(r3.withSales)
           +"名・売上は"+r3.salesPos+"列目「"+r3.salesCol+"」"+(r3.salesHow?"＝"+r3.salesHow:"")+"）");
       }
@@ -1123,6 +1124,20 @@
     });
     return order.map(function(n){return agg[n];});
   }
+  // ファイル名から集計期間を読み取る（例: aggregation_by_code_20260701-20260731.csv）
+  function parsePeriod(name){
+    var m=String(name||"").match(/(20\d{6})\D{0,3}(20\d{6})/);
+    if(!m)return null;
+    var f=m[1],t=m[2];
+    return f<=t?{f:f,t:t}:{f:t,t:f};
+  }
+  function perLabel(p){
+    if(!p)return "";
+    var d=function(x){return (+x.slice(4,6))+"/"+(+x.slice(6,8));};
+    return d(p.f)+"〜"+d(p.t);
+  }
+  function perOverlap(a,b){ return !!a&&!!b&&a.f<=b.t&&b.f<=a.t; }
+
   function importPlayers(ev,tbl,srcName){
     var pc=colFinder(tbl.head);
     var iN=pc(["広告コード"]),iG=pc(["グループ名","グループ"]),
@@ -1143,16 +1158,28 @@
     var prev=ev.players?ev.players.length:null;
     if(!hasB&&prev&&!askReplace("選手別データ",nf(prev)+" 名"))return {cancelled:true};
     var key=String(srcName||"").trim()||("取込"+((hasB?ev.playerBatches.length:0)+1));
+    var per=parsePeriod(key);
+    // 同じ期間のファイルは差し替える。期間が無ければ従来どおりファイル名で判定する。
+    var bid=per?("P"+per.f+"-"+per.t):("F"+key);
     var batches=hasB?ev.playerBatches.slice():[];
-    var idx=-1; batches.forEach(function(b,i){if(b.k===key)idx=i;});
-    var bat={k:key,rows:rows,col:normH(tbl.head[iS]),pos:iS+1,how:sc.how,heads:tbl.head.map(normH).join(" , ")};
+    var idx=-1; batches.forEach(function(b,i){ if((b.id||("F"+b.k))===bid)idx=i; });
+    // 期間が重なる別ファイルがあると二重計上になるため、置き換えるか確認する
+    var dup=[];
+    if(idx<0&&per) batches.forEach(function(b,i){ if(b.f&&perOverlap(per,{f:b.f,t:b.t})) dup.push(i); });
+    if(dup.length){
+      var names=dup.map(function(i){return "・"+batches[i].k+"（"+perLabel({f:batches[i].f,t:batches[i].t})+"）";}).join("\n");
+      if(!confirm("取り込もうとしているファイルの期間（"+perLabel(per)+"）が、すでに取り込み済みのファイルと重なっています。\n\n"+names+"\n\nこのまま追加すると重なった期間の売上を二重に計上してしまいます。\n\n［OK］重なっているファイルを外して、今回のファイルに置き換える\n［キャンセル］取込をやめる"))
+        return {cancelled:true};
+      batches=batches.filter(function(b,i){return dup.indexOf(i)<0;});
+    }
+    var bat={id:bid,k:key,f:per?per.f:"",t:per?per.t:"",rows:rows,col:normH(tbl.head[iS]),pos:iS+1,how:sc.how,heads:tbl.head.map(normH).join(" , ")};
     if(idx>=0)batches[idx]=bat; else batches.push(bat);
     ev.playerBatches=batches;
     ev.players=aggPlayers(batches);
     ev.plAt=new Date().toISOString();
     return {rows:ev.players.length,fileRows:rows.length,withSales:ev.players.filter(function(p){return p.sales>0;}).length,
             prev:prev,salesCol:normH(tbl.head[iS]),salesHow:sc.how,salesPos:iS+1,
-            files:batches.length,key:key,reimport:idx>=0,merged:hasB};
+            files:batches.length,key:key,reimport:idx>=0,merged:hasB,period:perLabel(per),replaced:dup.length};
   }
   // 7月分・8月分のように複数回に分けて取り込めるよう、明細を保持して合算する。
   // 同じCSVを再取込しても増えないよう、注文単位で「多い方の枚数」を採用する。
