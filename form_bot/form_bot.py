@@ -366,27 +366,48 @@ def find_button(page, kinds):
     return None, ''
 
 
+def looks_like_form(fr, min_fields=2):
+    """form/textareaタグが無くても、実質的な入力欄がmin_fields個以上あれば
+       「フォームがある」とみなす。React等のサイトはformタグを使わず
+       入力欄だけを描画することがあり、タグの有無だけで判定すると
+       中身があるのに「見つからない」扱いになってしまう"""
+    try:
+        if fr.query_selector('form') or fr.query_selector('textarea'):
+            return True
+        n = 0
+        for el in fr.query_selector_all('input'):
+            try:
+                typ = (el.get_attribute('type') or 'text').lower()
+                if typ in ('hidden', 'submit', 'button', 'image', 'file', 'reset',
+                           'search', 'checkbox', 'radio'):
+                    continue
+                if el.is_visible():
+                    n += 1
+                    if n >= min_fields:
+                        return True
+            except Exception:
+                continue
+        return False
+    except Exception:
+        return False
+
+
 def pick_target(page):
     """フォームがまだ描画されていない/外部iframeに埋め込まれているページに対応する。
        (例1: React等で作られたページは読み込み後しばらくしてフォームを生成する
         例2: フォームメーラー等はページ本体ではなくiframe内にformを生成する
        どちらも、決め打ちの短い待ち時間だけ見ているとフォームが常に
        「見つからない」扱いになるので、見つかるまで少し待ちながら探す)"""
-    def has_form(fr):
-        try:
-            return bool(fr.query_selector('form') or fr.query_selector('textarea'))
-        except Exception:
-            return False
-    if has_form(page):
+    if looks_like_form(page):
         return page
     for _ in range(5):
         page.wait_for_timeout(800)
-        if has_form(page):
+        if looks_like_form(page):
             return page
         for fr in page.frames:
             if fr == page.main_frame:
                 continue
-            if has_form(fr):
+            if looks_like_form(fr):
                 return fr
     return page
 
@@ -405,7 +426,7 @@ def preflight(page, url):
         ng.append('採用/サポート/取材専用の窓口')
     if CAPTCHA.search(html):
         ng.append('CAPTCHAあり（自動送信しない）')
-    if not page.query_selector('form') and not page.query_selector('textarea'):
+    if not looks_like_form(page):
         ng.append('フォームが見つからない')
     # 用途が問い合わせでないフォームは、URLでは見分けられないので項目名で判定する
     if not OK_FORMTYPE.search(text):
