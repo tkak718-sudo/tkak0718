@@ -203,7 +203,8 @@
   thead th:first-child,tbody td:first-child{text-align:left}
   tbody td{padding:12px 14px;border-bottom:1px solid var(--line-soft);text-align:right;white-space:nowrap}
   tbody tr:hover{background:var(--panel-2)}tbody tr:last-child td{border-bottom:none}
-  .pname{font-weight:700;display:flex;align-items:center;gap:10px}
+  .pname{font-weight:700;display:flex;align-items:center;gap:10px;max-width:360px}
+  .pname .pnm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
   .pav{width:26px;height:26px;border-radius:8px;display:grid;place-items:center;font-size:11px;font-weight:800;color:#fff;flex:none}
   tfoot td{padding:13px 14px;font-weight:800;border-top:2px solid var(--line);text-align:right;background:var(--panel-2)}
   tfoot td:first-child{text-align:left}
@@ -721,7 +722,7 @@
         var hasReg=ps.some(function(p){return (p.reg||0)>0;});
         var pTrs=ps.map(function(p){
           var share=pTot?p.sales/pTot*100:0;
-          return '<tr><td><div class="pname"><span class="pav" style="background:'+avatarColor(p.n)+'">'+esc(String(p.n).slice(0,1))+'</span>'+esc(p.n)+(p.g?' <span style="color:var(--faint);font-weight:600;font-size:11px">'+esc(p.g)+'</span>':'')+'</div></td>'+
+          return '<tr><td><div class="pname"><span class="pav" style="background:'+avatarColor(p.n)+'">'+esc(String(p.n).slice(0,1))+'</span><span class="pnm" title="'+esc(p.n)+'">'+esc(p.n)+'</span>'+(p.g?' <span style="color:var(--faint);font-weight:600;font-size:11px">'+esc(p.g)+'</span>':'')+'</div></td>'+
             (hasReg?'<td class="num">'+nf(p.reg)+'</td>':'')+
             (hasAC?'<td class="num">'+nf(p.access)+'</td><td class="num">'+nf(p.clicks)+'</td>':'')+
             '<td class="num">'+nf(p.tickets)+'</td><td class="num">'+nf(p.count)+'</td><td class="num"><b>'+yen(p.sales)+'</b></td><td class="num">'+share.toFixed(1)+'%</td></tr>';
@@ -1110,7 +1111,10 @@
     });
     while(rows.length&&rows[0].join("").trim()==="")rows.shift();
     if(!rows.length)return null;
-    return {head:rows[0],rows:rows.slice(1).filter(function(r){return r.join("").trim()!=="";})};
+    // 表の下に【集計方法】などの注釈が続くことがある。最初の空行で打ち切る。
+    var body=rows.slice(1),end=body.length;
+    for(var i=0;i<body.length;i++) if(body[i].join("").trim()===""){end=i;break;}
+    return {head:rows[0],rows:body.slice(0,end)};
   }
   // 選手別に使えるシート（広告コード等 ＋ 売上列があるもの）を探す。「サマリー」を優先。
   function xlsxPlayerTable(buf){
@@ -1291,6 +1295,7 @@
     tbl.rows.forEach(function(c){
       var n=(c[iN]||"").trim(); if(!n)return;
       if(/^(合計|総計|小計|計|total)$/i.test(n))return;              // 集計行は取り込まない
+      if(/^[・※＊*【（(]/.test(n))return;                            // 注釈・見出し行は取り込まない
       var num=function(i){return i>=0?(parseFloat(String(c[i]||"").replace(/[^0-9.\-]/g,""))||0):0;};
       if(!agg[n]){agg[n]={n:n,g:iG>=0?(c[iG]||"").trim():"",access:0,clicks:0,reg:0,tickets:0,count:0,sales:0,
         cT:iTc>=0?0:null,cC:iCtc>=0?0:null,cS:iSc>=0?0:null};order.push(n);}
