@@ -325,7 +325,7 @@
 
 <div class="modal-bg" id="modalBg"><div class="modal" id="modal"></div></div>
 <div class="toast" id="toast"></div>
-<input type="file" id="fileIn" accept=".csv,text/csv" style="display:none">
+<input type="file" id="fileIn" accept=".csv,text/csv,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" style="display:none">
 <input type="file" id="restoreIn" accept=".json,application/json" style="display:none">
 
 <!-- ============================================================
@@ -716,11 +716,19 @@
       if(ev.players&&ev.players.length){
         var ps=ev.players.slice().sort(function(a,b){return (b.sales-a.sales)||(b.access-a.access);});
         var pTot=ps.reduce(function(s,p){return s+(p.sales||0);},0);
+        // CSVにはアクセス・クリック、Excelには登録者数があるため、値のある列だけ表示する
+        var hasAC=ps.some(function(p){return (p.access||0)>0||(p.clicks||0)>0;});
+        var hasReg=ps.some(function(p){return (p.reg||0)>0;});
         var pTrs=ps.map(function(p){
           var share=pTot?p.sales/pTot*100:0;
           return '<tr><td><div class="pname"><span class="pav" style="background:'+avatarColor(p.n)+'">'+esc(String(p.n).slice(0,1))+'</span>'+esc(p.n)+(p.g?' <span style="color:var(--faint);font-weight:600;font-size:11px">'+esc(p.g)+'</span>':'')+'</div></td>'+
-            '<td class="num">'+nf(p.access)+'</td><td class="num">'+nf(p.clicks)+'</td><td class="num">'+nf(p.tickets)+'</td><td class="num">'+nf(p.count)+'</td><td class="num"><b>'+yen(p.sales)+'</b></td><td class="num">'+share.toFixed(1)+'%</td></tr>';
+            (hasReg?'<td class="num">'+nf(p.reg)+'</td>':'')+
+            (hasAC?'<td class="num">'+nf(p.access)+'</td><td class="num">'+nf(p.clicks)+'</td>':'')+
+            '<td class="num">'+nf(p.tickets)+'</td><td class="num">'+nf(p.count)+'</td><td class="num"><b>'+yen(p.sales)+'</b></td><td class="num">'+share.toFixed(1)+'%</td></tr>';
         }).join("");
+        var pHead='<tr><th>選手名</th>'+(hasReg?'<th>登録者数</th>':'')+(hasAC?'<th>アクセス</th><th>クリック</th>':'')+'<th>枚数</th><th>件数</th><th>売上</th><th>構成比</th></tr>';
+        var pDash=new Array((hasReg?1:0)+(hasAC?2:0)+2).join('|').split('|').map(function(){return '<td class="num">—</td>';}).join('');
+        var pFoot='<tr><td>合計</td>'+pDash+'<td class="num">'+yen(pTot)+'</td><td class="num">100%</td></tr>';
         var pbs=Array.isArray(ev.playerBatches)?ev.playerBatches:[];
         var pbNames=pbs.map(function(b){return b.k;}).join(" ／ ");
         var plSub=pbs.length>1
@@ -731,7 +739,7 @@
           return '<b>'+esc(b.k)+'</b>'+(b.f?' ［集計期間 '+esc(perLabel({f:b.f,t:b.t}))+'］':'')+' → 売上として '+(b.pos||"?")+' 列目「'+esc(b.col||"?")+'」を使用'+(b.how?'（'+esc(b.how)+'）':'')+
             (b.heads?'<br><span style="color:var(--faint)">列: '+esc(b.heads)+'</span>':'');
         }).join('<br>')+'<div style="margin-top:6px">※ 売上・枚数・件数は各ファイルの「累計」欄（期間開始日〜集計時点）も参照し、最も広い期間の値を採用しています。アクセス・クリックは累計欄が無いため合算です。</div></div>':'';
-        playerPanel='<div class="panel" style="margin-top:16px"><div class="panel-h"><h3>選手別 売上</h3>'+hRight('<span class="sub"'+(pbs.length?' title="'+esc(pbNames)+'"':'')+'>'+plSub+'</span>'+plEditBtn)+'</div><div class="tbl-wrap"><table><thead><tr><th>選手名</th><th>アクセス</th><th>クリック</th><th>枚数</th><th>件数</th><th>売上</th><th>構成比</th></tr></thead><tbody>'+pTrs+'</tbody><tfoot><tr><td>合計</td><td class="num">—</td><td class="num">—</td><td class="num">—</td><td class="num">—</td><td class="num">'+yen(pTot)+'</td><td class="num">100%</td></tr></tfoot></table></div>'+pbInfo+'</div>';
+        playerPanel='<div class="panel" style="margin-top:16px"><div class="panel-h"><h3>選手別 売上</h3>'+hRight('<span class="sub"'+(pbs.length?' title="'+esc(pbNames)+'"':'')+'>'+plSub+'</span>'+plEditBtn)+'</div><div class="tbl-wrap"><table><thead>'+pHead+'</thead><tbody>'+pTrs+'</tbody><tfoot>'+pFoot+'</tfoot></table></div>'+pbInfo+'</div>';
       } else {
         playerPanel='<div class="panel" style="margin-top:16px"><div class="panel-h"><h3>選手別 売上</h3>'+(editable?'<button class="btn btn-sm" data-editplayers="'+ev.id+'">＋ 手入力</button>':'')+'</div><div class="empty" style="padding:30px"><b>選手別データなし</b><p>'+(editable?'「＋ 手入力」で選手別（広告コード別）の数値を入力できます。「CSVを取込」でも自動集計されます。':'選手別データは未取込です。')+'</p></div></div>';
       }
@@ -739,7 +747,7 @@
       body=
         '<div class="ev-head"><div><h2 style="font-size:19px">'+esc(ev.name)+'</h2><div class="meta">'+(ev.date?fmtDate(ev.date):"日付未設定")+(ev.venue?" ・ "+esc(ev.venue):"")+'</div>'+
         ((ev.tkAt||ev.odAt||ev.plAt)?'<div class="meta" style="margin-top:2px;font-size:11.5px">最終取込 '+[ev.tkAt?'チケット '+fmtStamp(ev.tkAt):'',ev.odAt?'注文 '+fmtStamp(ev.odAt):'',ev.plAt?'選手 '+fmtStamp(ev.plAt):''].filter(Boolean).join(' / ')+'</div>':'')+'</div>'+
-        (editable?'<div class="ev-actions"><button class="btn" data-editev="'+ev.id+'">編集</button><button class="btn btn-pri" data-import="'+ev.id+'">'+ic("chart")+' CSVを取込</button><button class="btn btn-danger" data-del="'+ev.id+'">削除</button></div>':'')+'</div>'+
+        (editable?'<div class="ev-actions"><button class="btn" data-editev="'+ev.id+'">編集</button><button class="btn btn-pri" data-import="'+ev.id+'">'+ic("chart")+' CSV・Excelを取込</button><button class="btn btn-danger" data-del="'+ev.id+'">削除</button></div>':'')+'</div>'+
         '<div class="kpis">'+kpi("総売上金",yen(totalAmt),"yen","決済済み")+kpi("チケット枚数",nf(totalTk)+'<small>枚</small>',"ticket","販売済み")+kpi("平均単価",yen(avg),"chart","売上÷枚数")+kpi("決済件数",nf(cnt)+'<small>件</small>',"pipe","注文数")+'</div>'+
         salesPanel+
         '<div class="grid2" style="margin-top:16px">'+seatPanel+prodPanel+'</div>'+
@@ -1009,8 +1017,8 @@
   function editPlayersModal(id){
     if(!requireEdit())return;
     var ev=state.events.filter(function(e){return e.id===id;})[0];if(!ev)return;
-    var cols=[{key:"n",lab:"選手名（広告コード）",wide:true},{key:"g",lab:"グループ",wide:true},{key:"access",lab:"アクセス",num:true},{key:"clicks",lab:"クリック",num:true},{key:"tickets",lab:"枚数",num:true},{key:"count",lab:"件数",num:true},{key:"sales",lab:"売上(円)",num:true}];
-    var rows=(ev.players||[]).map(function(p){return {n:p.n,g:p.g,access:p.access,clicks:p.clicks,tickets:p.tickets,count:p.count,sales:p.sales};});
+    var cols=[{key:"n",lab:"選手名（広告コード）",wide:true},{key:"g",lab:"グループ",wide:true},{key:"reg",lab:"登録者数",num:true},{key:"access",lab:"アクセス",num:true},{key:"clicks",lab:"クリック",num:true},{key:"tickets",lab:"枚数",num:true},{key:"count",lab:"件数",num:true},{key:"sales",lab:"売上(円)",num:true}];
+    var rows=(ev.players||[]).map(function(p){return {n:p.n,g:p.g,reg:p.reg,access:p.access,clicks:p.clicks,tickets:p.tickets,count:p.count,sales:p.sales};});
     openModal(
       '<h3>選手別データを編集</h3><p class="mh">広告コード（選手）ごとの数値を手入力できます。売上の多い順に自動で並び替わります。</p>'+
       '<div class="modal-scroll"><div id="plCont">'+(rows.length?rows.map(function(r){return ledCard(cols,r);}).join(""):ledCard(cols,{}))+'</div>'+
@@ -1022,7 +1030,7 @@
     plCont.addEventListener("click",ledDelHandler);
     document.getElementById("plAdd").onclick=function(){plCont.insertAdjacentHTML("beforeend",ledCard(cols,{}));};
     document.getElementById("plok").onclick=function(){
-      var players=ledRead(plCont,".led-card",cols).map(function(r){return {n:r.n,g:r.g,access:pnum(r.access),clicks:pnum(r.clicks),tickets:pnum(r.tickets),count:pnum(r.count),sales:pnum(r.sales)};}).filter(function(p){return p.n;});
+      var players=ledRead(plCont,".led-card",cols).map(function(r){return {n:r.n,g:r.g,reg:pnum(r.reg),access:pnum(r.access),clicks:pnum(r.clicks),tickets:pnum(r.tickets),count:pnum(r.count),sales:pnum(r.sales)};}).filter(function(p){return p.n;});
       // 手入力した内容が正となるため、CSVのファイル別明細は破棄する（次回取込は置き換えになる）
       ev.players=players.length?players:null;ev.playerBatches=null;ev.plAt=new Date().toISOString();
       closeModal();commit();toast(players.length?("選手別データを保存しました（"+nf(players.length)+"名）"):"選手別データをクリアしました");
@@ -1030,16 +1038,126 @@
   }
 
   // ---------- CSV import（チケット管理 / 注文管理 を自動判定）----------
+  // ---------- .xlsx 読み込み ----------
+  // xlsx は ZIP。中の sharedStrings.xml と worksheet の XML を読んで表に変換する。
+  function u16(b,o){return b[o]|(b[o+1]<<8);}
+  function u32(b,o){return (b[o]|(b[o+1]<<8)|(b[o+2]<<16)|(b[o+3]<<24))>>>0;}
+  function zipOpen(buf){
+    var b=new Uint8Array(buf),i;
+    for(i=b.length-22;i>=0;i--) if(u32(b,i)===0x06054b50) break;   // 末尾から EOCD を探す
+    if(i<0)return null;
+    var n=u16(b,i+10), p=u32(b,i+16), map={};
+    for(var k=0;k<n;k++){
+      if(u32(b,p)!==0x02014b50)break;
+      var meth=u16(b,p+10), csz=u32(b,p+20), nlen=u16(b,p+28), elen=u16(b,p+30), clen=u16(b,p+32), lho=u32(b,p+42), nm="";
+      for(var j=0;j<nlen;j++) nm+=String.fromCharCode(b[p+46+j]);
+      map[nm]={meth:meth,csz:csz,lho:lho};
+      p+=46+nlen+elen+clen;
+    }
+    return {b:b,map:map};
+  }
+  function zipText(z,name){
+    var e=z.map[name]; if(!e)return Promise.resolve(null);
+    var b=z.b,p=e.lho;
+    if(u32(b,p)!==0x04034b50)return Promise.resolve(null);
+    var start=p+30+u16(b,p+26)+u16(b,p+28);
+    var data=b.subarray(start,start+e.csz);
+    if(e.meth===0)return Promise.resolve(new TextDecoder("utf-8").decode(data));
+    if(typeof DecompressionStream==="undefined")return Promise.reject(new Error("no-ds"));
+    return new Response(new Blob([data]).stream().pipeThrough(new DecompressionStream("deflate-raw"))).text();
+  }
+  function xlsxStrings(z){
+    return zipText(z,"xl/sharedStrings.xml").then(function(x){
+      if(!x)return [];
+      var d=new DOMParser().parseFromString(x,"application/xml");
+      return [].map.call(d.getElementsByTagName("si"),function(si){
+        var t="";[].forEach.call(si.getElementsByTagName("t"),function(n){t+=n.textContent;});return t;
+      });
+    });
+  }
+  function xlsxSheets(z){
+    return Promise.all([zipText(z,"xl/workbook.xml"),zipText(z,"xl/_rels/workbook.xml.rels")]).then(function(a){
+      if(!a[0])return [];
+      var wb=new DOMParser().parseFromString(a[0],"application/xml"), rel={};
+      if(a[1]){var rd=new DOMParser().parseFromString(a[1],"application/xml");
+        [].forEach.call(rd.getElementsByTagName("Relationship"),function(r){
+          rel[r.getAttribute("Id")]=String(r.getAttribute("Target")||"").replace(/^\/?xl\//,"").replace(/^\//,"");
+        });}
+      var NS="http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+      return [].map.call(wb.getElementsByTagName("sheet"),function(sh,i){
+        var id=sh.getAttributeNS?sh.getAttributeNS(NS,"id"):null; if(!id)id=sh.getAttribute("r:id");
+        return {name:sh.getAttribute("name")||("Sheet"+(i+1)),path:"xl/"+(rel[id]||("worksheets/sheet"+(i+1)+".xml"))};
+      });
+    });
+  }
+  function colNum(ref){var n=0;for(var i=0;i<ref.length;i++){var c=ref.charCodeAt(i);if(c<65||c>90)break;n=n*26+(c-64);}return n-1;}
+  function xlsxTable(xml,ss){
+    var d=new DOMParser().parseFromString(xml,"application/xml"),rows=[];
+    [].forEach.call(d.getElementsByTagName("row"),function(r){
+      var arr=[];
+      [].forEach.call(r.getElementsByTagName("c"),function(c){
+        var i=colNum(c.getAttribute("r")||""),t=c.getAttribute("t"),v="",e;
+        if(t==="s"){e=c.getElementsByTagName("v")[0];v=e?(ss[+e.textContent]||""):"";}
+        else if(t==="inlineStr"){e=c.getElementsByTagName("t")[0];v=e?e.textContent:"";}
+        else {e=c.getElementsByTagName("v")[0];v=e?e.textContent:"";}
+        if(i<0)i=arr.length;
+        arr[i]=v;
+      });
+      for(var k=0;k<arr.length;k++) if(arr[k]==null)arr[k]="";
+      rows.push(arr);
+    });
+    while(rows.length&&rows[0].join("").trim()==="")rows.shift();
+    if(!rows.length)return null;
+    return {head:rows[0],rows:rows.slice(1).filter(function(r){return r.join("").trim()!=="";})};
+  }
+  // 選手別に使えるシート（広告コード等 ＋ 売上列があるもの）を探す。「サマリー」を優先。
+  function xlsxPlayerTable(buf){
+    var z=zipOpen(buf);
+    if(!z)return Promise.reject(new Error("bad-zip"));
+    return xlsxStrings(z).then(function(ss){
+      return xlsxSheets(z).then(function(sheets){
+        var found=null;
+        return sheets.reduce(function(pr,sh){
+          return pr.then(function(){
+            if(found&&/サマリー|summary/i.test(found.sheet))return;
+            return zipText(z,sh.path).then(function(xml){
+              if(!xml)return;
+              var t=xlsxTable(xml,ss); if(!t)return;
+              var pc=colFinder(t.head);
+              if(pc(["広告コード","集計コード","コード"])>=0&&findSalesCol(t.head).idx>=0){
+                t.sheet=sh.name;
+                if(!found||/サマリー|summary/i.test(sh.name))found=t;
+              }
+            }).catch(function(){});
+          });
+        },Promise.resolve()).then(function(){return found;});
+      });
+    });
+  }
+
   var importFor=null;
   document.getElementById("fileIn").addEventListener("change",function(e){
     var f=e.target.files[0];e.target.value="";if(!f||!importFor)return;
     var rd=new FileReader();
     rd.onload=function(){
       var buf=rd.result,text;
+      var ev0=state.events.filter(function(x){return x.id===importFor;})[0];if(!ev0)return;
+      var head=new Uint8Array(buf,0,Math.min(4,buf.byteLength));
+      if(head[0]===0x50&&head[1]===0x4B){          // "PK" = xlsx（ZIP）
+        xlsxPlayerTable(buf).then(function(tbl){
+          if(!tbl){toast("Excelから選手別のシートが見つかりませんでした（広告コードと購入金額の列が必要です）");return;}
+          var r=importPlayers(ev0,tbl,f.name); if(r.cancelled)return; if(r.error){toast(r.error);return;} commit();
+          toast("Excel「"+tbl.sheet+"」から選手別を取込："+nf(r.rows)+"名（売上あり "+nf(r.withSales)
+            +"名・売上は"+r.salesPos+"列目「"+r.salesCol+"」）");
+        }).catch(function(err){
+          toast(err&&err.message==="no-ds"?"このブラウザではExcelを読み込めません（CSVをご利用ください）":"Excelファイルを読み込めませんでした");
+        });
+        return;
+      }
       try{text=new TextDecoder("utf-8",{fatal:true}).decode(buf);}catch(err){try{text=new TextDecoder("shift_jis").decode(buf);}catch(e2){text=new TextDecoder().decode(buf);}}
       var tbl=parseTable(text);
       if(tbl.error){toast(tbl.error);return;}
-      var ev=state.events.filter(function(x){return x.id===importFor;})[0];if(!ev)return;
+      var ev=ev0;
       var kind=detectKind(tbl.head);
       if(kind==="ticket"){
         var r=importTickets(ev,tbl); if(r.cancelled)return; if(r.error){toast(r.error);return;} commit();
@@ -1122,10 +1240,10 @@
     var mx=function(cur,v){return cur==null?v:Math.max(cur,v);};
     (batches||[]).forEach(function(b){
       (b.rows||[]).forEach(function(r){
-        if(!agg[r.n]){agg[r.n]={n:r.n,g:r.g||"",access:0,clicks:0,sT:0,sC:0,sS:0,mT:null,mC:null,mS:null};order.push(r.n);}
+        if(!agg[r.n]){agg[r.n]={n:r.n,g:r.g||"",access:0,clicks:0,reg:0,sT:0,sC:0,sS:0,mT:null,mC:null,mS:null};order.push(r.n);}
         var a=agg[r.n];
         if(!a.g&&r.g)a.g=r.g;
-        a.access+=r.access||0; a.clicks+=r.clicks||0;
+        a.access+=r.access||0; a.clicks+=r.clicks||0; a.reg+=r.reg||0;
         a.sT+=r.tickets||0; a.sC+=r.count||0; a.sS+=r.sales||0;
         if(r.cT!=null)a.mT=mx(a.mT,r.cT);
         if(r.cC!=null)a.mC=mx(a.mC,r.cC);
@@ -1133,7 +1251,7 @@
       });
     });
     return order.map(function(n){var a=agg[n];
-      return {n:a.n,g:a.g,access:a.access,clicks:a.clicks,
+      return {n:a.n,g:a.g,access:a.access,clicks:a.clicks,reg:a.reg,
         tickets:a.mT==null?a.sT:Math.max(a.sT,a.mT),
         count:  a.mC==null?a.sC:Math.max(a.sC,a.mC),
         sales:  a.mS==null?a.sS:Math.max(a.sS,a.mS)};
@@ -1157,7 +1275,8 @@
     var pc=colFinder(tbl.head);
     var iN=pc(["広告コード"]),iG=pc(["グループ名","グループ"]),
         iA=pc(["アクセス数","アクセス"],PL_EXCL),iC=pc(["クリック数","クリック"],PL_EXCL),
-        iT=pc(["購入商品数","購入枚数","枚数"],PL_EXCL),iCt=pc(["購入件数","件数"],PL_EXCL);
+        iT=pc(["購入商品数","購入枚数","枚数"],PL_EXCL),iCt=pc(["購入件数","件数","購入者数"],PL_EXCL),
+        iR=pc(["登録者数","登録人数"],PL_EXCL);
     var sc=findSalesCol(tbl.head), iS=sc.idx;
     if(iN<0||iS<0)return {error:"選手データの列（広告コード / 売上）が見つかりません"};
     // 各指標のすぐ右が「（累計）」列ならそれも取り込む
@@ -1166,10 +1285,11 @@
     var agg={},order=[];
     tbl.rows.forEach(function(c){
       var n=(c[iN]||"").trim(); if(!n)return;
+      if(/^(合計|総計|小計|計|total)$/i.test(n))return;              // 集計行は取り込まない
       var num=function(i){return i>=0?(parseFloat(String(c[i]||"").replace(/[^0-9.\-]/g,""))||0):0;};
-      if(!agg[n]){agg[n]={n:n,g:iG>=0?(c[iG]||"").trim():"",access:0,clicks:0,tickets:0,count:0,sales:0,
+      if(!agg[n]){agg[n]={n:n,g:iG>=0?(c[iG]||"").trim():"",access:0,clicks:0,reg:0,tickets:0,count:0,sales:0,
         cT:iTc>=0?0:null,cC:iCtc>=0?0:null,cS:iSc>=0?0:null};order.push(n);}
-      var a=agg[n];a.access+=num(iA);a.clicks+=num(iC);a.tickets+=num(iT);a.count+=num(iCt);a.sales+=num(iS);
+      var a=agg[n];a.access+=num(iA);a.clicks+=num(iC);a.reg+=num(iR);a.tickets+=num(iT);a.count+=num(iCt);a.sales+=num(iS);
       if(iTc>=0)a.cT+=num(iTc); if(iCtc>=0)a.cC+=num(iCtc); if(iSc>=0)a.cS+=num(iSc);
     });
     var rows=order.map(function(n){return agg[n];});
