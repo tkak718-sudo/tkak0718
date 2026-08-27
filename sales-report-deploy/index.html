@@ -738,7 +738,9 @@
         var pbInfo=pbs.length?'<div class="sb-meta" style="padding:12px 16px 4px;line-height:1.7">'+pbs.map(function(b){
           return '<b>'+esc(b.k)+'</b>'+(b.f?' ［集計期間 '+esc(perLabel({f:b.f,t:b.t}))+'］':'')+' → 売上として '+(b.pos||"?")+' 列目「'+esc(b.col||"?")+'」を使用'+(b.how?'（'+esc(b.how)+'）':'')+
             (b.heads?'<br><span style="color:var(--faint)">列: '+esc(b.heads)+'</span>':'');
-        }).join('<br>')+'<div style="margin-top:6px">※ 売上・枚数・件数は各ファイルの「累計」欄（期間開始日〜集計時点）も参照し、最も広い期間の値を採用しています。アクセス・クリックは累計欄が無いため合算です。</div></div>':'';
+        }).join('<br>')+(pbs.some(function(b){return b.full;})
+          ?'<div style="margin-top:6px">※ Excel「サマリー」はイベント全体の確定値です。取り込むたびに既存の選手別データを置き換えます。</div>'
+          :'<div style="margin-top:6px">※ 売上・枚数・件数は各ファイルの「累計」欄（期間開始日〜集計時点）も参照し、最も広い期間の値を採用しています。アクセス・クリックは累計欄が無いため合算です。</div>')+'</div>':'';
         playerPanel='<div class="panel" style="margin-top:16px"><div class="panel-h"><h3>選手別 売上</h3>'+hRight('<span class="sub"'+(pbs.length?' title="'+esc(pbNames)+'"':'')+'>'+plSub+'</span>'+plEditBtn)+'</div><div class="tbl-wrap"><table><thead>'+pHead+'</thead><tbody>'+pTrs+'</tbody><tfoot>'+pFoot+'</tfoot></table></div>'+pbInfo+'</div>';
       } else {
         playerPanel='<div class="panel" style="margin-top:16px"><div class="panel-h"><h3>選手別 売上</h3>'+(editable?'<button class="btn btn-sm" data-editplayers="'+ev.id+'">＋ 手入力</button>':'')+'</div><div class="empty" style="padding:30px"><b>選手別データなし</b><p>'+(editable?'「＋ 手入力」で選手別（広告コード別）の数値を入力できます。「CSVを取込」でも自動集計されます。':'選手別データは未取込です。')+'</p></div></div>';
@@ -1146,9 +1148,9 @@
       if(head[0]===0x50&&head[1]===0x4B){          // "PK" = xlsx（ZIP）
         xlsxPlayerTable(buf).then(function(tbl){
           if(!tbl){toast("Excelから選手別のシートが見つかりませんでした（広告コードと購入金額の列が必要です）");return;}
-          var r=importPlayers(ev0,tbl,f.name); if(r.cancelled)return; if(r.error){toast(r.error);return;} commit();
-          toast("Excel「"+tbl.sheet+"」から選手別を取込："+nf(r.rows)+"名（売上あり "+nf(r.withSales)
-            +"名・売上は"+r.salesPos+"列目「"+r.salesCol+"」）");
+          var r=importPlayers(ev0,tbl,f.name,true); if(r.cancelled)return; if(r.error){toast(r.error);return;} commit();
+          toast("Excel「"+tbl.sheet+"」から選手別を取込："+nf(r.rows)+"名（売上あり "+nf(r.withSales)+"名）"
+            +(r.prevRows?" ／ 以前の "+nf(r.prevRows)+" 名を置き換えました":""));
         }).catch(function(err){
           toast(err&&err.message==="no-ds"?"このブラウザではExcelを読み込めません（CSVをご利用ください）":"Excelファイルを読み込めませんでした");
         });
@@ -1173,7 +1175,10 @@
       }
       else if(kind==="player"){
         var r3=importPlayers(ev,tbl,f.name); if(r3.cancelled)return; if(r3.error){toast(r3.error);return;} commit();
-        toast((r3.reimport?"選手別を再取込："+r3.key+" を差し替え":(r3.replaced?"選手別を置き換え取込："+r3.key+"（重複"+r3.replaced+"件を除外）":(r3.merged?"選手別を追加取込："+r3.key:"選手別を取込："+r3.key)))
+        toast((r3.reimport?"選手別を再取込："+r3.key+" を差し替え"
+          :(r3.wiped?"選手別を置き換え取込："+r3.key+"（Excelの全体集計を破棄）"
+          :(r3.replaced?"選手別を置き換え取込："+r3.key+"（重複"+r3.replaced+"件を除外）"
+          :(r3.merged?"選手別を追加取込："+r3.key:"選手別を取込："+r3.key))))
           +(r3.period?"［"+r3.period+"］":"")
           +" ／ "+(r3.files>1?nf(r3.files)+"ファイル合算 ":"")+nf(r3.rows)+"名（売上あり "+nf(r3.withSales)
           +"名・売上は"+r3.salesPos+"列目「"+r3.salesCol+"」"+(r3.salesHow?"＝"+r3.salesHow:"")+"）");
@@ -1271,7 +1276,7 @@
   }
   function perOverlap(a,b){ return !!a&&!!b&&a.f<=b.t&&b.f<=a.t; }
 
-  function importPlayers(ev,tbl,srcName){
+  function importPlayers(ev,tbl,srcName,isFull){
     var pc=colFinder(tbl.head);
     var iN=pc(["広告コード"]),iG=pc(["グループ名","グループ"]),
         iA=pc(["アクセス数","アクセス"],PL_EXCL),iC=pc(["クリック数","クリック"],PL_EXCL),
@@ -1296,12 +1301,24 @@
     if(!rows.length)return {error:"選手データの行がありません"};
     var hasB=Array.isArray(ev.playerBatches)&&ev.playerBatches.length>0;
     var prev=ev.players?ev.players.length:null;
-    if(!hasB&&prev&&!askReplace("選手別データ",nf(prev)+" 名"))return {cancelled:true};
+    // Excelのサマリーはイベント全体の確定値なので、取り込んだ時点で既存データを置き換える
+    // （手作業での全行削除を不要にする）。期間別ファイルとの混在は二重計上になるため許可しない。
+    if(!isFull&&!hasB&&prev&&!askReplace("選手別データ",nf(prev)+" 名"))return {cancelled:true};
     var key=String(srcName||"").trim()||("取込"+((hasB?ev.playerBatches.length:0)+1));
     var per=parsePeriod(key);
     // 同じ期間のファイルは差し替える。期間が無ければ従来どおりファイル名で判定する。
     var bid=per?("P"+per.f+"-"+per.t):("F"+key);
     var batches=hasB?ev.playerBatches.slice():[];
+    var wiped=0;
+    if(isFull){                       // 全体集計 → 既存はすべて破棄して置き換える
+      wiped=batches.length+((!hasB&&prev)?1:0);
+      batches=[];
+    } else if(batches.some(function(b){return b.full;})){
+      if(!confirm("このイベントには Excel「サマリー」で取り込んだ全体集計があります。\n\n期間別のファイルを足すと二重計上になるため、合算はできません。\n\n［OK］Excelの集計を破棄して、このファイルに置き換える\n［キャンセル］取込をやめる"))
+        return {cancelled:true};
+      wiped=batches.filter(function(b){return b.full;}).length;
+      batches=batches.filter(function(b){return !b.full;});
+    }
     var idx=-1; batches.forEach(function(b,i){ if((b.id||("F"+b.k))===bid)idx=i; });
     // 期間が重なる別ファイルがあると二重計上になるため、置き換えるか確認する
     var dup=[];
@@ -1312,14 +1329,15 @@
         return {cancelled:true};
       batches=batches.filter(function(b,i){return dup.indexOf(i)<0;});
     }
-    var bat={id:bid,k:key,f:per?per.f:"",t:per?per.t:"",rows:rows,col:normH(tbl.head[iS]),pos:iS+1,how:sc.how,heads:tbl.head.map(normH).join(" , ")};
+    var bat={id:bid,k:key,full:!!isFull,f:per?per.f:"",t:per?per.t:"",rows:rows,col:normH(tbl.head[iS]),pos:iS+1,how:sc.how,heads:tbl.head.map(normH).join(" , ")};
     if(idx>=0)batches[idx]=bat; else batches.push(bat);
     ev.playerBatches=batches;
     ev.players=aggPlayers(batches);
     ev.plAt=new Date().toISOString();
     return {rows:ev.players.length,fileRows:rows.length,withSales:ev.players.filter(function(p){return p.sales>0;}).length,
             prev:prev,salesCol:normH(tbl.head[iS]),salesHow:sc.how,salesPos:iS+1,
-            files:batches.length,key:key,reimport:idx>=0,merged:hasB,period:perLabel(per),replaced:dup.length};
+            files:batches.length,key:key,reimport:idx>=0,merged:hasB&&!isFull,period:perLabel(per),replaced:dup.length,
+            wiped:wiped,full:!!isFull,prevRows:prev};
   }
   // 7月分・8月分のように複数回に分けて取り込めるよう、明細を保持して合算する。
   // 同じCSVを再取込しても増えないよう、注文単位で「多い方の枚数」を採用する。
