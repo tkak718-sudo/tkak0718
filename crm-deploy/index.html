@@ -280,11 +280,21 @@
     display:flex; align-items:center; gap:8px; padding:8px 12px;
     background:var(--pc-bg,#e2e8f0);
   }
+  /* 完了タスクがある案件は、見出しをタップして表示・非表示を切り替えられる */
+  .task-group-head.has-done{cursor:pointer;}
   .task-group-mark{color:var(--pc,#64748b); font-size:11px; line-height:1;}
   .task-group-name{font-size:12.5px; font-weight:800; letter-spacing:.02em; color:var(--pc-fg,#334155);}
   .task-group-count{font-size:11px; font-weight:700; color:var(--pc-fg,#334155); opacity:.75; margin-left:auto;}
+  .task-group-chevron{
+    flex:none; width:14px; height:14px; color:var(--pc-fg,#334155); opacity:.6;
+    transition:transform .15s;
+  }
+  .task-group.done-open .task-group-chevron{transform:rotate(180deg);}
   .task-group-body{padding:2px 6px; min-width:0;}
   .task-group-body .task-row{padding-left:10px;}
+  /* 完了タスクの一覧。既定では畳んでおき、見出しをタップしたときだけ広げる */
+  .task-group-done{display:none; border-top:1px dashed var(--border); margin-top:2px; padding-top:2px;}
+  .task-group.done-open .task-group-done{display:block;}
   .task-hint{font-size:11.5px; color:var(--text-faint); padding:8px 2px 2px;}
   .pj-row{display:flex; align-items:center; gap:6px; padding:6px 0; border-bottom:1px solid var(--border);}
   .pj-row input[type=text], .pj-row select{
@@ -2607,7 +2617,7 @@ function tickSave(){
 const DOC_LIMIT = 1048576;
 
 /* どの版が動いているかを画面から確かめられるようにする */
-const BUILD_ID = '2026-08-20w';
+const BUILD_ID = '2026-08-20x';
 /* 直近の保存結果と、サーバーから受け取った内容の素性。診断画面で見せる */
 let lastWriteInfo = 'まだ保存していません';
 let lastServerInfo = 'まだ受信していません';
@@ -4969,6 +4979,10 @@ function clientNoteThread(taskId){
   return el;
 }
 
+/* 案件の見出しをタップして完了タスクを開閉した状態。案件ID（無ければ'none'）をキーに持つ。
+   データが変わって再描画されても開閉状態を覚えておくため、モジュール変数にしている。 */
+const expandedDoneGroups = new Set();
+
 function buildTaskGroups(list, opts){
   const o = opts || {};
   const groups = sortedProjects()
@@ -4979,26 +4993,52 @@ function buildTaskGroups(list, opts){
 
   const frag = document.createDocumentFragment();
   groups.forEach(g=>{
+    const groupKey = g.pj ? String(g.pj.id) : 'none';
     const c = g.pj ? projectColor(g.pj.color) : projectColor('slate');
     const wrap = document.createElement('div');
     wrap.className = 'task-group';
     wrap.style.setProperty('--pc', c.bar);
     wrap.style.setProperty('--pc-bg', c.bg);
     wrap.style.setProperty('--pc-fg', c.fg);
-    const doneCount = g.list.filter(t=>t.done).length;
+
+    // 完了は消さずに畳んでおき、見出しをタップしたときだけ広げる
+    const undone = g.list.filter(t=>!t.done);
+    const done = g.list.filter(t=>t.done);
+    if(done.length && expandedDoneGroups.has(groupKey)) wrap.classList.add('done-open');
+
     const head = document.createElement('div');
-    head.className = 'task-group-head';
+    head.className = 'task-group-head' + (done.length ? ' has-done' : '');
     head.innerHTML = `
       <span class="task-group-mark">◇</span>
       <span class="task-group-name">${escapeHtml(g.pj ? g.pj.name : '案件なし')}</span>
-      <span class="task-group-count">${doneCount} / ${g.list.length} 完了</span>`;
+      <span class="task-group-count">${done.length} / ${g.list.length} 完了</span>
+      ${done.length ? `<svg class="task-group-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg>` : ''}`;
+    if(done.length){
+      head.title = '完了したタスクを表示・非表示';
+      head.onclick = ()=>{
+        wrap.classList.toggle('done-open');
+        if(wrap.classList.contains('done-open')) expandedDoneGroups.add(groupKey);
+        else expandedDoneGroups.delete(groupKey);
+      };
+    }
     wrap.appendChild(head);
+
     const body = document.createElement('div');
     body.className = 'task-group-body';
-    g.list.forEach(t=>{
+    const addRow = t=>{
       body.appendChild(taskRow(t, opts));
       if(o.notes && !t.internal) body.appendChild(clientNoteThread(t.id));
-    });
+    };
+    undone.forEach(addRow);
+    if(done.length){
+      const doneWrap = document.createElement('div');
+      doneWrap.className = 'task-group-done';
+      done.forEach(t=>{
+        doneWrap.appendChild(taskRow(t, opts));
+        if(o.notes && !t.internal) doneWrap.appendChild(clientNoteThread(t.id));
+      });
+      body.appendChild(doneWrap);
+    }
     wrap.appendChild(body);
     frag.appendChild(wrap);
   });
