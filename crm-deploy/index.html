@@ -654,6 +654,8 @@
   .icon-btn:hover{background:var(--surface-alt);}
   .icon-btn-danger:hover{background:var(--danger-soft); border-color:var(--danger); color:var(--danger);}
   .icon-btn svg{width:13px;height:13px;}
+  /* 「全員のタスク」など、オン/オフを持つアイコンボタン */
+  .icon-btn.active{background:var(--primary); border-color:var(--primary); color:#fff;}
 
   /* ---------- Modal ---------- */
   .modal-overlay{
@@ -949,10 +951,6 @@
         <label>ログイン中:</label>
         <select id="current-user"></select>
       </div>
-      <button class="btn" onclick="openAllTasksModal()" title="小熊・石井 両方のタスクをまとめて見る">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
-        全員のタスク
-      </button>
       <button class="btn btn-primary" onclick="openContactModal()">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 5v14M5 12h14"/></svg>
         新規クライアント作成
@@ -995,6 +993,9 @@
               <h2>タスク管理</h2>
               <div style="display:flex; align-items:center; gap:10px;">
                 <span class="filter-label" id="task-progress">0 / 0 完了</span>
+                <span class="icon-btn" id="task-scope-btn" title="全員のタスクを表示" onclick="toggleTaskScope()">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+                </span>
                 <span class="icon-btn" title="議事録から取り込む" onclick="openMeetingImportModal()">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
                 </span>
@@ -1686,22 +1687,6 @@
       <button class="btn" onclick="closeModal('meeting-import-modal')">閉じる</button>
       <button class="btn" id="mi-draft-btn" onclick="saveMeetingImportDraft()" disabled>下書きとして保存する</button>
       <button class="btn btn-primary" id="mi-commit-btn" onclick="commitMeetingImport()" disabled>選択したタスクを登録する</button>
-    </div>
-  </div>
-</div>
-
-<div class="modal-overlay" id="all-tasks-modal">
-  <div class="modal modal-wide">
-    <div class="modal-head"><h3>全員のタスク</h3><span class="modal-close" onclick="closeModal('all-tasks-modal')">&times;</span></div>
-    <div class="modal-body">
-      <p class="ai-desc" style="font-size:12px; color:var(--text-secondary); line-height:1.7;">
-        小熊さん・石井さん、両方のタスクをまとめて表示します。誰のタスクかは各行の担当者名で見分けられます。
-        行をタップすると編集画面が開きます。</p>
-      <div id="all-tasks-list"></div>
-    </div>
-    <div class="modal-foot">
-      <div style="flex:1"></div>
-      <button class="btn" onclick="closeModal('all-tasks-modal')">閉じる</button>
     </div>
   </div>
 </div>
@@ -2645,7 +2630,7 @@ function tickSave(){
 const DOC_LIMIT = 1048576;
 
 /* どの版が動いているかを画面から確かめられるようにする */
-const BUILD_ID = '2026-08-20y';
+const BUILD_ID = '2026-08-20z';
 /* 直近の保存結果と、サーバーから受け取った内容の素性。診断画面で見せる */
 let lastWriteInfo = 'まだ保存していません';
 let lastServerInfo = 'まだ受信していません';
@@ -4285,26 +4270,33 @@ function renderHome(){
   document.getElementById('home-date').textContent =
     `${now.getFullYear()}年${now.getMonth()+1}月${now.getDate()}日(${wd})の業務状況`;
 
-  // 自分のタスクに加えて、共有タスクは誰の画面にも出す
+  // 自分のタスクに加えて、共有タスクは誰の画面にも出す。上部の統計は常にこちらを使う。
   const myTasks = sortTasks(tasks.filter(t=>t.owner===currentUser || t.owner===SHARED_OWNER));
   const undone = myTasks.filter(t=>!t.done);
   document.getElementById('stat-tasks').textContent = undone.length;
-  // 期日を過ぎた未完了タスクがあれば、進捗の横で気づけるようにする
-  const overdue = undone.filter(t=>t.due && daysUntil(t.due) < 0).length;
-  document.getElementById('task-progress').textContent =
-    `${myTasks.length-undone.length} / ${myTasks.length} 完了` + (overdue ? `・期限切れ ${overdue}件` : '');
 
   document.getElementById('stat-unassigned').textContent = contacts.filter(c=>!c.owner).length;
   document.getElementById('stat-mydeals').textContent = deals.filter(d=>d.owner===currentUser && !['成立','失注'].includes(d.status)).length;
   document.getElementById('stat-won').textContent = deals.filter(d=>d.owner===currentUser && d.status==='成立').length;
 
+  // タスク管理カードの中身だけは、トグルで自分／全員を切り替える
+  const scopeBtn = document.getElementById('task-scope-btn');
+  scopeBtn.classList.toggle('active', taskListShowAll);
+  scopeBtn.title = taskListShowAll ? '自分のタスクだけ表示' : '全員のタスクを表示';
+  const cardTasks = taskListShowAll ? sortTasks(tasks) : myTasks;
+  const cardUndone = cardTasks.filter(t=>!t.done);
+  // 期日を過ぎた未完了タスクがあれば、進捗の横で気づけるようにする
+  const overdue = cardUndone.filter(t=>t.due && daysUntil(t.due) < 0).length;
+  document.getElementById('task-progress').textContent =
+    `${cardTasks.length-cardUndone.length} / ${cardTasks.length} 完了` + (overdue ? `・期限切れ ${overdue}件` : '');
+
   const taskList = document.getElementById('task-list');
   taskList.innerHTML = '';
-  if(myTasks.length===0){
+  if(cardTasks.length===0){
     taskList.innerHTML = `<div class="empty"><p>タスクはありません</p></div>`;
   } else {
-    // 案件ごとにまとめ、案件に属さないタスクは最後に置く
-    taskList.appendChild(buildTaskGroups(myTasks));
+    // 案件ごとにまとめ、案件に属さないタスクは最後に置く。全員表示のときだけ担当者名を出す。
+    taskList.appendChild(buildTaskGroups(cardTasks, {showOwnerName: taskListShowAll}));
     if(!taskProjects.length){
       const hint = document.createElement('div');
       hint.className = 'task-hint';
@@ -4320,25 +4312,16 @@ function toggleTask(id){
   t.done = !t.done;
   renderHome();
   if(cdCurrentId) renderClientTasks(cdCurrentId);
-  if(document.getElementById('all-tasks-modal').classList.contains('open')) renderAllTasks();
 }
 
-/* ---------- 全員のタスク（小熊・石井 まとめて見る） ---------- */
-function openAllTasksModal(){
-  renderAllTasks();
-  openModal('all-tasks-modal');
-}
+/* ---------- タスク管理カードの表示範囲（自分／全員） ----------
+   ホーム上部の統計（本日の未完了タスクなど）は常に自分の分のまま。
+   切り替わるのはタスク管理カードの中身と、その見出しの完了件数だけ。 */
+let taskListShowAll = false;
 
-function renderAllTasks(){
-  const box = document.getElementById('all-tasks-list');
-  if(!box) return;
-  const list = sortTasks(tasks);
-  box.innerHTML = '';
-  if(!list.length){
-    box.innerHTML = '<div class="empty"><p>タスクはありません</p></div>';
-    return;
-  }
-  box.appendChild(buildTaskGroups(list, {showOwnerName: true}));
+function toggleTaskScope(){
+  taskListShowAll = !taskListShowAll;
+  renderHome();
 }
 
 /* タスク1行分。所属する案件は囲みブロック側で示すため、行自体は共通の見た目にする。 */
@@ -4522,7 +4505,6 @@ function autoLinkProjects(){
       renderProjectList();
       renderHome();
       if(cdCurrentId) renderClientTasks(cdCurrentId);
-      if(document.getElementById('all-tasks-modal').classList.contains('open')) renderAllTasks();
       toast(`${found.length}件の案件をクライアントに紐づけました`);
     }, {okLabel:'紐づける', danger:false});
 }
@@ -4542,7 +4524,6 @@ function setProjectClient(projectId, value){
   renderProjectList();
   renderHome();
   if(cdCurrentId) renderClientTasks(cdCurrentId);
-  if(document.getElementById('all-tasks-modal').classList.contains('open')) renderAllTasks();
   toast(pj.clientId ? `案件「${pj.name}」を ${clients.find(c=>c.id===pj.clientId).name} に紐づけました`
                     : `案件「${pj.name}」のクライアント紐づけを外しました`);
 }
@@ -5826,7 +5807,6 @@ function addProject(){
   renderProjectList();
   renderHome();
   if(cdCurrentId) renderClientTasks(cdCurrentId);
-  if(document.getElementById('all-tasks-modal').classList.contains('open')) renderAllTasks();
   toast(made ? `案件「${name}」を追加し、タスク${made}件を作成しました` : `案件「${name}」を追加しました`);
 }
 
@@ -5873,7 +5853,6 @@ function deleteProject(id){
     tasks.forEach(t=>{ if(t.projectId===id) t.projectId = null; });
     taskProjects = taskProjects.filter(p=>p.id!==id);
     if(cdCurrentId) renderClientTasks(cdCurrentId);
-    if(document.getElementById('all-tasks-modal').classList.contains('open')) renderAllTasks();
     renderProjectList();
     renderHome();
     toast('案件を削除しました');
@@ -5935,7 +5914,6 @@ function saveTask(){
   closeModal('task-modal');
   renderHome();
   if(cdCurrentId) renderClientTasks(cdCurrentId);
-  if(document.getElementById('all-tasks-modal').classList.contains('open')) renderAllTasks();
 }
 function deleteTaskFromModal(){
   if(!tkCurrentId) return;
@@ -5947,7 +5925,6 @@ function deleteTaskFromModal(){
     toast('タスクを削除しました');
     renderHome();
     if(cdCurrentId) renderClientTasks(cdCurrentId);
-    if(document.getElementById('all-tasks-modal').classList.contains('open')) renderAllTasks();
   });
 }
 
