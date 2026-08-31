@@ -299,6 +299,20 @@
   }
   .task-group.done-open .task-group-chevron{transform:rotate(180deg);}
   .task-group-body{padding:2px 6px; min-width:0;}
+  /* 案件の進捗段階。見出しのすぐ下に、全段階を並べて出す。 */
+  .stage-bar{
+    display:flex; flex-wrap:wrap; align-items:center; gap:2px 0;
+    padding:6px 12px; background:var(--pc-bg,#e2e8f0);
+    border-top:1px solid rgba(0,0,0,.06);
+    font-size:11px; line-height:1.6;
+  }
+  .stage-item{
+    color:var(--pc-fg,#334155); opacity:.55; font-weight:600; white-space:nowrap;
+    cursor:pointer; padding:1px 3px; border-radius:4px;
+  }
+  .stage-item:hover{opacity:.85; background:rgba(255,255,255,.5);}
+  .stage-item.current{color:#0a0a0a; opacity:1; font-weight:800;}
+  .stage-arrow{color:var(--pc-fg,#334155); opacity:.35; margin:0 2px; font-size:10px;}
   .task-group-body .task-row{padding-left:10px;}
   /* 完了タスクの一覧。既定では畳んでおき、見出しをタップしたときだけ広げる */
   .task-group-done{display:none; border-top:1px dashed var(--border); margin-top:2px; padding-top:2px;}
@@ -2630,7 +2644,7 @@ function tickSave(){
 const DOC_LIMIT = 1048576;
 
 /* どの版が動いているかを画面から確かめられるようにする */
-const BUILD_ID = '2026-08-31a';
+const BUILD_ID = '2026-08-31b';
 /* 直近の保存結果と、サーバーから受け取った内容の素性。診断画面で見せる */
 let lastWriteInfo = 'まだ保存していません';
 let lastServerInfo = 'まだ受信していません';
@@ -5015,6 +5029,45 @@ function clientNoteThread(taskId){
    データが変わって再描画されても開閉状態を覚えておくため、モジュール変数にしている。 */
 const expandedDoneGroups = new Set();
 
+/* ---------- 案件の進捗段階 ----------
+   常に全段階を並べて出し、現在地だけ太字で強調する。
+   「提案済み」だけ確定／破談の2通りを横に並べて置く（分岐点をそのまま見せるため）。 */
+const PROJECT_STAGES = [
+  '提案前', '提案中', '提案済み（確定）', '提案済み（破談）',
+  '契約中', '契約完了', '連携中', '連携完了', '運用前', '運用中',
+];
+
+function projectStage(pj){
+  return (pj && pj.stage && PROJECT_STAGES.includes(pj.stage)) ? pj.stage : PROJECT_STAGES[0];
+}
+
+/* 段階名をタップすると、その場でその案件の現在地に切り替わる。
+   タスクの並び替えなど構造には影響しないため、DOM上の強調だけをその場で書き換える
+   （案件見出しの完了折りたたみと同じやり方）。 */
+function setProjectStage(id, stage){
+  const pj = projectById(id);
+  if(!pj || !PROJECT_STAGES.includes(stage)) return;
+  pj.stage = stage;
+  document.querySelectorAll(`.stage-bar[data-project="${id}"] .stage-item`).forEach(el=>{
+    el.classList.toggle('current', el.dataset.stage === stage);
+  });
+}
+
+function stageBarEl(pj){
+  const cur = projectStage(pj);
+  const el = document.createElement('div');
+  el.className = 'stage-bar';
+  el.dataset.project = pj.id;
+  // 見出しのクリック（完了の開閉）に巻き込まれないようにする
+  el.onclick = e=>e.stopPropagation();
+  el.innerHTML = PROJECT_STAGES.map((s, i)=>
+    `${i ? '<span class="stage-arrow">→</span>' : ''}`
+    + `<span class="stage-item${s===cur?' current':''}" data-stage="${escapeHtml(s)}" `
+    + `onclick="setProjectStage(${pj.id}, '${s}')">${escapeHtml(s)}</span>`
+  ).join('');
+  return el;
+}
+
 function buildTaskGroups(list, opts){
   const o = opts || {};
   const groups = sortedProjects()
@@ -5054,6 +5107,7 @@ function buildTaskGroups(list, opts){
       };
     }
     wrap.appendChild(head);
+    if(g.pj) wrap.appendChild(stageBarEl(g.pj));
 
     const body = document.createElement('div');
     body.className = 'task-group-body';
