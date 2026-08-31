@@ -270,6 +270,14 @@
     font-size:11px; font-weight:700; white-space:nowrap;
     background:#e0e7ff; color:#4338ca;
   }
+  /* 「全員のタスク」で、どちらの担当か一目で見分けるための印。
+     担当ID(u1/u2)ごとに色を分けているので、担当が増えた場合はここに追記する。 */
+  .task-owner{
+    display:inline-block; margin-right:6px; padding:1px 6px; border-radius:5px;
+    font-size:11px; font-weight:700; white-space:nowrap;
+  }
+  .task-owner.owner-u1{background:#dbeafe; color:#1e40af;}
+  .task-owner.owner-u2{background:#dcfce7; color:#166534;}
   /* 案件（タスクのグループ） */
   /* 案件はひとつの囲みブロックにして、どこからどこまでが同じ案件か一目で分かるようにする */
   .task-group{
@@ -941,6 +949,10 @@
         <label>ログイン中:</label>
         <select id="current-user"></select>
       </div>
+      <button class="btn" onclick="openAllTasksModal()" title="小熊・石井 両方のタスクをまとめて見る">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+        全員のタスク
+      </button>
       <button class="btn btn-primary" onclick="openContactModal()">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 5v14M5 12h14"/></svg>
         新規クライアント作成
@@ -1674,6 +1686,22 @@
       <button class="btn" onclick="closeModal('meeting-import-modal')">閉じる</button>
       <button class="btn" id="mi-draft-btn" onclick="saveMeetingImportDraft()" disabled>下書きとして保存する</button>
       <button class="btn btn-primary" id="mi-commit-btn" onclick="commitMeetingImport()" disabled>選択したタスクを登録する</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="all-tasks-modal">
+  <div class="modal modal-wide">
+    <div class="modal-head"><h3>全員のタスク</h3><span class="modal-close" onclick="closeModal('all-tasks-modal')">&times;</span></div>
+    <div class="modal-body">
+      <p class="ai-desc" style="font-size:12px; color:var(--text-secondary); line-height:1.7;">
+        小熊さん・石井さん、両方のタスクをまとめて表示します。誰のタスクかは各行の担当者名で見分けられます。
+        行をタップすると編集画面が開きます。</p>
+      <div id="all-tasks-list"></div>
+    </div>
+    <div class="modal-foot">
+      <div style="flex:1"></div>
+      <button class="btn" onclick="closeModal('all-tasks-modal')">閉じる</button>
     </div>
   </div>
 </div>
@@ -2617,7 +2645,7 @@ function tickSave(){
 const DOC_LIMIT = 1048576;
 
 /* どの版が動いているかを画面から確かめられるようにする */
-const BUILD_ID = '2026-08-20x';
+const BUILD_ID = '2026-08-20y';
 /* 直近の保存結果と、サーバーから受け取った内容の素性。診断画面で見せる */
 let lastWriteInfo = 'まだ保存していません';
 let lastServerInfo = 'まだ受信していません';
@@ -4292,6 +4320,25 @@ function toggleTask(id){
   t.done = !t.done;
   renderHome();
   if(cdCurrentId) renderClientTasks(cdCurrentId);
+  if(document.getElementById('all-tasks-modal').classList.contains('open')) renderAllTasks();
+}
+
+/* ---------- 全員のタスク（小熊・石井 まとめて見る） ---------- */
+function openAllTasksModal(){
+  renderAllTasks();
+  openModal('all-tasks-modal');
+}
+
+function renderAllTasks(){
+  const box = document.getElementById('all-tasks-list');
+  if(!box) return;
+  const list = sortTasks(tasks);
+  box.innerHTML = '';
+  if(!list.length){
+    box.innerHTML = '<div class="empty"><p>タスクはありません</p></div>';
+    return;
+  }
+  box.appendChild(buildTaskGroups(list, {showOwnerName: true}));
 }
 
 /* タスク1行分。所属する案件は囲みブロック側で示すため、行自体は共通の見た目にする。 */
@@ -4312,6 +4359,7 @@ function taskRow(t, opts){
     <div class="task-main">
       <div class="task-title ${t.done?'done':''}">${escapeHtml(t.title)}</div>
       <div class="task-meta">${dueBadge(t.start, t.due, t.done)}${
+        o.showOwnerName && t.owner !== SHARED_OWNER ? `<span class="task-owner owner-${t.owner}">${escapeHtml(ownerName(t.owner))}</span>` : ''}${
         o.showSide ? `<span class="task-side side-${sideOf(t)}">${SIDE_LABEL[sideOf(t)]}</span>` : ''}${
         o.showOpen && !t.internal ? '<span class="task-open" title="共有URLのタスク管理表にも表示されます">客先公開</span>' : ''}${
         o.showOwner !== false && t.owner===SHARED_OWNER?'<span class="task-shared" title="全員の画面に表示される共有タスクです">共有</span>':''}${escapeHtml(memo)}</div>
@@ -4474,6 +4522,7 @@ function autoLinkProjects(){
       renderProjectList();
       renderHome();
       if(cdCurrentId) renderClientTasks(cdCurrentId);
+      if(document.getElementById('all-tasks-modal').classList.contains('open')) renderAllTasks();
       toast(`${found.length}件の案件をクライアントに紐づけました`);
     }, {okLabel:'紐づける', danger:false});
 }
@@ -4493,6 +4542,7 @@ function setProjectClient(projectId, value){
   renderProjectList();
   renderHome();
   if(cdCurrentId) renderClientTasks(cdCurrentId);
+  if(document.getElementById('all-tasks-modal').classList.contains('open')) renderAllTasks();
   toast(pj.clientId ? `案件「${pj.name}」を ${clients.find(c=>c.id===pj.clientId).name} に紐づけました`
                     : `案件「${pj.name}」のクライアント紐づけを外しました`);
 }
@@ -5776,6 +5826,7 @@ function addProject(){
   renderProjectList();
   renderHome();
   if(cdCurrentId) renderClientTasks(cdCurrentId);
+  if(document.getElementById('all-tasks-modal').classList.contains('open')) renderAllTasks();
   toast(made ? `案件「${name}」を追加し、タスク${made}件を作成しました` : `案件「${name}」を追加しました`);
 }
 
@@ -5822,6 +5873,7 @@ function deleteProject(id){
     tasks.forEach(t=>{ if(t.projectId===id) t.projectId = null; });
     taskProjects = taskProjects.filter(p=>p.id!==id);
     if(cdCurrentId) renderClientTasks(cdCurrentId);
+    if(document.getElementById('all-tasks-modal').classList.contains('open')) renderAllTasks();
     renderProjectList();
     renderHome();
     toast('案件を削除しました');
@@ -5883,6 +5935,7 @@ function saveTask(){
   closeModal('task-modal');
   renderHome();
   if(cdCurrentId) renderClientTasks(cdCurrentId);
+  if(document.getElementById('all-tasks-modal').classList.contains('open')) renderAllTasks();
 }
 function deleteTaskFromModal(){
   if(!tkCurrentId) return;
@@ -5894,6 +5947,7 @@ function deleteTaskFromModal(){
     toast('タスクを削除しました');
     renderHome();
     if(cdCurrentId) renderClientTasks(cdCurrentId);
+    if(document.getElementById('all-tasks-modal').classList.contains('open')) renderAllTasks();
   });
 }
 
