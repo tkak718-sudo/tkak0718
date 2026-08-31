@@ -268,7 +268,7 @@
   .task-shared{
     display:inline-block; margin-right:6px; padding:1px 6px; border-radius:5px;
     font-size:11px; font-weight:700; white-space:nowrap;
-    background:#e0e7ff; color:#4338ca;
+    background:#f3e8ff; color:#6b21a8;
   }
   /* 「全員のタスク」で、どちらの担当か一目で見分けるための印。
      担当ID(u1/u2)ごとに色を分けているので、担当が増えた場合はここに追記する。 */
@@ -2630,7 +2630,7 @@ function tickSave(){
 const DOC_LIMIT = 1048576;
 
 /* どの版が動いているかを画面から確かめられるようにする */
-const BUILD_ID = '2026-08-20z';
+const BUILD_ID = '2026-08-31a';
 /* 直近の保存結果と、サーバーから受け取った内容の素性。診断画面で見せる */
 let lastWriteInfo = 'まだ保存していません';
 let lastServerInfo = 'まだ受信していません';
@@ -4341,8 +4341,9 @@ function taskRow(t, opts){
     <div class="task-badge badge-${t.priority}" title="優先度 ${label}">${label}</div>
     <div class="task-main">
       <div class="task-title ${t.done?'done':''}">${escapeHtml(t.title)}</div>
-      <div class="task-meta">${dueBadge(t.start, t.due, t.done)}${
+      <div class="task-meta">${
         o.showOwnerName && t.owner !== SHARED_OWNER ? `<span class="task-owner owner-${t.owner}">${escapeHtml(ownerName(t.owner))}</span>` : ''}${
+        dueBadge(t.start, t.due, t.done)}${
         o.showSide ? `<span class="task-side side-${sideOf(t)}">${SIDE_LABEL[sideOf(t)]}</span>` : ''}${
         o.showOpen && !t.internal ? '<span class="task-open" title="共有URLのタスク管理表にも表示されます">客先公開</span>' : ''}${
         o.showOwner !== false && t.owner===SHARED_OWNER?'<span class="task-shared" title="全員の画面に表示される共有タスクです">共有</span>':''}${escapeHtml(memo)}</div>
