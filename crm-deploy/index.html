@@ -278,6 +278,12 @@
   }
   .task-owner.owner-u1{background:#dbeafe; color:#1e40af;}
   .task-owner.owner-u2{background:#dcfce7; color:#166534;}
+  /* 種類別ビューで、行の案件がどこか分かるように付ける小さなチップ */
+  .task-type-chip{
+    display:inline-block; margin-right:4px; padding:0 5px; border-radius:4px;
+    font-size:10.5px; font-weight:700; white-space:nowrap; vertical-align:middle;
+    background:var(--pc-bg,#e2e8f0); color:var(--pc-fg,#334155);
+  }
   /* 案件（タスクのグループ） */
   /* 案件はひとつの囲みブロックにして、どこからどこまでが同じ案件か一目で分かるようにする */
   .task-group{
@@ -1009,6 +1015,9 @@
                 <span class="filter-label" id="task-progress">0 / 0 完了</span>
                 <span class="icon-btn" id="task-scope-btn" title="全員のタスクを表示" onclick="toggleTaskScope()">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+                </span>
+                <span class="icon-btn" id="task-mode-btn" title="タスク種別でまとめて表示" onclick="toggleTaskGroupMode()">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h10M4 18h7"/></svg>
                 </span>
                 <span class="icon-btn" title="議事録から取り込む" onclick="openMeetingImportModal()">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
@@ -2644,7 +2653,7 @@ function tickSave(){
 const DOC_LIMIT = 1048576;
 
 /* どの版が動いているかを画面から確かめられるようにする */
-const BUILD_ID = '2026-08-31b';
+const BUILD_ID = '2026-09-01';
 /* 直近の保存結果と、サーバーから受け取った内容の素性。診断画面で見せる */
 let lastWriteInfo = 'まだ保存していません';
 let lastServerInfo = 'まだ受信していません';
@@ -4293,10 +4302,13 @@ function renderHome(){
   document.getElementById('stat-mydeals').textContent = deals.filter(d=>d.owner===currentUser && !['成立','失注'].includes(d.status)).length;
   document.getElementById('stat-won').textContent = deals.filter(d=>d.owner===currentUser && d.status==='成立').length;
 
-  // タスク管理カードの中身だけは、トグルで自分／全員を切り替える
+  // タスク管理カードの中身だけは、トグルで自分／全員・案件別／種別を切り替える
   const scopeBtn = document.getElementById('task-scope-btn');
   scopeBtn.classList.toggle('active', taskListShowAll);
   scopeBtn.title = taskListShowAll ? '自分のタスクだけ表示' : '全員のタスクを表示';
+  const modeBtn = document.getElementById('task-mode-btn');
+  modeBtn.classList.toggle('active', taskGroupMode === 'type');
+  modeBtn.title = taskGroupMode === 'type' ? '案件別に表示' : 'タスク種別でまとめて表示';
   const cardTasks = taskListShowAll ? sortTasks(tasks) : myTasks;
   const cardUndone = cardTasks.filter(t=>!t.done);
   // 期日を過ぎた未完了タスクがあれば、進捗の横で気づけるようにする
@@ -4310,7 +4322,9 @@ function renderHome(){
     taskList.innerHTML = `<div class="empty"><p>タスクはありません</p></div>`;
   } else {
     // 案件ごとにまとめ、案件に属さないタスクは最後に置く。全員表示のときだけ担当者名を出す。
-    taskList.appendChild(buildTaskGroups(cardTasks, {showOwnerName: taskListShowAll}));
+    // 種別モードのときは、似た内容のタスクを案件をまたいでまとめる。
+    const buildGroups = taskGroupMode === 'type' ? buildTaskTypeGroups : buildTaskGroups;
+    taskList.appendChild(buildGroups(cardTasks, {showOwnerName: taskListShowAll}));
     if(!taskProjects.length){
       const hint = document.createElement('div');
       hint.className = 'task-hint';
@@ -4335,6 +4349,16 @@ let taskListShowAll = false;
 
 function toggleTaskScope(){
   taskListShowAll = !taskListShowAll;
+  renderHome();
+}
+
+/* ---------- タスク管理カードの並べ方（案件別／種別） ----------
+   案件が増えて縦に長くなってきたときのために、似た内容のタスクを案件をまたいで
+   まとめて見られるモードを追加する。既定は今まで通り案件別。 */
+let taskGroupMode = 'project';  // 'project' | 'type'
+
+function toggleTaskGroupMode(){
+  taskGroupMode = (taskGroupMode === 'project') ? 'type' : 'project';
   renderHome();
 }
 
@@ -5123,6 +5147,106 @@ function buildTaskGroups(list, opts){
         doneWrap.appendChild(taskRow(t, opts));
         if(o.notes && !t.internal) doneWrap.appendChild(clientNoteThread(t.id));
       });
+      body.appendChild(doneWrap);
+    }
+    wrap.appendChild(body);
+    frag.appendChild(wrap);
+  });
+  return frag;
+}
+
+/* ---------- タスクの種別まとめ（案件横断） ----------
+   案件が増えて縦に長くなってきたときのために、似た内容のタスクを案件をまたいで
+   まとめて見られるようにする。タイトル（＋メモ）を決め打ちのキーワードで分類するだけで、
+   新しいデータは持たない（保存もしない。毎回その場で判定する）。
+   ヒットしたら最初に一致したものを採用する（1タスク=1種類、案件と同じ考え方）。
+   ここのキーワードは業務に合わせて増減してよい。より具体的な分類ほど上に置く。 */
+const TASK_TYPE_RULES = [
+  {name: 'LINE関連',   keywords: ['LINE', 'ライン公式', 'ライン連携']},
+  {name: '決済関連',   keywords: ['決済', 'クレジット', 'カード決済', 'PayPay', '振込']},
+  {name: '契約関連',   keywords: ['契約', '発注書', '見積', '請書']},
+  {name: '打ち合わせ', keywords: ['打ち合わせ', 'MTG', 'ミーティング', '面談', '商談']},
+  {name: '資料作成',   keywords: ['資料', '提案書', 'スライド', '台本']},
+  {name: '確認・返信', keywords: ['確認', '返信', 'ヒアリング']},
+  {name: '連携・設定', keywords: ['連携', '設定', '導入', 'アカウント']},
+];
+const TASK_TYPE_OTHER = 'その他';
+
+/* タスクのタイトル（＋メモ）から種類を推定する。最初に一致したルールを採用する。
+   何にも一致しなければ「その他」に入れる。 */
+function taskTypeOf(t){
+  const text = ((t.title || '') + ' ' + (t.sub || '')).toLowerCase();
+  const rule = TASK_TYPE_RULES.find(r => r.keywords.some(k => text.includes(k.toLowerCase())));
+  return rule ? rule.name : TASK_TYPE_OTHER;
+}
+
+/* 種別ビューでは行ごとに元の案件が分からなくなるため、タイトルの前に案件名の小さな
+   チップを添える。taskRow() 自体は変えず、行を作った後に差し込む。 */
+function taskRowWithProjectChip(t, opts){
+  const row = taskRow(t, opts);
+  const pj = t.projectId ? projectById(t.projectId) : null;
+  if(pj){
+    const c = projectColor(pj.color);
+    const chip = document.createElement('span');
+    chip.className = 'task-type-chip';
+    chip.textContent = pj.name;
+    chip.style.setProperty('--pc-bg', c.bg);
+    chip.style.setProperty('--pc-fg', c.fg);
+    const title = row.querySelector('.task-title');
+    if(title) title.prepend(chip, ' ');
+  }
+  return row;
+}
+
+/* buildTaskGroups と同じ見た目のブロックを、案件ではなく種別ごとに作る。
+   案件をまたぐビューなので、案件の進捗バー（stageBarEl）は出さない。
+   完了の折りたたみ状態は案件別ビューと別枠のキー（'type:'+種別名）で管理し、
+   モードを行き来しても互いに影響しないようにする。 */
+function buildTaskTypeGroups(list, opts){
+  const order = TASK_TYPE_RULES.map(r=>r.name).concat(TASK_TYPE_OTHER);
+  const groups = order
+    .map(name => ({name, list: list.filter(t => taskTypeOf(t) === name)}))
+    .filter(g => g.list.length);
+
+  const frag = document.createDocumentFragment();
+  groups.forEach(g=>{
+    const groupKey = 'type:' + g.name;
+    const wrap = document.createElement('div');
+    wrap.className = 'task-group';
+    const c = projectColor('slate'); // 案件のような色分けはしないので既定色を使う
+    wrap.style.setProperty('--pc', c.bar);
+    wrap.style.setProperty('--pc-bg', c.bg);
+    wrap.style.setProperty('--pc-fg', c.fg);
+
+    const undone = g.list.filter(t=>!t.done);
+    const done = g.list.filter(t=>t.done);
+    if(done.length && expandedDoneGroups.has(groupKey)) wrap.classList.add('done-open');
+
+    const head = document.createElement('div');
+    head.className = 'task-group-head' + (done.length ? ' has-done' : '');
+    head.innerHTML = `
+      <span class="task-group-mark">◇</span>
+      <span class="task-group-name">${escapeHtml(g.name)}</span>
+      <span class="task-group-count">${done.length} / ${g.list.length} 完了</span>
+      ${done.length ? `<svg class="task-group-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg>` : ''}`;
+    if(done.length){
+      head.title = '完了したタスクを表示・非表示';
+      head.onclick = ()=>{
+        wrap.classList.toggle('done-open');
+        if(wrap.classList.contains('done-open')) expandedDoneGroups.add(groupKey);
+        else expandedDoneGroups.delete(groupKey);
+      };
+    }
+    wrap.appendChild(head);
+    // 案件をまたぐビューなので、進捗バーはここでは出さない
+
+    const body = document.createElement('div');
+    body.className = 'task-group-body';
+    undone.forEach(t => body.appendChild(taskRowWithProjectChip(t, opts)));
+    if(done.length){
+      const doneWrap = document.createElement('div');
+      doneWrap.className = 'task-group-done';
+      done.forEach(t => doneWrap.appendChild(taskRowWithProjectChip(t, opts)));
       body.appendChild(doneWrap);
     }
     wrap.appendChild(body);
