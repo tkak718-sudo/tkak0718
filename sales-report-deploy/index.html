@@ -196,6 +196,10 @@
   :root[data-theme="dark"] .chip.ph-unk{background:#3a2a12;color:#f0bf7a}
   .sch{font-size:11.5px;color:var(--muted);font-weight:700}
   .sch.over{color:var(--crit)}
+  .rfilter{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:18px 0 4px}
+  .rfilter .lb{font-size:12px;font-weight:800;color:var(--muted)}
+  .dt-in{padding:7px 10px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--ink);font-size:12.5px;font-family:inherit}
+  .dt-in:focus{outline:2px solid var(--brand);outline-offset:1px;border-color:transparent}
   .sch-in{display:flex;gap:8px;align-items:center}
   .sch-in input{min-width:0}
   .anyone{font-size:11px;font-weight:700;color:var(--brand-deep);background:var(--brand-soft);border-radius:20px;padding:2px 10px;white-space:nowrap}
@@ -518,45 +522,109 @@
   }
   var PHASE_LABEL={adv:"先行",reg:"通常",unknown:"期間不明"};
   var PHASE_CLASS={adv:"ph-adv",reg:"ph-reg",unknown:"ph-unk"};
+  // 0円も正当な単価（招待枠など）なので、空欄のみを未設定として扱う
+  function uval(v){return (v==null||v==="")?null:(+v||0);}
+  // チケット1行ごとの明細を返す。購入日が引けない行は d:null。
+  // 期間別の集計（データ分析）と商品別の集計（売上内訳）で同じ解決結果を使うための共通処理。
+  function priceRows(ev){
+    var pr=pricingOf(ev), tk=ticketOf(ev), out=[];
+    if(!tk)return out;
+    var unitFor=function(p,phase){
+      var u=pr?pr.unit[p]:null;
+      var adv=u?uval(u.adv):null, reg=u?uval(u.reg):null;
+      // 期間不明の分は通常単価を当てる（不確実な枚数は画面に明示する）
+      // 先行単価が空欄なら通常単価を流用する（「通常単価を適用」と表示して明示する）
+      var price=(phase==="adv")?(adv!=null?adv:reg):reg;
+      return {unit:price,fallback:(phase==="adv"&&adv==null&&reg!=null)};
+    };
+    var push=function(d,p,seat,n){
+      if(!n)return;
+      var phase=pr?phaseOf(pr,d):(d?"reg":"unknown");
+      var u=unitFor(p,phase);
+      out.push({d:d,p:p,s:seat,phase:phase,n:n,unit:u.unit,fallback:u.fallback,
+                amt:u.unit!=null?Math.round(u.unit*n):0});
+    };
+    if(Array.isArray(ev.ticketRaw)&&ev.ticketRaw.length){
+      var dm=(ev.dateMap&&typeof ev.dateMap==="object")?ev.dateMap:{};
+      ev.ticketRaw.forEach(function(r){push(dm[r.o]||null,r.p,r.s||"",r.n||0);});
+    }else{
+      // 手入力で保存された場合は明細が無いため、購入日が判定できない
+      (tk.byProduct||[]).forEach(function(x){push(null,x.k,"",x.v||0);});
+    }
+    return out;
+  }
+  // 売上内訳（税込）用。商品×販売区分でまとめる。
   function priceBreakdown(ev){
     var pr=pricingOf(ev), tk=ticketOf(ev);
     var out={configured:false,hasDates:false,rows:[],tickets:0,amount:0,unpriced:0,undated:0,sysFee:0,
              advFrom:pr?pr.advFrom:"",advTo:pr?pr.advTo:"",fee:pr?pr.sysFee:SYS_FEE};
     if(!tk)return out;
-    // 0円も正当な単価（招待枠など）なので、空欄のみを未設定として扱う
-    var uval=function(v){return (v==null||v==="")?null:(+v||0);};
     if(pr)out.configured=Object.keys(pr.unit).some(function(k){var u=pr.unit[k];return u&&(uval(u.adv)!=null||uval(u.reg)!=null);});
-    // 商品×販売区分ごとに枚数を集める
     var agg={},order=[];
-    var add=function(p,ph,n){
-      var k=ph+"\u0001"+p;
-      if(!agg[k]){agg[k]={p:p,phase:ph,n:0};order.push(k);}
-      agg[k].n+=n;
-    };
-    if(Array.isArray(ev.ticketRaw)&&ev.ticketRaw.length){
-      var dm=(ev.dateMap&&typeof ev.dateMap==="object")?ev.dateMap:{};
-      ev.ticketRaw.forEach(function(r){
-        var d=dm[r.o]||null; if(d)out.hasDates=true;
-        add(r.p,pr?phaseOf(pr,d):(d?"reg":"unknown"),r.n||0);
-      });
-    }else{
-      // 手入力で保存された場合は明細が無いため、購入日が判定できない
-      (tk.byProduct||[]).forEach(function(x){add(x.k,"unknown",x.v||0);});
-    }
+    priceRows(ev).forEach(function(r){
+      if(r.d)out.hasDates=true;
+      var k=r.phase+"\u0001"+r.p;
+      if(!agg[k]){agg[k]={p:r.p,phase:r.phase,n:0,unit:r.unit,fallback:r.fallback,amt:0};order.push(k);}
+      agg[k].n+=r.n; agg[k].amt+=r.amt;
+    });
     out.rows=order.map(function(k){
-      var a=agg[k], u=pr?pr.unit[a.p]:null;
-      var adv=u?uval(u.adv):null, reg=u?uval(u.reg):null;
-      // 期間不明の分は通常単価を当てる（不確実な枚数は画面に明示する）
-      // 先行単価が空欄なら通常単価を流用する（「通常単価を適用」と表示して明示する）
-      var price=(a.phase==="adv")?(adv!=null?adv:reg):reg;
-      var fb=(a.phase==="adv"&&adv==null&&reg!=null);
-      var row={p:a.p,phase:a.phase,n:a.n,unit:price,fallback:fb,amt:price!=null?Math.round(price*a.n):0};
-      out.tickets+=a.n; out.amount+=row.amt;
-      if(row.unit==null)out.unpriced+=a.n;
+      var a=agg[k];
+      out.tickets+=a.n; out.amount+=a.amt;
+      if(a.unit==null)out.unpriced+=a.n;
       if(a.phase==="unknown")out.undated+=a.n;
-      return row;
+      return a;
     }).sort(function(x,y){return (y.amt-x.amt)||(y.n-x.n);});
     out.sysFee=out.tickets*(pr?pr.sysFee:SYS_FEE);
+    return out;
+  }
+
+  // 期間バケットのキーとラベル。groupSales() と同じ規約に合わせる。
+  function bucketOf(d,period){
+    if(period==="month"){var mp=d.slice(0,7).split("-");return {key:d.slice(0,7),label:(+mp[0])+"年"+(+mp[1])+"月",sub:""};}
+    if(period==="week"){var k=mondayOf(d);return {key:k,label:mdLabel(k)+"〜",sub:"週"};}
+    return {key:d,label:mdLabel(d),sub:wdayJ(d)};
+  }
+  // データ分析ページ用。全イベントのチケット明細を期間で絞り、日/週/月に集計する。
+  function reportSeries(evs,from,to,period){
+    var out={buckets:[],undated:{n:0,amt:0},byEvent:[],bySeat:[],
+             tickets:0,amount:0,sysFee:0,minDate:"",maxDate:"",
+             noPriceEvents:[],noDateEvents:[],hasAny:false};
+    var bk={},order=[],seat={},seatOrder=[];
+    (evs||[]).forEach(function(ev){
+      var rows=priceRows(ev); if(!rows.length)return;
+      var pr=pricingOf(ev), fee=pr?pr.sysFee:SYS_FEE;
+      if(out.oneFee===undefined)out.oneFee=fee; else if(out.oneFee!==fee)out.oneFee=null;
+      var e={id:ev.id,name:ev.name,n:0,amt:0,hasPrice:false,hasDates:false};
+      if(pr)e.hasPrice=Object.keys(pr.unit).some(function(k){var u=pr.unit[k];return u&&(uval(u.adv)!=null||uval(u.reg)!=null);});
+      rows.forEach(function(r){
+        if(r.d){
+          e.hasDates=true;
+          if(!out.minDate||r.d<out.minDate)out.minDate=r.d;
+          if(!out.maxDate||r.d>out.maxDate)out.maxDate=r.d;
+          if(from&&r.d<from)return;            // 期間で絞り込む（両端を含む）
+          if(to&&r.d>to)return;
+          var b=bucketOf(r.d,period);
+          if(!bk[b.key]){bk[b.key]={key:b.key,label:b.label,sub:b.sub,n:0,amt:0};order.push(b.key);}
+          bk[b.key].n+=r.n; bk[b.key].amt+=r.amt;
+        }else{
+          out.undated.n+=r.n; out.undated.amt+=r.amt;
+        }
+        out.hasAny=true;
+        out.tickets+=r.n; out.amount+=r.amt; out.sysFee+=r.n*fee;
+        e.n+=r.n; e.amt+=r.amt;
+        var sk=r.s||"(未設定)";
+        if(!seat[sk]){seat[sk]={k:sk,v:0};seatOrder.push(sk);}
+        seat[sk].v+=r.n;
+      });
+      if(e.n){
+        out.byEvent.push(e);
+        if(!e.hasPrice)out.noPriceEvents.push(ev.name);
+        if(!e.hasDates)out.noDateEvents.push(ev.name);
+      }
+    });
+    out.buckets=order.sort().map(function(k){return bk[k];});
+    out.byEvent.sort(function(a,b){return (b.amt-a.amt)||(b.n-a.n);});
+    out.bySeat=seatOrder.map(function(k){return seat[k];}).sort(function(a,b){return b.v-a.v;});
     return out;
   }
 
@@ -888,30 +956,90 @@
   function ledDelHandler(e){var d=e.target.closest(".led-del");if(d){e.preventDefault();var host=d.closest(".led-row,.led-card");if(host)host.remove();}}
 
   function renderReport(){
-    var evs=state.events, grandTk=0,grandAmt=0,grandCnt=0;
-    evs.forEach(function(ev){grandTk+=ticketTotal(ev);var s=salesOf(ev);if(s){grandAmt+=s.total||0;grandCnt+=s.count||0;}});
-    var avg=grandTk?grandAmt/grandTk:0;
-    // イベント別売上
-    var evData=evs.map(function(ev){return {k:ev.name,v:salesTotal(ev)};}).sort(function(a,b){return b.v-a.v;});
-    var evBars=evData.length?barList(evData,function(v){return yen(v);}):'<div class="empty"><b>集計対象がありません</b></div>';
-    // 席タイプ別（全イベント合算）
-    var seatMap={};evs.forEach(function(ev){var t=ticketOf(ev);if(t&&t.bySeat)t.bySeat.forEach(function(s){seatMap[s.k]=(seatMap[s.k]||0)+s.v;});});
-    var seatData=Object.keys(seatMap).map(function(k){return {k:k,v:seatMap[k]};}).sort(function(a,b){return b.v-a.v;});
-    var seatBars=seatData.length?barList(seatData,function(v){return nf(v)+" 枚";},true):'<div class="empty"><b>チケットデータがありません</b></div>';
-    // 選手ランキング（全イベント合算）
+    var evs=state.events;
+    var period=route.rperiod||"month", from=route.rfrom||"", to=route.rto||"";
+    var rs=reportSeries(evs,from,to,period);
+    var avg=rs.tickets?rs.amount/rs.tickets:0;
+
+    // 期間フィルタ
+    var seg='<div class="seg">'+["day","week","month"].map(function(p){
+      var lb={day:"日別",week:"週別",month:"月別"}[p];
+      return '<button class="seg-b'+(p===period?" on":"")+'" data-rperiod="'+p+'">'+lb+'</button>';
+    }).join("")+'</div>';
+    var filter='<div class="rfilter"><span class="lb">期間</span>'+
+      '<input class="dt-in" id="rFrom" type="date" value="'+esc(from)+'">'+
+      '<span style="color:var(--muted);font-weight:700">〜</span>'+
+      '<input class="dt-in" id="rTo" type="date" value="'+esc(to)+'">'+
+      (from||to?'<button class="btn btn-sm" id="rAll">全期間</button>':'')+
+      '<span style="flex:1"></span>'+seg+'</div>';
+
+    // 期間別の推移
+    var trend;
+    if(rs.buckets.length||rs.undated.n){
+      var maxA=Math.max.apply(null,rs.buckets.map(function(x){return x.amt;}).concat([1]));
+      var rows=rs.buckets.map(function(x){
+        return '<tr><td>'+esc(x.label)+(x.sub?' <span style="color:var(--faint);font-weight:600">'+esc(x.sub)+'</span>':'')+'</td>'+
+          '<td style="width:44%"><div class="bar-track" style="height:20px"><div class="bar-fill" style="width:'+(x.amt/maxA*100)+'%"></div></div></td>'+
+          '<td class="num">'+nf(x.n)+'</td><td class="num"><b>'+yen(x.amt)+'</b></td></tr>';
+      }).join("");
+      if(rs.undated.n)rows+='<tr><td><span class="chip ph-unk">期間不明</span></td><td></td>'+
+        '<td class="num">'+nf(rs.undated.n)+'</td><td class="num"><b>'+yen(rs.undated.amt)+'</b></td></tr>';
+      var notes=[];
+      if(rs.sysFee>0)notes.push('システム利用料（参考）: '+nf(rs.tickets)+' 枚'+(rs.oneFee!=null?' × '+yen(rs.oneFee):'')+' ＝ <b>'+yen(rs.sysFee)+'</b> ／ 上記の合計には含みません');
+      if(rs.minDate)notes.push('購入日のあるデータの範囲: '+fmtDate(rs.minDate)+' 〜 '+fmtDate(rs.maxDate));
+      if(rs.undated.n)notes.push('<span style="color:var(--warn)">購入日が特定できないチケットが '+nf(rs.undated.n)+' 枚あります（期間で絞り込めないため「期間不明」に計上）。</span>');
+      if(rs.noDateEvents.length)notes.push('<span style="color:var(--warn)">購入日のデータが無いイベント: '+esc(rs.noDateEvents.join(" / "))+'（「チケット管理」CSVを購入期間の列つきで取り込むと期間別に集計できます）</span>');
+      if(rs.noPriceEvents.length)notes.push('<span style="color:var(--warn)">税込単価が未設定のイベント: '+esc(rs.noPriceEvents.join(" / "))+'（枚数のみ計上され、金額は0です）</span>');
+      trend='<div class="panel"><div class="panel-h"><h3>期間別の推移</h3>'+
+        hRight('<span class="sub">'+({day:"日別",week:"週別",month:"月別"}[period])+' ・ 税込単価×枚数</span>')+'</div>'+
+        '<div class="tbl-wrap"><table><thead><tr><th>'+({day:"日",week:"週",month:"月"}[period])+'</th><th>税込金額</th><th>枚数</th><th>金額</th></tr></thead><tbody>'+rows+
+        '</tbody><tfoot><tr><td>合計</td><td></td><td class="num">'+nf(rs.tickets)+'</td><td class="num">'+yen(rs.amount)+'</td></tr></tfoot></table></div>'+
+        (notes.length?'<div class="sb-meta" style="padding:12px 16px 4px;line-height:1.8">※ '+notes.join('<br>※ ')+'</div>':'')+'</div>';
+    }else{
+      trend=cardEmpty("集計できるデータがありません",
+        evs.length?"選択した期間にチケットのデータがありません。期間を広げるか「全期間」に戻してください。":"イベントを追加し、「チケット管理」CSVを取り込むと集計されます。");
+    }
+
+    // イベント別（選択期間内）
+    var evPanel;
+    if(rs.byEvent.length){
+      var eTrs=rs.byEvent.map(function(e){
+        var share=rs.amount?e.amt/rs.amount*100:0;
+        return '<tr><td><span class="pnm" title="'+esc(e.name)+'" style="display:inline-block;max-width:300px;vertical-align:bottom">'+esc(e.name)+'</span></td>'+
+          '<td class="num">'+nf(e.n)+'</td><td class="num"><b>'+yen(e.amt)+'</b></td>'+
+          '<td class="num">'+(rs.amount?share.toFixed(1)+'%':'—')+'</td></tr>';
+      }).join("");
+      evPanel='<div class="panel" style="margin-top:16px"><div class="panel-h"><h3>イベント別</h3><span class="sub">選択期間内 ・ 金額の多い順</span></div>'+
+        '<div class="tbl-wrap"><table><thead><tr><th>イベント名</th><th>枚数</th><th>税込金額</th><th>構成比</th></tr></thead><tbody>'+eTrs+
+        '</tbody><tfoot><tr><td>合計</td><td class="num">'+nf(rs.tickets)+'</td><td class="num">'+yen(rs.amount)+'</td><td class="num">100%</td></tr></tfoot></table></div></div>';
+    }else evPanel="";
+
+    // 席タイプ別（選択期間内）／選手別ランキング（期間対象外）
+    var seatBars=rs.bySeat.length?barList(rs.bySeat,function(v){return nf(v)+" 枚";},true):'<div class="empty"><b>チケットデータがありません</b></div>';
     var pm={};evs.forEach(function(ev){(ev.players||[]).forEach(function(p){if(!pm[p.n])pm[p.n]={k:p.n,v:0};pm[p.n].v+=(p.sales||0);});});
     var pd=Object.keys(pm).map(function(k){return pm[k];}).filter(function(x){return x.v>0;}).sort(function(a,b){return b.v-a.v;}).slice(0,12);
-    var playerRank=pd.length?'<div class="panel" style="margin-top:16px"><div class="panel-h"><h3>選手別 売上ランキング</h3><span class="sub">全イベント合算 ・ 上位'+pd.length+'名</span></div>'+barList(pd,function(v){return yen(v);})+'</div>':'';
+    var playerRank=pd.length?'<div class="panel"><div class="panel-h"><h3>選手別 売上ランキング</h3><span class="sub">全期間合算 ・ 上位'+pd.length+'名</span></div>'+
+      barList(pd,function(v){return yen(v);})+
+      '<div class="sb-meta" style="padding:4px 16px 12px">※ 選手別データには購入日が無いため、期間の絞り込み対象外です（常に全期間の合算）。</div></div>':'';
+
+    var span=(from||to)?((from?fmtDate(from):"最初")+" 〜 "+(to?fmtDate(to):"最新")):"全期間";
     elView.innerHTML=
-      '<div class="greet"><h2>データ分析</h2><p>全イベント横断の集計 ・ '+evs.length+'イベント</p></div>'+
-      '<div class="kpis">'+kpi("総売上金",yen(grandAmt),"yen","決済済み合計")+kpi("総チケット枚数",nf(grandTk)+'<small>枚</small>',"ticket","全イベント合計")+kpi("平均単価",yen(avg),"chart","売上÷枚数")+kpi("イベント数",evs.length+'<small>件</small>',"pipe","登録済み")+'</div>'+
-      '<div class="grid2"><div class="panel"><div class="panel-h"><h3>イベント別 売上</h3><span class="sub">売上の多い順</span></div>'+evBars+'</div><div class="panel"><div class="panel-h"><h3>席タイプ別 枚数</h3><span class="sub">全イベント合算</span></div>'+seatBars+'</div></div>'+
-      playerRank;
+      '<div class="greet"><h2>データ分析</h2><p>全イベント横断 ・ '+esc(span)+' ・ '+nf(rs.byEvent.length)+'イベント</p></div>'+
+      filter+
+      '<div class="kpis">'+
+        kpi("チケット枚数",nf(rs.tickets)+'<small>枚</small>',"ticket",(from||to)?"選択期間内":"全期間")+
+        kpi("税込売上",yen(rs.amount),"yen","税込単価×枚数")+
+        kpi("平均単価",yen(avg),"chart","売上÷枚数")+
+        kpi("イベント数",nf(rs.byEvent.length)+'<small>件</small>',"pipe","販売のあったもの")+'</div>'+
+      trend+
+      evPanel+
+      '<div class="grid2" style="margin-top:16px"><div class="panel"><div class="panel-h"><h3>席タイプ別 枚数</h3><span class="sub">選択期間内</span></div>'+seatBars+'</div>'+
+      playerRank+'</div>';
   }
 
   // ================= interactions =================
   document.addEventListener("click",function(e){
-    var t=e.target.closest("[data-go],[data-ev],[data-del],[data-import],[data-editev],[data-edittk],[data-editprice],[data-editsales],[data-editplayers],[data-period],#addEvTop,#reorderEvTop,#addAnn,[data-anndel],[data-annedit],#addPrj,[data-addtask],[data-editprj],[data-delprj],[data-edittask],[data-deltask],[data-cycle]");
+    var t=e.target.closest("[data-go],[data-ev],[data-del],[data-import],[data-editev],[data-edittk],[data-editprice],[data-editsales],[data-editplayers],[data-period],[data-rperiod],#rAll,#addEvTop,#reorderEvTop,#addAnn,[data-anndel],[data-annedit],#addPrj,[data-addtask],[data-editprj],[data-delprj],[data-edittask],[data-deltask],[data-cycle]");
     if(!t)return;
     // --- タスク管理（編集モード不要）---
     if(t.id==="addPrj"){addProjectModal();return;}
@@ -922,6 +1050,9 @@
     if(t.hasAttribute("data-deltask")){var dk=t.getAttribute("data-deltask").split(":");delTask(dk[0],dk[1]);return;}
     if(t.hasAttribute("data-cycle")){var ck=t.getAttribute("data-cycle").split(":");cycleStatus(ck[0],ck[1]);return;}
     if(t.hasAttribute("data-period")){route.period=t.getAttribute("data-period");render();return;}
+    // データ分析の粒度は route.period とは別に持つ（イベントページの売上推移と干渉させない）
+    if(t.hasAttribute("data-rperiod")){route.rperiod=t.getAttribute("data-rperiod");render();return;}
+    if(t.id==="rAll"){route.rfrom="";route.rto="";render();return;}
     if(t.hasAttribute("data-del")){e.stopPropagation();delEvent(t.getAttribute("data-del"));return;}
     if(t.hasAttribute("data-anndel")){delAnn(t.getAttribute("data-anndel"));return;}
     if(t.hasAttribute("data-annedit")){editAnnModal(t.getAttribute("data-annedit"));return;}
@@ -936,6 +1067,16 @@
     if(t.hasAttribute("data-editev")){editEventModal(t.getAttribute("data-editev"));return;}
     if(t.hasAttribute("data-import")){importFor=t.getAttribute("data-import");document.getElementById("fileIn").click();return;}
     if(t.id==="addAnn"){addAnnModal();return;}
+  });
+
+  // データ分析の期間指定。input ではなく change を使う（入力途中の再描画でフォーカスを失わないように）
+  document.addEventListener("change",function(e){
+    var id=e.target&&e.target.id;
+    if(id!=="rFrom"&&id!=="rTo")return;
+    var a=document.getElementById("rFrom"), b=document.getElementById("rTo");
+    var fr=a?a.value:"", to=b?b.value:"";
+    if(fr&&to&&fr>to){toast("開始日が終了日より後になっています");return;}
+    route.rfrom=fr; route.rto=to; render();
   });
 
   function requireEdit(){ if(!editable){toast("編集モードで操作してください");return false;} return true; }
