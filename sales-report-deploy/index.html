@@ -176,6 +176,9 @@
   .chip.own-ly{background:#eaf1ff;color:#2554c7}
   .chip.own-ac{background:var(--brand-soft);color:var(--brand-deep)}
   .chip.own-bo{background:#f3ecff;color:#6b3fc7}
+  .chip.ph-adv{background:#eaf1ff;color:#2554c7}
+  .chip.ph-reg{background:var(--brand-soft);color:var(--brand-deep)}
+  .chip.ph-unk{background:#fdf0da;color:#b45309}
   .chip.st-todo{background:var(--panel);color:var(--muted);border-color:var(--line)}
   .chip.st-doing{background:#fdf0da;color:#b45309}
   .chip.st-done{background:var(--brand-soft);color:var(--brand-deep)}
@@ -183,10 +186,14 @@
     :root:not([data-theme="light"]) .chip.own-ly{background:#16223d;color:#8fb0ff}
     :root:not([data-theme="light"]) .chip.own-bo{background:#241a3d;color:#c3a8ff}
     :root:not([data-theme="light"]) .chip.st-doing{background:#3a2a12;color:#f0bf7a}
+    :root:not([data-theme="light"]) .chip.ph-adv{background:#16223d;color:#8fb0ff}
+    :root:not([data-theme="light"]) .chip.ph-unk{background:#3a2a12;color:#f0bf7a}
   }
   :root[data-theme="dark"] .chip.own-ly{background:#16223d;color:#8fb0ff}
   :root[data-theme="dark"] .chip.own-bo{background:#241a3d;color:#c3a8ff}
   :root[data-theme="dark"] .chip.st-doing{background:#3a2a12;color:#f0bf7a}
+  :root[data-theme="dark"] .chip.ph-adv{background:#16223d;color:#8fb0ff}
+  :root[data-theme="dark"] .chip.ph-unk{background:#3a2a12;color:#f0bf7a}
   .sch{font-size:11.5px;color:var(--muted);font-weight:700}
   .sch.over{color:var(--crit)}
   .sch-in{display:flex;gap:8px;align-items:center}
@@ -491,6 +498,68 @@
   }
   function salesTotal(ev){var s=salesOf(ev);return s?(s.total||0):0;}
   // CSVエクスポート金額 → 元の総売上（決済1件あたり）に戻す
+  // ---------- 税込単価による金額算出 ----------
+  // 単価は ev.pricing に商品名をキーにして持つ。ev.ticket は取込・手入力のたびに
+  // 作り直されるため、その中には置かない（設定が消えてしまう）。
+  //   ev.pricing = {advFrom,advTo,sysFee, unit:{ "商品名":{adv:単価, reg:単価} }}
+  function pricingOf(ev){
+    var p=ev&&ev.pricing;
+    if(!p||typeof p!=="object")return null;
+    return {advFrom:p.advFrom||"",advTo:p.advTo||"",
+            sysFee:(p.sysFee==null?SYS_FEE:+p.sysFee)||0,
+            unit:(p.unit&&typeof p.unit==="object")?p.unit:{}};
+  }
+  // 購入日から販売区分を決める。日付が引けなければ "unknown"。
+  function phaseOf(pr,d){
+    if(!d)return "unknown";
+    if(!pr.advTo)return "reg";                       // 先行販売期間 未設定 → すべて通常
+    if(pr.advFrom&&d<pr.advFrom)return "reg";
+    return d<=pr.advTo?"adv":"reg";
+  }
+  var PHASE_LABEL={adv:"先行",reg:"通常",unknown:"期間不明"};
+  var PHASE_CLASS={adv:"ph-adv",reg:"ph-reg",unknown:"ph-unk"};
+  function priceBreakdown(ev){
+    var pr=pricingOf(ev), tk=ticketOf(ev);
+    var out={configured:false,hasDates:false,rows:[],tickets:0,amount:0,unpriced:0,undated:0,sysFee:0,
+             advFrom:pr?pr.advFrom:"",advTo:pr?pr.advTo:"",fee:pr?pr.sysFee:SYS_FEE};
+    if(!tk)return out;
+    // 0円も正当な単価（招待枠など）なので、空欄のみを未設定として扱う
+    var uval=function(v){return (v==null||v==="")?null:(+v||0);};
+    if(pr)out.configured=Object.keys(pr.unit).some(function(k){var u=pr.unit[k];return u&&(uval(u.adv)!=null||uval(u.reg)!=null);});
+    // 商品×販売区分ごとに枚数を集める
+    var agg={},order=[];
+    var add=function(p,ph,n){
+      var k=ph+"\u0001"+p;
+      if(!agg[k]){agg[k]={p:p,phase:ph,n:0};order.push(k);}
+      agg[k].n+=n;
+    };
+    if(Array.isArray(ev.ticketRaw)&&ev.ticketRaw.length){
+      var dm=(ev.dateMap&&typeof ev.dateMap==="object")?ev.dateMap:{};
+      ev.ticketRaw.forEach(function(r){
+        var d=dm[r.o]||null; if(d)out.hasDates=true;
+        add(r.p,pr?phaseOf(pr,d):(d?"reg":"unknown"),r.n||0);
+      });
+    }else{
+      // 手入力で保存された場合は明細が無いため、購入日が判定できない
+      (tk.byProduct||[]).forEach(function(x){add(x.k,"unknown",x.v||0);});
+    }
+    out.rows=order.map(function(k){
+      var a=agg[k], u=pr?pr.unit[a.p]:null;
+      var adv=u?uval(u.adv):null, reg=u?uval(u.reg):null;
+      // 期間不明の分は通常単価を当てる（不確実な枚数は画面に明示する）
+      // 先行単価が空欄なら通常単価を流用する（「通常単価を適用」と表示して明示する）
+      var price=(a.phase==="adv")?(adv!=null?adv:reg):reg;
+      var fb=(a.phase==="adv"&&adv==null&&reg!=null);
+      var row={p:a.p,phase:a.phase,n:a.n,unit:price,fallback:fb,amt:price!=null?Math.round(price*a.n):0};
+      out.tickets+=a.n; out.amount+=row.amt;
+      if(row.unit==null)out.unpriced+=a.n;
+      if(a.phase==="unknown")out.undated+=a.n;
+      return row;
+    }).sort(function(x,y){return (y.amt-x.amt)||(y.n-x.n);});
+    out.sysFee=out.tickets*(pr?pr.sysFee:SYS_FEE);
+    return out;
+  }
+
   function grossFromExport(a){a=+a||0;if(a<=0)return a;return Math.round((a-SYS_FEE)*(1+FEE_RATE)+SYS_FEE);}
   // 日/週/月へ集計
   function groupSales(daily,period){
@@ -669,6 +738,7 @@
       var period=route.period||"day";
 
       var tkEditBtn=editable?'<button class="btn btn-sm" data-edittk="'+ev.id+'">編集</button>':'';
+      var prEditBtn=editable?'<button class="btn btn-sm" data-editprice="'+ev.id+'">単価設定</button>':'';
       // 席タイプ別
       var seatPanel;
       if(tk&&tk.bySeat&&tk.bySeat.length){
@@ -681,7 +751,7 @@
       // コーナー別（商品名）
       var prodPanel;
       if(tk&&tk.byProduct&&tk.byProduct.length){
-        prodPanel='<div class="panel"><div class="panel-h"><h3>コーナー・商品別 枚数</h3>'+hRight('<span class="sub">商品名ごと</span>'+tkEditBtn)+'</div>'+barList(tk.byProduct.slice().sort(function(a,b){return b.v-a.v;}),function(v){return nf(v)+" 枚";},true)+'</div>';
+        prodPanel='<div class="panel"><div class="panel-h"><h3>コーナー・商品別 枚数</h3>'+hRight((editable?'':'<span class="sub">商品名ごと</span>')+prEditBtn+tkEditBtn)+'</div>'+barList(tk.byProduct.slice().sort(function(a,b){return b.v-a.v;}),function(v){return nf(v)+" 枚";},true)+'</div>';
       }else if(editable){
         prodPanel='<div class="panel"><div class="panel-h"><h3>コーナー・商品別 枚数</h3><button class="btn btn-sm" data-edittk="'+ev.id+'">＋ 手入力</button></div><div class="empty" style="padding:34px 20px"><b>コーナー・商品別データなし</b><p>「＋ 手入力」で商品・コーナー別の枚数を入力できます。</p></div></div>';
       }else{
@@ -709,6 +779,35 @@
         salesPanel='<div class="panel"><div class="panel-h"><h3>売上推移（決済済み）</h3><button class="btn btn-sm" data-editsales="'+ev.id+'">＋ 手入力</button></div><div class="empty" style="padding:34px 20px"><b>売上データなし</b><p>「＋ 手入力」で日別の件数・金額を入力できます。CSV取込でも集計されます。</p></div></div>';
       } else {
         salesPanel=cardEmpty("売上データなし","「注文管理」CSVを取り込むと決済済み売上を日・週・月別に集計します。");
+      }
+
+      // 売上内訳（税込）— 商品ごとの税込単価 × 枚数
+      var pb=priceBreakdown(ev), pricePanel="";
+      if(tk&&totalTk){
+        if(pb.configured){
+          var prRows=pb.rows.map(function(r){
+            return '<tr><td><span class="pnm" title="'+esc(r.p)+'" style="display:inline-block;max-width:300px;vertical-align:bottom">'+esc(r.p)+'</span></td>'+
+              '<td><span class="chip '+PHASE_CLASS[r.phase]+'">'+PHASE_LABEL[r.phase]+'</span></td>'+
+              '<td class="num">'+nf(r.n)+'</td>'+
+              '<td class="num">'+(r.unit!=null?yen(r.unit)+(r.fallback?'<br><span style="font-size:10px;color:var(--muted);font-weight:700">通常単価を適用</span>':''):'<span style="color:var(--warn)">未設定</span>')+'</td>'+
+              '<td class="num"><b>'+(r.unit!=null?yen(r.amt):'—')+'</b></td></tr>';
+          }).join("");
+          var notes=[];
+          if(pb.fee>0)notes.push('システム利用料（参考）: '+nf(pb.tickets)+' 枚 × '+yen(pb.fee)+' ＝ <b>'+yen(pb.sysFee)+'</b> ／ 上記の合計には含みません');
+          if(pb.advTo)notes.push('先行販売期間: '+(pb.advFrom?fmtDate(pb.advFrom):'（開始日なし）')+' 〜 '+fmtDate(pb.advTo));
+          else notes.push('先行販売期間が未設定のため、購入日が分かる分はすべて通常販売として集計しています。');
+          if(pb.unpriced)notes.push('<span style="color:var(--warn)">単価が未設定の商品が '+nf(pb.unpriced)+' 枚あります（金額に含まれていません）。</span>');
+          if(pb.undated)notes.push('<span style="color:var(--warn)">購入日が特定できないチケットが '+nf(pb.undated)+' 枚あり、通常単価で計算しています。</span>'
+            +(Array.isArray(ev.ticketRaw)&&ev.ticketRaw.length?'':'（枚数を手入力したため明細がありません。「チケット管理」CSVを取り込むと購入日で振り分けられます）'));
+          pricePanel='<div class="panel" style="margin-top:16px"><div class="panel-h"><h3>売上内訳（税込）</h3>'+
+            hRight('<span class="sub">チケット代 '+yen(pb.amount)+'</span>'+prEditBtn)+'</div>'+
+            '<div class="tbl-wrap"><table><thead><tr><th>商品・コーナー名</th><th>販売区分</th><th>枚数</th><th>税込単価</th><th>金額</th></tr></thead><tbody>'+prRows+
+            '</tbody><tfoot><tr><td>合計</td><td></td><td class="num">'+nf(pb.tickets)+'</td><td class="num">—</td><td class="num">'+yen(pb.amount)+'</td></tr></tfoot></table></div>'+
+            '<div class="sb-meta" style="padding:12px 16px 4px;line-height:1.8">※ '+notes.join('<br>※ ')+'</div></div>';
+        }else if(editable){
+          pricePanel='<div class="panel" style="margin-top:16px"><div class="panel-h"><h3>売上内訳（税込）</h3><button class="btn btn-sm" data-editprice="'+ev.id+'">＋ 単価を設定</button></div>'+
+            '<div class="empty" style="padding:34px 20px"><b>税込単価が未設定です</b><p>「＋ 単価を設定」で商品ごとの税込単価と先行販売期間を登録すると、チケット枚数から税込金額を算出します。</p></div></div>';
+        }
       }
 
       // 選手別
@@ -754,6 +853,7 @@
         '<div class="kpis">'+kpi("総売上金",yen(totalAmt),"yen","決済済み")+kpi("チケット枚数",nf(totalTk)+'<small>枚</small>',"ticket","販売済み")+kpi("平均単価",yen(avg),"chart","売上÷枚数")+kpi("決済件数",nf(cnt)+'<small>件</small>',"pipe","注文数")+'</div>'+
         salesPanel+
         '<div class="grid2" style="margin-top:16px">'+seatPanel+prodPanel+'</div>'+
+        pricePanel+
         playerPanel+
         '<div class="sb-meta" style="padding:14px 4px 0">※ チケット管理／注文管理のCSVは、月ごとに分かれていても続けて取り込めば合算されます（7月分→8月分の順に取込）。同じCSVを再度取り込んでも二重計上されず、同じ注文IDは新しい内容で更新されます。<br>※ 選手別CSVも月ごとに分けて取り込めば広告コード単位でまとまります。売上・枚数・件数は「累計」欄（期間開始日〜集計時点）も参照するため、片方のファイルに行が無い選手も取りこぼしません。集計期間が重なるファイルを取り込もうとすると確認が出ます。</div>';
     }
@@ -811,7 +911,7 @@
 
   // ================= interactions =================
   document.addEventListener("click",function(e){
-    var t=e.target.closest("[data-go],[data-ev],[data-del],[data-import],[data-editev],[data-edittk],[data-editsales],[data-editplayers],[data-period],#addEvTop,#reorderEvTop,#addAnn,[data-anndel],[data-annedit],#addPrj,[data-addtask],[data-editprj],[data-delprj],[data-edittask],[data-deltask],[data-cycle]");
+    var t=e.target.closest("[data-go],[data-ev],[data-del],[data-import],[data-editev],[data-edittk],[data-editprice],[data-editsales],[data-editplayers],[data-period],#addEvTop,#reorderEvTop,#addAnn,[data-anndel],[data-annedit],#addPrj,[data-addtask],[data-editprj],[data-delprj],[data-edittask],[data-deltask],[data-cycle]");
     if(!t)return;
     // --- タスク管理（編集モード不要）---
     if(t.id==="addPrj"){addProjectModal();return;}
@@ -826,6 +926,7 @@
     if(t.hasAttribute("data-anndel")){delAnn(t.getAttribute("data-anndel"));return;}
     if(t.hasAttribute("data-annedit")){editAnnModal(t.getAttribute("data-annedit"));return;}
     if(t.hasAttribute("data-edittk")){editTicketModal(t.getAttribute("data-edittk"));return;}
+    if(t.hasAttribute("data-editprice")){editPriceModal(t.getAttribute("data-editprice"));return;}
     if(t.hasAttribute("data-editsales")){editSalesModal(t.getAttribute("data-editsales"));return;}
     if(t.hasAttribute("data-editplayers")){editPlayersModal(t.getAttribute("data-editplayers"));return;}
     if(t.hasAttribute("data-go")){route.view=t.getAttribute("data-go");closeSidebar();render();return;}
@@ -990,6 +1091,56 @@
       // 手入力した内容が正となるため、CSVの明細は破棄する（次回取込は置き換えになる）
       ev.ticket={total:total,byProduct:byProduct,bySeat:bySeat};ev.ticketRaw=null;ev.tkAt=new Date().toISOString();
       closeModal();commit();toast("チケット枚数を保存しました（合計 "+nf(total)+" 枚）");
+    };
+  }
+  // 税込単価の設定（先行販売期間・商品ごとの単価・システム利用料）
+  function editPriceModal(id){
+    if(!requireEdit())return;
+    var ev=state.events.filter(function(e){return e.id===id;})[0];if(!ev)return;
+    var pr=pricingOf(ev)||{advFrom:"",advTo:"",sysFee:SYS_FEE,unit:{}};
+    var cols=[{key:"k",lab:"商品・コーナー名",wide:true},{key:"adv",lab:"先行販売の税込単価",num:true},{key:"reg",lab:"通常販売の税込単価",num:true}];
+    // 現在のチケットデータにある商品を枚数の多い順に並べ、設定済みで今は無い商品を後ろに足す
+    var seen={},rows=[];
+    ((ev.ticket&&ev.ticket.byProduct)||[]).slice().sort(function(x,y){return y.v-x.v;}).forEach(function(x){
+      var u=pr.unit[x.k]||{}; seen[x.k]=1;
+      rows.push({k:x.k,adv:u.adv||"",reg:u.reg||""});
+    });
+    Object.keys(pr.unit).forEach(function(k){
+      if(seen[k])return; var u=pr.unit[k]||{};
+      rows.push({k:k,adv:u.adv||"",reg:u.reg||""});
+    });
+    openModal(
+      '<h3>税込単価を設定</h3><p class="mh">商品ごとの税込単価を登録すると、チケット枚数と掛け合わせて金額を算出します。先行販売と通常販売は購入日で振り分けます。</p>'+
+      '<label>先行販売期間</label>'+
+      '<div class="sch-in"><input id="pr_from" type="date" value="'+esc(pr.advFrom)+'"><span style="color:var(--muted);font-weight:700">〜</span><input id="pr_to" type="date" value="'+esc(pr.advTo)+'"></div>'+
+      '<p class="mh" style="margin:6px 0 0">この期間に購入されたチケットを先行販売として集計します。空欄の場合はすべて通常販売になります。</p>'+
+      '<label>システム利用料（税込・1枚あたり）</label><input id="pr_fee" type="number" inputmode="numeric" value="'+esc(pr.sysFee)+'">'+
+      '<p class="mh" style="margin:6px 0 0">参考値として別行に表示します。売上合計には加算しません。</p>'+
+      '<label style="margin-top:14px">商品ごとの税込単価</label>'+
+      '<div class="modal-scroll"><div id="prCont">'+(rows.length?rows.map(function(r){return ledCard(cols,r);}).join(""):ledCard(cols,{}))+'</div>'+
+      '<button type="button" class="led-add" id="prAdd">＋ 商品を追加</button></div>'+
+      '<div class="modal-act"><button class="btn" data-close>キャンセル</button><button class="btn btn-pri" id="prok">保存</button></div>',
+      null, true
+    );
+    var prCont=document.getElementById("prCont");
+    prCont.addEventListener("click",ledDelHandler);
+    document.getElementById("prAdd").onclick=function(){prCont.insertAdjacentHTML("beforeend",ledCard(cols,{}));};
+    document.getElementById("prok").onclick=function(){
+      var from=document.getElementById("pr_from").value||"", to=document.getElementById("pr_to").value||"";
+      if(from&&to&&from>to){toast("先行販売の開始日が終了日より後になっています");return;}
+      var fee=pnum(document.getElementById("pr_fee").value);
+      var unit={},n=0;
+      ledRead(prCont,".led-card",cols).forEach(function(r){
+        if(!r.k)return;
+        var num=function(v){v=String(v==null?"":v).trim();if(v==="")return null;var x=pnum(v);return x<0?0:x;};
+        var adv=num(r.adv), reg=num(r.reg);
+        if(adv==null&&reg==null)return;          // 両方空欄の行は登録しない（0円は有効）
+        unit[r.k]={adv:adv,reg:reg}; n++;
+      });
+      if(!n&&!from&&!to){ev.pricing=null;closeModal();commit();toast("税込単価をクリアしました");return;}
+      ev.pricing={advFrom:from,advTo:to,sysFee:fee,unit:unit};
+      closeModal();commit();
+      toast("税込単価を保存しました（"+nf(n)+"件"+(to?" ／ 先行販売 〜"+to:"")+"）");
     };
   }
   function editSalesModal(id){
