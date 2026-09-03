@@ -251,6 +251,20 @@
   .modal textarea{resize:vertical;min-height:70px}
   .modal input:focus,.modal textarea:focus,.modal select:focus{outline:2px solid var(--brand);outline-offset:1px;border-color:transparent}
   .modal-act{display:flex;gap:10px;justify-content:flex-end;margin-top:20px}
+  /* 取込モードの確認（追加 / 置き換え） */
+  .im-cmp{display:flex;align-items:center;gap:10px;margin:12px 0 14px}
+  .im-box{flex:1;border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--panel-2)}
+  .im-box label{display:block;margin:0 0 2px;font-size:10.5px;font-weight:700;color:var(--muted)}
+  .im-box b{font-size:17px;font-weight:800}
+  .im-box span{display:block;font-size:11px;font-weight:600;color:var(--muted);margin-top:1px}
+  .im-arw{color:var(--faint);font-weight:800}
+  .im-acts{display:flex;flex-direction:column;gap:8px}
+  .im-b{display:block;width:100%;text-align:left;padding:11px 13px}
+  .im-b b{display:block;font-size:13.5px}
+  .im-b span{display:block;font-size:11px;font-weight:600;opacity:.82;margin-top:2px}
+  .im-off{border:1px dashed var(--line);border-radius:10px;padding:11px 13px;color:var(--muted)}
+  .im-off b{display:block;font-size:13.5px}
+  .im-off span{display:block;font-size:11px;font-weight:600;margin-top:2px}
   .toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(20px);z-index:90;background:var(--ink);color:var(--bg);padding:11px 20px;border-radius:10px;font-size:13px;font-weight:700;box-shadow:var(--shadow-lg);opacity:0;transition:.25s;pointer-events:none;max-width:90vw;text-align:center}
   .toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
 
@@ -615,7 +629,10 @@
   }
   // データ分析ページ用。全イベントのチケット明細を期間で絞り、日/週/月に集計する。
   function reportSeries(evs,from,to,period){
-    var out={buckets:[],undated:{n:0,amt:0},byEvent:[],bySeat:[],
+    // 期間を指定している間は、購入日が無いチケットを合計に入れない。
+    // 入れてしまうと「9月」を選んでも購入日不明の分が必ず足され、選んだ期間の数字にならない。
+    var filtered=!!(from||to);
+    var out={buckets:[],undated:{n:0,amt:0},byEvent:[],bySeat:[],filtered:filtered,
              tickets:0,amount:0,sysFee:0,minDate:"",maxDate:"",
              noPriceEvents:[],noDateEvents:[],hasAny:false};
     var bk={},order=[],seat={},seatOrder=[];
@@ -623,7 +640,7 @@
       var rows=priceRows(ev); if(!rows.length)return;
       var pr=pricingOf(ev), fee=pr?pr.sysFee:SYS_FEE;
       if(out.oneFee===undefined)out.oneFee=fee; else if(out.oneFee!==fee)out.oneFee=null;
-      var e={id:ev.id,name:ev.name,n:0,amt:0,hasPrice:false,hasDates:false};
+      var e={id:ev.id,name:ev.name,n:0,amt:0,undated:0,hasPrice:false,hasDates:false};
       e.hasPrice=hasAnyUnit(pr);
       rows.forEach(function(r){
         if(r.d){
@@ -636,7 +653,8 @@
           if(!bk[b.key]){bk[b.key]={key:b.key,label:b.label,sub:b.sub,n:0,amt:0};order.push(b.key);}
           bk[b.key].n+=r.n; bk[b.key].amt+=r.amt;
         }else{
-          out.undated.n+=r.n; out.undated.amt+=r.amt;
+          out.undated.n+=r.n; out.undated.amt+=r.amt; e.undated+=r.n;
+          if(filtered)return;                  // 期間指定中は合計に含めない
         }
         out.hasAny=true;
         out.tickets+=r.n; out.amount+=r.amt; out.sysFee+=r.n*fee;
@@ -648,8 +666,9 @@
       if(e.n){
         out.byEvent.push(e);
         if(!e.hasPrice)out.noPriceEvents.push(ev.name);
-        if(!e.hasDates)out.noDateEvents.push(ev.name);
       }
+      // 集計から外れたイベントも「購入日のデータが無い」注記には出す（黙って消えないように）
+      if((e.n||e.undated)&&!e.hasDates)out.noDateEvents.push(ev.name);
     });
     out.buckets=order.sort().map(function(k){return bk[k];});
     out.byEvent.sort(function(a,b){return (b.amt-a.amt)||(b.n-a.n);});
@@ -1007,19 +1026,20 @@
 
     // 期間別の推移
     var trend;
-    if(rs.buckets.length||rs.undated.n){
+    if(rs.buckets.length||(rs.undated.n&&!rs.filtered)){
       var maxA=Math.max.apply(null,rs.buckets.map(function(x){return x.amt;}).concat([1]));
       var rows=rs.buckets.map(function(x){
         return '<tr><td>'+esc(x.label)+(x.sub?' <span style="color:var(--faint);font-weight:600">'+esc(x.sub)+'</span>':'')+'</td>'+
           '<td style="width:44%"><div class="bar-track" style="height:20px"><div class="bar-fill" style="width:'+(x.amt/maxA*100)+'%"></div></div></td>'+
           '<td class="num">'+nf(x.n)+'</td><td class="num"><b>'+yen(x.amt)+'</b></td></tr>';
       }).join("");
-      if(rs.undated.n)rows+='<tr><td><span class="chip ph-unk">期間不明</span></td><td></td>'+
+      if(rs.undated.n&&!rs.filtered)rows+='<tr><td><span class="chip ph-unk">期間不明</span></td><td></td>'+
         '<td class="num">'+nf(rs.undated.n)+'</td><td class="num"><b>'+yen(rs.undated.amt)+'</b></td></tr>';
       var notes=[];
       if(rs.sysFee>0)notes.push('システム利用料（参考）: '+nf(rs.tickets)+' 枚'+(rs.oneFee!=null?' × '+yen(rs.oneFee):'')+' ＝ <b>'+yen(rs.sysFee)+'</b> ／ 上記の合計には含みません');
       if(rs.minDate)notes.push('購入日のあるデータの範囲: '+fmtDate(rs.minDate)+' 〜 '+fmtDate(rs.maxDate));
-      if(rs.undated.n)notes.push('<span style="color:var(--warn)">購入日が特定できないチケットが '+nf(rs.undated.n)+' 枚あります（期間で絞り込めないため「期間不明」に計上）。</span>');
+      if(rs.undated.n)notes.push('<span style="color:var(--warn)">購入日が不明なチケットが '+nf(rs.undated.n)+' 枚あります'
+        +(rs.filtered?'（期間で絞り込めないため、選択期間の集計には含めていません。「全期間」で確認できます）。':'（期間で絞り込めないため「期間不明」に計上）。')+'</span>');
       if(rs.noDateEvents.length)notes.push('<span style="color:var(--warn)">購入日のデータが無いイベント: '+esc(rs.noDateEvents.join(" / "))+'（「チケット管理」CSVを購入期間の列つきで取り込むと期間別に集計できます）</span>');
       if(rs.noPriceEvents.length)notes.push('<span style="color:var(--warn)">税込単価が未設定のイベント: '+esc(rs.noPriceEvents.join(" / "))+'（枚数のみ計上され、金額は0です）</span>');
       trend='<div class="panel"><div class="panel-h"><h3>期間別の推移</h3>'+
@@ -1029,7 +1049,9 @@
         (notes.length?'<div class="sb-meta" style="padding:12px 16px 4px;line-height:1.8">※ '+notes.join('<br>※ ')+'</div>':'')+'</div>';
     }else{
       trend=cardEmpty("集計できるデータがありません",
-        evs.length?"選択した期間にチケットのデータがありません。期間を広げるか「全期間」に戻してください。":"イベントを追加し、「チケット管理」CSVを取り込むと集計されます。");
+        evs.length?("選択した期間にチケットのデータがありません。期間を広げるか「全期間」に戻してください。"
+          +(rs.undated.n?"（購入日が不明なチケットが "+nf(rs.undated.n)+" 枚あります。購入期間の列があるCSVを取り込むと期間別に集計できます）":""))
+        :"イベントを追加し、「チケット管理」CSVを取り込むと集計されます。");
     }
 
     // イベント別（選択期間内）
@@ -1066,7 +1088,8 @@
       '<div class="greet"><h2>データ分析</h2><p>全イベント横断 ・ '+esc(span)+' ・ '+nf(rs.byEvent.length)+'イベント</p></div>'+
       filter+
       '<div class="kpis">'+
-        kpi("チケット枚数",nf(rs.tickets)+'<small>枚</small>',"ticket",(from||to)?"選択期間内":"全期間")+
+        kpi("チケット枚数",nf(rs.tickets)+'<small>枚</small>',"ticket",
+          rs.filtered?("選択期間内"+(rs.undated.n?" ・ 期間不明 "+nf(rs.undated.n)+"枚を除く":"")):"全期間")+
         kpi("税込売上",yen(rs.amount),"yen","税込単価×枚数")+
         kpi("平均単価",yen(avg),"chart","売上÷枚数")+
         kpi("イベント数",nf(rs.byEvent.length)+'<small>件</small>',"pipe","販売のあったもの")+'</div>'+
@@ -1531,16 +1554,45 @@
       var ev=ev0;
       var kind=detectKind(tbl.head);
       if(kind==="ticket"){
-        var r=importTickets(ev,tbl); if(r.cancelled)return; if(r.error){toast(r.error);return;} commit();
-        toast(r.merged
-          ? ("チケットを追加取込：+"+nf(r.added)+" 枚"+(r.dup?"（重複 "+nf(r.dup)+" 枚は除外）":"")+" ／ 合計 "+nf(r.total)+" 枚")
-          : ("チケット管理を取込：合計 "+nf(r.total)+" 枚"+(r.prev!=null?"（以前の "+nf(r.prev)+" 枚を置き換え）":"")));
+        var ps=tkParse(tbl); if(ps.error){toast(ps.error);return;}
+        var done=function(mode){
+          var r=tkApply(ev,ps,mode); commit();
+          toast(r.merged
+            ? ("チケットを追加取込：+"+nf(r.added)+" 枚"+(r.dup?"（重複 "+nf(r.dup)+" 枚は除外）":"")+" ／ 合計 "+nf(r.total)+" 枚")
+            : ("チケット管理を取込：合計 "+nf(r.total)+" 枚"+(r.prev?"（以前の "+nf(r.prev)+" 枚を置き換え）":"")));
+        };
+        var prevTk=ticketTotal(ev);
+        if(!prevTk){done("replace");return;}
+        var hasRaw=Array.isArray(ev.ticketRaw)&&ev.ticketRaw.length>0;
+        var mgTotal=hasRaw?tkMerge(ev.ticketRaw,ps.fresh).rows.reduce(function(a,r){return a+r.n;},0):0;
+        askImportMode({
+          title:"チケット管理を取り込みます",
+          curMain:nf(prevTk)+" 枚", curSub:hasRaw?("購入日あり "+nf(tkDatedCount(ev))+" 枚"):"明細なし（購入日なし）",
+          newMain:nf(ps.total)+" 枚", newSub:"購入日あり "+nf(ps.dated)+" 枚",
+          canMerge:hasRaw, why:"既存データが明細を持たないため、重複を判定できません。置き換えてください。",
+          mergeSub:"合計 "+nf(mgTotal)+" 枚になります（同じ注文の重複は自動で除外）",
+          repSub:"既存の "+nf(prevTk)+" 枚を消して "+nf(ps.total)+" 枚にします（税込単価の設定は残ります）"
+        },done);
       }
       else if(kind==="order"){
-        var r2=importOrders(ev,tbl); if(r2.cancelled)return; if(r2.error){toast(r2.error);return;} commit();
-        toast(r2.merged
-          ? ("売上を追加取込：新規 "+nf(r2.added)+" 件"+(r2.updated?"・更新 "+nf(r2.updated)+" 件":"")+" ／ 決済済み合計 "+nf(r2.count)+" 件 "+yen(r2.total))
-          : ("注文管理を取込：決済済み "+nf(r2.count)+" 件 / "+yen(r2.total)+(r2.prevT!=null?"（以前の "+yen(r2.prevT)+" を置き換え）":"")));
+        var ps2=odParse(tbl); if(ps2.error){toast(ps2.error);return;}
+        var done2=function(mode){
+          var r2=odApply(ev,ps2,mode); commit();
+          toast(r2.merged
+            ? ("売上を追加取込：新規 "+nf(r2.added)+" 件"+(r2.updated?"・更新 "+nf(r2.updated)+" 件":"")+" ／ 決済済み合計 "+nf(r2.count)+" 件 "+yen(r2.total))
+            : ("注文管理を取込：決済済み "+nf(r2.count)+" 件 / "+yen(r2.total)+(r2.prevT?"（以前の "+yen(r2.prevT)+" を置き換え）":"")));
+        };
+        var cur2=salesOf(ev), prevOd=cur2?(cur2.total||0):0;
+        if(!prevOd){done2("replace");return;}
+        var hasOr=Array.isArray(ev.orderRaw)&&ev.orderRaw.length>0;
+        askImportMode({
+          title:"注文管理を取り込みます",
+          curMain:yen(prevOd), curSub:hasOr?("決済済み "+nf(cur2.count)+" 件"):"明細なし（手入力の集計）",
+          newMain:yen(ps2.total), newSub:"決済済み "+nf(ps2.paid)+" 件",
+          canMerge:hasOr, why:"既存データが明細を持たないため、同じ注文かどうかを判定できません。置き換えてください。",
+          mergeSub:"同じ注文IDは今回の内容で更新し、無い注文を足します",
+          repSub:"既存の売上データを消して、今回のファイルだけにします"
+        },done2);
       }
       else if(kind==="player"){
         var r3=importPlayers(ev,tbl,f.name); if(r3.cancelled)return; if(r3.error){toast(r3.error);return;} commit();
@@ -1722,60 +1774,97 @@
     });
     return {rows:Object.keys(m).map(function(k){return m[k];}),added:added,dup:dup};
   }
-  // 明細を持たない既存集計に追加取込しようとしたとき、消してよいか確認する
+  // 選手別データ用。明細（ファイル別バッチ）を持たない既存集計に追加取込しようとしたとき、消してよいか確認する
   function askReplace(what,cur){
     return confirm("このイベントには既存の"+what+"（"+cur+"）がありますが、明細データを持たないため追加での取込ができません。\n\n［OK］今回のCSVの内容で置き換える\n［キャンセル］取込をやめる\n\n※7月分・8月分の両方を反映したい場合は、OKで1件目を取り込んだあと、続けて2件目を取り込んでください。2回目以降は自動で合算されます。");
   }
-  function importTickets(ev,tbl){
+  // 既にデータがあるイベントへの取込。追加（合算）か置き換えかをその場で選んでもらう。
+  // o = {title, curMain, curSub, newMain, newSub, mergeSub, repSub, canMerge, why}
+  function askImportMode(o,cb){
+    var merge=o.canMerge
+      ? '<button type="button" class="btn btn-pri im-b" id="imMerge"><b>追加して合算する</b><span>'+esc(o.mergeSub)+'</span></button>'
+      : '<div class="im-off"><b>追加して合算はできません</b><span>'+esc(o.why)+'</span></div>';
+    openModal(
+      '<h3>'+esc(o.title)+'</h3><p class="mh">このイベントにはすでにデータがあります。取り込み方を選んでください。</p>'+
+      '<div class="im-cmp"><div class="im-box"><label>既存データ</label><b>'+esc(o.curMain)+'</b><span>'+esc(o.curSub)+'</span></div>'+
+      '<div class="im-arw">→</div>'+
+      '<div class="im-box"><label>今回のファイル</label><b>'+esc(o.newMain)+'</b><span>'+esc(o.newSub)+'</span></div></div>'+
+      '<div class="im-acts">'+merge+
+      '<button type="button" class="btn '+(o.canMerge?'':'btn-pri ')+'im-b" id="imRep"><b>今回のファイルで置き換える</b><span>'+esc(o.repSub)+'</span></button></div>'+
+      '<div class="modal-act"><button class="btn" data-close>キャンセル</button></div>');
+    var m=document.getElementById("imMerge"); if(m)m.onclick=function(){closeModal();cb("merge");};
+    document.getElementById("imRep").onclick=function(){closeModal();cb("replace");};
+  }
+  // 既存のチケット明細のうち、購入日が引けている枚数
+  function tkDatedCount(ev){
+    if(!Array.isArray(ev.ticketRaw))return 0;
+    var dm=(ev.dateMap&&typeof ev.dateMap==="object")?ev.dateMap:{},n=0;
+    ev.ticketRaw.forEach(function(r){if(dm[r.o])n+=(r.n||0);});
+    return n;
+  }
+  // CSVを読むだけ。保存はしない（追加か置き換えかを選んでもらってから tkApply で反映する）
+  function tkParse(tbl){
     var ix=idxer(tbl.head);
     var iP=ix(["商品名"]),iS=ix(["オブジェクト名"]),iO=ix(["注文番号"]),iD=ix(["購入期間"]);
     if(iP<0||iS<0)return {error:"チケット管理の列（商品名/オブジェクト名）が見つかりません"};
-    var fresh={},seen=0,newDates={};
+    var fresh={},seen=0,dated=0,newDates={};
     tbl.rows.forEach(function(c){
       var p=(c[iP]||"").trim(); if(!p)return;
-      var s=(c[iS]||"").trim()||"(未設定)";
-      var o=iO>=0?((c[iO]||"").trim()||"(注文番号なし)"):"(注文番号なし)";
+      var s=(c[iS]||"").trim()||SEAT_NONE;
+      var oo=iO>=0?(c[iO]||"").trim():"";
+      var o=oo||"(注文番号なし)";
       seen++;
       var k=tkKey(o,p,s); if(!fresh[k])fresh[k]={o:o,p:p,s:s,n:0}; fresh[k].n++;
-      if(iO>=0&&iD>=0){var oo=(c[iO]||"").trim(); if(oo&&!newDates[oo]){var d=toISODate(c[iD]); if(d)newDates[oo]=d;}}
+      if(oo&&iD>=0){var d=toISODate(c[iD]); if(d){if(!newDates[oo])newDates[oo]=d; dated++;}}
     });
     if(!seen)return {error:"チケットのデータ行がありません"};
-    var hasRaw=Array.isArray(ev.ticketRaw)&&ev.ticketRaw.length>0;
+    return {fresh:fresh,dates:newDates,total:seen,dated:dated};
+  }
+  // mode "merge" は既存明細に合算、"replace" は今回のファイルだけで作り直す
+  function tkApply(ev,ps,mode){
+    var base=(mode==="merge"&&Array.isArray(ev.ticketRaw))?ev.ticketRaw:[];
     var prev=ev.ticket?ev.ticket.total:null;
-    if(!hasRaw&&prev&&!askReplace("チケット集計",nf(prev)+" 枚"))return {cancelled:true};
-    var mg=tkMerge(hasRaw?ev.ticketRaw:[],fresh);
+    var mg=tkMerge(base,ps.fresh);
     var byP={},byS={},total=0;
     mg.rows.forEach(function(r){byP[r.p]=(byP[r.p]||0)+r.n;byS[r.s]=(byS[r.s]||0)+r.n;total+=r.n;});
     ev.ticketRaw=mg.rows;
     ev.ticket={total:total,byProduct:mapToArr(byP),bySeat:mapToArr(byS)};
-    // 日付の紐付けは上書きせずマージする（他の月の売上推移が消えないように）
+    // 日付の紐付けは置き換えでも消さずにマージする。注文管理の売上推移も同じ dateMap を使うため、
+    // ここで消すと売上の日付まで失われる。今回のファイルにある注文番号は新しい日付で上書きされる。
     var dm=(ev.dateMap&&typeof ev.dateMap==="object")?ev.dateMap:{};
-    Object.keys(newDates).forEach(function(k){dm[k]=newDates[k];});
+    Object.keys(ps.dates).forEach(function(k){dm[k]=ps.dates[k];});
     ev.dateMap=dm; ev.tkAt=new Date().toISOString();
-    return {total:total,prev:prev,added:mg.added,dup:mg.dup,merged:hasRaw};
+    return {total:total,prev:prev,added:mg.added,dup:mg.dup,merged:base.length>0};
   }
-  function importOrders(ev,tbl){
+  // チケットと同じく、読むだけの odParse と、反映する odApply に分ける
+  function odParse(tbl){
     var ix=idxer(tbl.head);
     var iO=ix(["注文ID"]),iA=ix(["金額"]),iS=ix(["決済状況"]);
     if(iO<0||iA<0||iS<0)return {error:"注文管理の列（注文ID/金額/決済状況）が見つかりません"};
-    var hasRaw=Array.isArray(ev.orderRaw)&&ev.orderRaw.length>0;
-    var ps=salesOf(ev), prevC=ps?ps.count:null, prevT=ps?ps.total:null;
-    if(!hasRaw&&ps&&ps.total&&!askReplace("売上データ",yen(ps.total)+" / "+nf(ps.count)+" 件"))return {cancelled:true};
-    var base=hasRaw?ev.orderRaw.slice():[];
-    var pos={};base.forEach(function(r,i){pos[r.o]=i;});
-    var added=0,updated=0,seen=0;
+    var rows=[],paid=0,total=0;
     tbl.rows.forEach(function(c){
       var o=(c[iO]||"").trim(); if(!o)return;
       var a=parseFloat(String(c[iA]||"").replace(/[^0-9.\-]/g,""))||0;
-      var s=(c[iS]||"").trim(); seen++;
-      var row={o:o,a:a,s:s};
-      if(pos[o]!=null){base[pos[o]]=row;updated++;}   // 同じ注文IDは上書き（決済状況の変化に追従）
-      else{pos[o]=base.length;base.push(row);added++;}
+      var s=(c[iS]||"").trim();
+      rows.push({o:o,a:a,s:s});
+      if(s==="決済済み"){paid++; total+=grossFromExport(a);}
     });
-    if(!seen)return {error:"注文のデータ行がありません"};
+    if(!rows.length)return {error:"注文のデータ行がありません"};
+    return {rows:rows,paid:paid,total:total};
+  }
+  function odApply(ev,ps,mode){
+    var base=(mode==="merge"&&Array.isArray(ev.orderRaw))?ev.orderRaw.slice():[];
+    var merged=base.length>0;
+    var cur=salesOf(ev), prevC=cur?cur.count:null, prevT=cur?cur.total:null;
+    var pos={};base.forEach(function(r,i){pos[r.o]=i;});
+    var added=0,updated=0;
+    ps.rows.forEach(function(row){
+      if(pos[row.o]!=null){base[pos[row.o]]=row;updated++;}   // 同じ注文IDは上書き（決済状況の変化に追従）
+      else{pos[row.o]=base.length;base.push(row);added++;}
+    });
     ev.orderRaw=base; ev.odAt=new Date().toISOString();
     var ns=salesOf(ev)||{total:0,count:0};
-    return {total:ns.total,count:ns.count,added:added,updated:updated,prev:prevC,prevT:prevT,merged:hasRaw};
+    return {total:ns.total,count:ns.count,added:added,updated:updated,prev:prevC,prevT:prevT,merged:merged};
   }
   function mapToArr(m){return Object.keys(m).map(function(k){return {k:k,v:m[k]};});}
   function parseTable(text){
