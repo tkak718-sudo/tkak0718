@@ -393,6 +393,8 @@
 
   var state = defaults();
   var route = {view:"home", eventId:null};
+  // データ分析は開いたときの初期表示を当月・日別にする（「全期間」でいつでも解除できる）
+  (function(){var r=monthRangeOf(new Date());route.rfrom=r.from;route.rto=r.to;route.rperiod="day";})();
   var editable = false;
 
   // ★タスク管理（ホーム画面）は編集モード不要＝誰でも編集できます
@@ -465,6 +467,11 @@
   function fmtStamp(iso){var d=new Date(iso);if(isNaN(d))return "";return (d.getMonth()+1)+"/"+d.getDate()+" "+pad2(d.getHours())+":"+pad2(d.getMinutes());}
   function wdayJ(ds){var d=new Date(ds+"T00:00:00");if(isNaN(d))return "";return "("+["日","月","火","水","木","金","土"][d.getDay()]+")";}
   function todayISO(){return new Date().toISOString().slice(0,10);}
+  // 当月の1日〜末日。UTCとの時差で月初がずれないようローカル日付から組み立てる。
+  function monthRangeOf(d){
+    var y=d.getFullYear(), m=d.getMonth();
+    return {from:y+"-"+pad2(m+1)+"-01", to:y+"-"+pad2(m+1)+"-"+pad2(new Date(y,m+1,0).getDate())};
+  }
   // タスク用
   function ensureProjects(){
     if(!Array.isArray(state.projects))state.projects=[];
@@ -983,6 +990,7 @@
     var period=route.rperiod||"month", from=route.rfrom||"", to=route.rto||"";
     var rs=reportSeries(evs,from,to,period);
     var avg=rs.tickets?rs.amount/rs.tickets:0;
+    var thisM=monthRangeOf(new Date());
 
     // 期間フィルタ
     var seg='<div class="seg">'+["day","week","month"].map(function(p){
@@ -994,6 +1002,7 @@
       '<span style="color:var(--muted);font-weight:700">〜</span>'+
       '<input class="dt-in" id="rTo" type="date" value="'+esc(to)+'">'+
       (from||to?'<button class="btn btn-sm" id="rAll">全期間</button>':'')+
+      (thisM.from===from&&thisM.to===to?'':'<button class="btn btn-sm" id="rThis">当月</button>')+
       '<span style="flex:1"></span>'+seg+'</div>';
 
     // 期間別の推移
@@ -1069,7 +1078,7 @@
 
   // ================= interactions =================
   document.addEventListener("click",function(e){
-    var t=e.target.closest("[data-go],[data-ev],[data-del],[data-import],[data-editev],[data-edittk],[data-editprice],[data-editsales],[data-editplayers],[data-period],[data-rperiod],#rAll,#addEvTop,#reorderEvTop,#addAnn,[data-anndel],[data-annedit],#addPrj,[data-addtask],[data-editprj],[data-delprj],[data-edittask],[data-deltask],[data-cycle]");
+    var t=e.target.closest("[data-go],[data-ev],[data-del],[data-import],[data-editev],[data-edittk],[data-editprice],[data-editsales],[data-editplayers],[data-period],[data-rperiod],#rAll,#rThis,#addEvTop,#reorderEvTop,#addAnn,[data-anndel],[data-annedit],#addPrj,[data-addtask],[data-editprj],[data-delprj],[data-edittask],[data-deltask],[data-cycle]");
     if(!t)return;
     // --- タスク管理（編集モード不要）---
     if(t.id==="addPrj"){addProjectModal();return;}
@@ -1083,6 +1092,7 @@
     // データ分析の粒度は route.period とは別に持つ（イベントページの売上推移と干渉させない）
     if(t.hasAttribute("data-rperiod")){route.rperiod=t.getAttribute("data-rperiod");render();return;}
     if(t.id==="rAll"){route.rfrom="";route.rto="";render();return;}
+    if(t.id==="rThis"){var mr=monthRangeOf(new Date());route.rfrom=mr.from;route.rto=mr.to;render();return;}
     if(t.hasAttribute("data-del")){e.stopPropagation();delEvent(t.getAttribute("data-del"));return;}
     if(t.hasAttribute("data-anndel")){delAnn(t.getAttribute("data-anndel"));return;}
     if(t.hasAttribute("data-annedit")){editAnnModal(t.getAttribute("data-annedit"));return;}
