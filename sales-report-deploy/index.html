@@ -413,10 +413,8 @@
   var VIEW_PASSWORD = "crowdbasket";   // ★閲覧パスワード（全員で共有）
   var EDIT_PASSWORD = "crowdbasketadmin"; // ★編集モードの管理パスワード（あなただけ）
 
-  // ★エクスポート補正：CSVの金額は「元売上−0.9%＋システム利用料330円」で書き出されているため、
-  //   決済1件ごとに元の総売上へ戻す（(金額−330)×(1+0.9%)＋330）。数値はここで調整可能。
-  var SYS_FEE  = 330;    // システム利用料（1決済あたり・円）
-  var FEE_RATE = 0.009;  // エクスポート時に控除される率（0.9%）
+  // 注文管理CSVの金額は販売手数料を引いたあとの入金額なので、補正せずそのまま集計する（＝純売上）。
+  var SYS_FEE  = 330;    // システム利用料（1枚あたり・円）。税込単価の設定の初期値に使う
 
   var state = defaults();
   var route = {view:"home", eventId:null};
@@ -529,7 +527,7 @@
     if(ev&&ev.orderRaw&&ev.orderRaw.length){
       var dm=ev.dateMap||{},total=0,count=0,day={};
       ev.orderRaw.forEach(function(r){
-        if(r.s!=="決済済み")return; var amt=grossFromExport(r.a); total+=amt; count++;
+        if(r.s!=="決済済み")return; var amt=+r.a||0; total+=amt; count++;
         var d=dm[r.o]||null; if(d){if(!day[d])day[d]={c:0,a:0};day[d].c++;day[d].a+=amt;}
       });
       var daily=Object.keys(day).sort().map(function(d){return {d:d,c:day[d].c,a:day[d].a};});
@@ -538,7 +536,6 @@
     return ev&&ev.sales?ev.sales:null;
   }
   function salesTotal(ev){var s=salesOf(ev);return s?(s.total||0):0;}
-  // CSVエクスポート金額 → 元の総売上（決済1件あたり）に戻す
   // ---------- 税込単価による金額算出 ----------
   // 単価は ev.pricing に商品名をキーにして持つ。ev.ticket は取込・手入力のたびに
   // 作り直されるため、その中には置かない（設定が消えてしまう）。
@@ -695,7 +692,6 @@
     return out;
   }
 
-  function grossFromExport(a){a=+a||0;if(a<=0)return a;return Math.round((a-SYS_FEE)*(1+FEE_RATE)+SYS_FEE);}
   // 日/週/月へ集計
   function groupSales(daily,period){
     daily=daily||[];
@@ -895,6 +891,8 @@
 
       // 売上推移
       var salEditBtn=editable?'<button class="btn btn-sm" data-editsales="'+ev.id+'">編集</button>':'';
+      // 注文管理CSVの金額は販売手数料を引いたあとの入金額なので、そのまま純売上として扱う
+      var salesNote='<div class="sb-meta" style="padding:12px 16px 4px;line-height:1.8">※ 販売手数料抜きの純売上です（注文管理CSVの金額をそのまま集計しています）。</div>';
       var salesPanel;
       if(sa&&sa.daily&&sa.daily.length){
         var g=groupSales(sa.daily,period);
@@ -907,9 +905,9 @@
         var seg='<div class="seg">'+["day","week","month"].map(function(p){var lb={day:"日別",week:"週別",month:"月別"}[p];return '<button class="seg-b'+(p===period?" on":"")+'" data-period="'+p+'">'+lb+'</button>';}).join("")+'</div>';
         salesPanel='<div class="panel"><div class="panel-h"><h3>売上推移（決済済み）</h3>'+hRight(seg+salEditBtn)+'</div>'+
           '<div class="tbl-wrap"><table><thead><tr><th>'+({day:"日",week:"週",month:"月"}[period])+'</th><th>売上</th><th>件数</th><th>金額</th></tr></thead><tbody>'+rows+
-          '</tbody><tfoot><tr><td>合計</td><td></td><td class="num">'+nf(cnt)+'</td><td class="num">'+yen(totalAmt)+'</td></tr></tfoot></table></div></div>';
+          '</tbody><tfoot><tr><td>合計</td><td></td><td class="num">'+nf(cnt)+'</td><td class="num">'+yen(totalAmt)+'</td></tr></tfoot></table></div>'+salesNote+'</div>';
       } else if(sa){
-        salesPanel='<div class="panel"><div class="panel-h"><h3>売上（決済済み）</h3>'+hRight('<span class="sub">合計 '+yen(totalAmt)+' / '+nf(cnt)+'件</span>'+salEditBtn)+'</div><div class="empty" style="padding:30px"><b>日別の内訳がありません</b><p>日・週・月別に分けるには「編集」で日別データを入力するか、「チケット管理」CSV（購入日を含む）も取り込んでください。</p></div></div>';
+        salesPanel='<div class="panel"><div class="panel-h"><h3>売上（決済済み）</h3>'+hRight('<span class="sub">合計 '+yen(totalAmt)+' / '+nf(cnt)+'件</span>'+salEditBtn)+'</div><div class="empty" style="padding:30px"><b>日別の内訳がありません</b><p>日・週・月別に分けるには「編集」で日別データを入力するか、「チケット管理」CSV（購入日を含む）も取り込んでください。</p></div>'+salesNote+'</div>';
       } else if(editable){
         salesPanel='<div class="panel"><div class="panel-h"><h3>売上推移（決済済み）</h3><button class="btn btn-sm" data-editsales="'+ev.id+'">＋ 手入力</button></div><div class="empty" style="padding:34px 20px"><b>売上データなし</b><p>「＋ 手入力」で日別の件数・金額を入力できます。CSV取込でも集計されます。</p></div></div>';
       } else {
@@ -991,7 +989,7 @@
         '<div class="ev-head"><div><h2 style="font-size:19px">'+esc(ev.name)+'</h2><div class="meta">'+(ev.date?fmtDate(ev.date):"日付未設定")+(ev.venue?" ・ "+esc(ev.venue):"")+'</div>'+
         ((ev.tkAt||ev.odAt||ev.plAt)?'<div class="meta" style="margin-top:2px;font-size:11.5px">最終取込 '+[ev.tkAt?'チケット '+fmtStamp(ev.tkAt):'',ev.odAt?'注文 '+fmtStamp(ev.odAt):'',ev.plAt?'選手 '+fmtStamp(ev.plAt):''].filter(Boolean).join(' / ')+'</div>':'')+'</div>'+
         (editable?'<div class="ev-actions"><button class="btn" data-editev="'+ev.id+'">編集</button><button class="btn btn-pri" data-import="'+ev.id+'">'+ic("chart")+' CSV・Excelを取込</button><button class="btn btn-danger" data-del="'+ev.id+'">削除</button></div>':'')+'</div>'+
-        '<div class="kpis">'+kpi("総売上金",yen(totalAmt),"yen","決済済み")+kpi("チケット枚数",nf(totalTk)+'<small>枚</small>',"ticket","販売済み")+kpi("平均単価",yen(avg),"chart","売上÷枚数")+kpi("決済件数",nf(cnt)+'<small>件</small>',"pipe","注文数")+'</div>'+
+        '<div class="kpis">'+kpi("純売上",yen(totalAmt),"yen","決済済み ・ 販売手数料抜き")+kpi("チケット枚数",nf(totalTk)+'<small>枚</small>',"ticket","販売済み")+kpi("平均単価",yen(avg),"chart","売上÷枚数")+kpi("決済件数",nf(cnt)+'<small>件</small>',"pipe","注文数")+'</div>'+
         salesPanel+
         '<div class="grid2" style="margin-top:16px">'+seatPanel+prodPanel+'</div>'+
         pricePanel+
@@ -1889,7 +1887,7 @@
       var a=parseFloat(String(c[iA]||"").replace(/[^0-9.\-]/g,""))||0;
       var s=(c[iS]||"").trim();
       rows.push({o:o,a:a,s:s});
-      if(s==="決済済み"){paid++; total+=grossFromExport(a);}
+      if(s==="決済済み"){paid++; total+=a;}
     });
     if(!rows.length)return {error:"注文のデータ行がありません"};
     return {rows:rows,paid:paid,total:total};
