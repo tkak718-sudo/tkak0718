@@ -953,7 +953,7 @@
       // 売上推移
       var salEditBtn=editable?'<button class="btn btn-sm" data-editsales="'+ev.id+'">編集</button>':'';
       // 注文管理CSVの金額は販売手数料を引いたあとの入金額なので、そのまま純売上として扱う
-      var salesNote='<div class="sb-meta" style="padding:12px 16px 4px;line-height:1.8">※ 販売手数料抜きの純売上です（注文管理CSVの金額をそのまま集計しています）。</div>';
+      var salesNote='<div class="sb-meta" style="padding:12px 16px 4px;line-height:1.8">※ 注文管理CSVの入金額をそのまま集計しています（販売手数料抜き）。上部の「純売上」と売上内訳は税込単価×枚数で出しているため、金額が一致しないことがあります。</div>';
       var salesPanel;
       if(sa&&sa.daily&&sa.daily.length){
         var g=groupSales(sa.daily,period);
@@ -1060,11 +1060,18 @@
         playerPanel='<div class="panel" style="margin-top:16px"><div class="panel-h"><h3>選手別 売上</h3>'+(editable?'<button class="btn btn-sm" data-editplayers="'+ev.id+'">＋ 手入力</button>':'')+'</div><div class="empty" style="padding:30px"><b>選手別データなし</b><p>'+(editable?'「＋ 手入力」で選手別（広告コード別）の数値を入力できます。「CSVを取込」でも自動集計されます。':'選手別データは未取込です。')+'</p></div></div>';
       }
 
+      // 一番上の金額は、税込単価から出した「チケット代」（売上内訳の合計）を正とする。
+      // 単価が未設定のイベントだけ、注文管理CSVの入金額を出す。
+      var usePb=pb.configured&&pb.amount>0;
+      var headAmt=usePb?pb.amount:totalAmt;
+      var headSub=usePb?"税込単価×枚数 ・ 販売手数料抜き":"決済済み ・ 販売手数料抜き";
+      var headAvg=totalTk?headAmt/totalTk:0;
+
       body=
         '<div class="ev-head"><div><h2 style="font-size:19px">'+esc(ev.name)+'</h2><div class="meta">'+(ev.date?fmtDate(ev.date):"日付未設定")+(ev.venue?" ・ "+esc(ev.venue):"")+'</div>'+
         ((ev.tkAt||ev.odAt||ev.plAt)?'<div class="meta" style="margin-top:2px;font-size:11.5px">最終取込 '+[ev.tkAt?'チケット '+fmtStamp(ev.tkAt):'',ev.odAt?'注文 '+fmtStamp(ev.odAt):'',ev.plAt?'選手 '+fmtStamp(ev.plAt):''].filter(Boolean).join(' / ')+'</div>':'')+'</div>'+
         (editable?'<div class="ev-actions"><button class="btn" data-editev="'+ev.id+'">編集</button><button class="btn btn-pri" data-import="'+ev.id+'">'+ic("chart")+' CSV・Excelを取込</button><button class="btn btn-danger" data-del="'+ev.id+'">削除</button></div>':'')+'</div>'+
-        '<div class="kpis">'+kpi("純売上",yen(totalAmt),"yen","決済済み ・ 販売手数料抜き")+kpi("チケット枚数",nf(totalTk)+'<small>枚</small>',"ticket","販売済み")+kpi("平均単価",yen(avg),"chart","売上÷枚数")+kpi("決済件数",nf(cnt)+'<small>件</small>',"pipe","注文数")+'</div>'+
+        '<div class="kpis">'+kpi("純売上",yen(headAmt),"yen",headSub)+kpi("チケット枚数",nf(totalTk)+'<small>枚</small>',"ticket","販売済み")+kpi("平均単価",yen(headAvg),"chart","売上÷枚数")+kpi("決済件数",nf(cnt)+'<small>件</small>',"pipe","注文数")+'</div>'+
         salesPanel+
         '<div class="grid2" style="margin-top:16px">'+seatPanel+prodPanel+'</div>'+
         pricePanel+
