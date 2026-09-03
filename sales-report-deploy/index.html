@@ -272,6 +272,8 @@
   .im-off{border:1px dashed var(--line);border-radius:10px;padding:11px 13px;color:var(--muted)}
   .im-off b{display:block;font-size:13.5px}
   .im-off span{display:block;font-size:11px;font-weight:600;margin-top:2px}
+  .im-list{margin-top:10px;border:1px dashed var(--line);border-radius:10px;padding:9px 11px;max-height:150px;overflow:auto;font-size:11.5px;font-weight:600;color:var(--muted);line-height:1.75}
+  .im-list b{color:var(--ink);display:block;margin-bottom:3px}
   .toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(20px);z-index:90;background:var(--ink);color:var(--bg);padding:11px 20px;border-radius:10px;font-size:13px;font-weight:700;box-shadow:var(--shadow-lg);opacity:0;transition:.25s;pointer-events:none;max-width:90vw;text-align:center}
   .toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
 
@@ -1697,16 +1699,32 @@
         if(!prevTk){done("replace");return;}
         var hasRaw=Array.isArray(ev.ticketRaw)&&ev.ticketRaw.length>0;
         var mgTotal=hasRaw?tkMerge(ev.ticketRaw,ps.fresh).rows.reduce(function(a,r){return a+r.n;},0):0;
-        // 追加した場合に「今回のファイルに無い既存の分」が何枚残るか。枚数が減らない原因になるので明示する。
-        var keep=0;
-        if(hasRaw)ev.ticketRaw.forEach(function(r){if(!ps.fresh[tkKey(r.o,r.p,r.s)])keep+=(r.n||0);});
+        // 「追加」で残ってしまう既存の分を洗い出す。7月分・8月分と分けて取り込む運用があるので、
+        // 今回のファイルと同じ期間のものだけを問題として並べ、別の期間の分は枚数だけ添える。
+        var dm0=(ev.dateMap&&typeof ev.dateMap==="object")?ev.dateMap:{};
+        var lo="",hi="";
+        Object.keys(ps.dates).forEach(function(k){var d=ps.dates[k];if(!lo||d<lo)lo=d;if(!hi||d>hi)hi=d;});
+        var inR=[],inN=0,outN=0,keep=0;
+        if(hasRaw)ev.ticketRaw.forEach(function(r){
+          if(ps.fresh[tkKey(r.o,r.p,r.s)])return;
+          var d=dm0[r.o]||"", n=r.n||0; keep+=n;
+          if(lo&&d&&d>=lo&&d<=hi){inR.push(r);inN+=n;} else outN+=n;
+        });
+        var leftList=inR.length?('<b>今回のファイルと同じ期間（'+esc(lo)+' 〜 '+esc(hi)+'）なのに、ファイルに無い '+nf(inN)+' 枚</b>'+
+          inR.slice(0,12).map(function(r){
+            return '注文 '+esc(r.o)+' ／ '+esc(String(r.p).slice(0,20))+' ／ '+esc(r.s)+' ／ '+nf(r.n)+' 枚'+
+              (dm0[r.o]?' ／ 購入 '+esc(dm0[r.o]):'');
+          }).join('<br>')+(inR.length>12?'<br>ほか '+nf(inR.length-12)+' 件':'')+
+          (outN?'<br>（別の期間の '+nf(outN)+' 枚は、追加してもそのまま残ります）':'')):"";
         askImportMode({
           title:"チケット管理を取り込みます",
           curMain:nf(prevTk)+" 枚", curSub:hasRaw?("購入日あり "+nf(tkDatedCount(ev))+" 枚"):"明細なし（購入日なし）",
           newMain:nf(ps.total)+" 枚", newSub:"購入日あり "+nf(ps.dated)+" 枚",
           canMerge:hasRaw, why:"既存データが明細を持たないため、重複を判定できません。置き換えてください。",
-          mergeSub:"合計 "+nf(mgTotal)+" 枚になります"+(keep?"（今回のファイルに無い既存 "+nf(keep)+" 枚も残ります）":"（同じ注文の重複は自動で除外）"),
-          repSub:"既存の "+nf(prevTk)+" 枚を消して "+nf(ps.total)+" 枚にします（税込単価の設定は残ります）"
+          mergeSub:"合計 "+nf(mgTotal)+" 枚になります"+(inN?"（同じ期間なのにファイルに無い "+nf(inN)+" 枚が残ります）"
+            :(keep?"（別の期間の既存 "+nf(keep)+" 枚はそのまま残ります）":"（同じ注文の重複は自動で除外）")),
+          repSub:"既存の "+nf(prevTk)+" 枚を消して "+nf(ps.total)+" 枚にします（税込単価の設定は残ります）",
+          list:leftList
         },done);
       }
       else if(kind==="order"){
@@ -1720,16 +1738,20 @@
         var cur2=salesOf(ev), prevOd=cur2?(cur2.total||0):0;
         if(!prevOd){done2("replace");return;}
         var hasOr=Array.isArray(ev.orderRaw)&&ev.orderRaw.length>0;
-        var keepOd=0;
+        var keepOd=0,leftOd=[];
         if(hasOr){var fo={};ps2.rows.forEach(function(r){fo[r.o]=1;});
-          ev.orderRaw.forEach(function(r){if(!fo[r.o]&&r.s==="決済済み")keepOd++;});}
+          ev.orderRaw.forEach(function(r){if(!fo[r.o]&&r.s==="決済済み"){keepOd++;leftOd.push(r);}});}
+        var odList=leftOd.length?('<b>今回のファイルに無い既存の決済済み（'+nf(keepOd)+' 件）— 「追加」だとこれが残ります</b>'+
+          leftOd.slice(0,12).map(function(r){return '注文ID '+esc(r.o)+' ／ '+yen(+r.a||0);}).join('<br>')+
+          (leftOd.length>12?'<br>ほか '+nf(leftOd.length-12)+' 件':'')):"";
         askImportMode({
           title:"注文管理を取り込みます",
           curMain:yen(prevOd), curSub:hasOr?("決済済み "+nf(cur2.count)+" 件"):"明細なし（手入力の集計）",
           newMain:yen(ps2.total), newSub:"決済済み "+nf(ps2.paid)+" 件",
           canMerge:hasOr, why:"既存データが明細を持たないため、同じ注文かどうかを判定できません。置き換えてください。",
           mergeSub:"同じ注文IDは今回の内容で更新し、無い注文を足します"+(keepOd?"（今回のファイルに無い既存 "+nf(keepOd)+" 件も残ります）":""),
-          repSub:"既存の売上データを消して、今回のファイルだけにします"
+          repSub:"既存の売上データを消して、今回のファイルだけにします",
+          list:odList
         },done2);
       }
       else if(kind==="player"){
@@ -1929,6 +1951,7 @@
       '<div class="im-box"><label>今回のファイル</label><b>'+esc(o.newMain)+'</b><span>'+esc(o.newSub)+'</span></div></div>'+
       '<div class="im-acts">'+merge+
       '<button type="button" class="btn '+(o.canMerge?'':'btn-pri ')+'im-b" id="imRep"><b>今回のファイルで置き換える</b><span>'+esc(o.repSub)+'</span></button></div>'+
+      (o.list?'<div class="im-list">'+o.list+'</div>':'')+
       '<div class="modal-act"><button class="btn" data-close>キャンセル</button></div>');
     var m=document.getElementById("imMerge"); if(m)m.onclick=function(){closeModal();cb("merge");};
     document.getElementById("imRep").onclick=function(){closeModal();cb("replace");};
