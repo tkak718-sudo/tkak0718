@@ -219,6 +219,10 @@
   .pav{width:26px;height:26px;border-radius:8px;display:grid;place-items:center;font-size:11px;font-weight:800;color:#fff;flex:none}
   tfoot td{padding:13px 14px;font-weight:800;border-top:2px solid var(--line);text-align:right;background:var(--panel-2)}
   tfoot td:first-child{text-align:left}
+  tfoot tr+tr td{border-top:1px solid var(--line)}
+  tfoot .ft-fee td{font-weight:700;color:var(--muted)}
+  tfoot .ft-all td{font-size:14.5px}
+  .ft-x{color:var(--faint);font-weight:600;font-size:11px;margin-left:6px}
   .share-bar{display:inline-block;height:6px;border-radius:4px;background:var(--brand);vertical-align:middle;margin-right:8px}
   .rate{font-weight:700}.rate.hi{color:var(--good)}.rate.mid{color:var(--warn)}.rate.lo{color:var(--muted)}
 
@@ -910,7 +914,6 @@
               '<td class="num"><b>'+(r.unit!=null?yen(r.amt):'—')+'</b></td></tr>';
           }).join("");
           var notes=[];
-          if(pb.fee>0)notes.push('システム利用料（参考）: '+nf(pb.tickets)+' 枚 × '+yen(pb.fee)+' ＝ <b>'+yen(pb.sysFee)+'</b> ／ 上記の合計には含みません');
           if(pb.advTo)notes.push('先行販売期間: '+(pb.advFrom?fmtDate(pb.advFrom):'（開始日なし）')+' 〜 '+fmtDate(pb.advTo));
           else notes.push('先行販売期間が未設定のため、購入日が分かる分はすべて通常販売として集計しています。');
           if(pb.unpriced)notes.push('<span style="color:var(--warn)">単価が未設定の商品・席タイプが '+nf(pb.unpriced)+' 枚あります（金額に含まれていません）。</span>');
@@ -919,7 +922,12 @@
           pricePanel='<div class="panel" style="margin-top:16px"><div class="panel-h"><h3>売上内訳（税込）</h3>'+
             hRight('<span class="sub">チケット代 '+yen(pb.amount)+'</span>'+prEditBtn)+'</div>'+
             '<div class="tbl-wrap"><table><thead><tr><th>商品・コーナー名</th><th>席タイプ</th><th>販売区分</th><th>枚数</th><th>税込単価</th><th>金額</th></tr></thead><tbody>'+prRows+
-            '</tbody><tfoot><tr><td>合計</td><td></td><td></td><td class="num">'+nf(pb.tickets)+'</td><td class="num">—</td><td class="num">'+yen(pb.amount)+'</td></tr></tfoot></table></div>'+
+            '</tbody><tfoot><tr><td>'+(pb.sysFee>0?'チケット代':'合計')+'</td><td></td><td></td><td class="num">'+nf(pb.tickets)+'</td><td class="num">—</td><td class="num">'+yen(pb.amount)+'</td></tr>'+
+            (pb.sysFee>0
+              ? '<tr class="ft-fee"><td>システム利用料<span class="ft-x">'+nf(pb.tickets)+' 枚分</span></td><td></td><td></td><td class="num"></td><td class="num">'+yen(pb.fee)+'</td><td class="num">'+yen(pb.sysFee)+'</td></tr>'+
+                '<tr class="ft-all"><td>合計（システム利用料込）</td><td></td><td></td><td class="num"></td><td class="num"></td><td class="num">'+yen(pb.amount+pb.sysFee)+'</td></tr>'
+              : '')+
+            '</tfoot></table></div>'+
             '<div class="sb-meta" style="padding:12px 16px 4px;line-height:1.8">※ '+notes.join('<br>※ ')+'</div></div>';
         }else if(editable){
           pricePanel='<div class="panel" style="margin-top:16px"><div class="panel-h"><h3>売上内訳（税込）</h3><button class="btn btn-sm" data-editprice="'+ev.id+'">＋ 単価を設定</button></div>'+
@@ -1036,7 +1044,6 @@
       if(rs.undated.n&&!rs.filtered)rows+='<tr><td><span class="chip ph-unk">期間不明</span></td><td></td>'+
         '<td class="num">'+nf(rs.undated.n)+'</td><td class="num"><b>'+yen(rs.undated.amt)+'</b></td></tr>';
       var notes=[];
-      if(rs.sysFee>0)notes.push('システム利用料（参考）: '+nf(rs.tickets)+' 枚'+(rs.oneFee!=null?' × '+yen(rs.oneFee):'')+' ＝ <b>'+yen(rs.sysFee)+'</b> ／ 上記の合計には含みません');
       if(rs.minDate)notes.push('購入日のあるデータの範囲: '+fmtDate(rs.minDate)+' 〜 '+fmtDate(rs.maxDate));
       if(rs.undated.n)notes.push('<span style="color:var(--warn)">購入日が不明なチケットが '+nf(rs.undated.n)+' 枚あります'
         +(rs.filtered?'（期間で絞り込めないため、選択期間の集計には含めていません。「全期間」で確認できます）。':'（期間で絞り込めないため「期間不明」に計上）。')+'</span>');
@@ -1045,7 +1052,12 @@
       trend='<div class="panel"><div class="panel-h"><h3>期間別の推移</h3>'+
         hRight('<span class="sub">'+({day:"日別",week:"週別",month:"月別"}[period])+' ・ 税込単価×枚数</span>')+'</div>'+
         '<div class="tbl-wrap"><table><thead><tr><th>'+({day:"日",week:"週",month:"月"}[period])+'</th><th>税込金額</th><th>枚数</th><th>金額</th></tr></thead><tbody>'+rows+
-        '</tbody><tfoot><tr><td>合計</td><td></td><td class="num">'+nf(rs.tickets)+'</td><td class="num">'+yen(rs.amount)+'</td></tr></tfoot></table></div>'+
+        '</tbody><tfoot><tr><td>'+(rs.sysFee>0?'チケット代':'合計')+'</td><td></td><td class="num">'+nf(rs.tickets)+'</td><td class="num">'+yen(rs.amount)+'</td></tr>'+
+        (rs.sysFee>0
+          ? '<tr class="ft-fee"><td>システム利用料<span class="ft-x">'+nf(rs.tickets)+' 枚'+(rs.oneFee!=null?' × '+yen(rs.oneFee):'')+'</span></td><td></td><td class="num"></td><td class="num">'+yen(rs.sysFee)+'</td></tr>'+
+            '<tr class="ft-all"><td>合計（システム利用料込）</td><td></td><td class="num"></td><td class="num">'+yen(rs.amount+rs.sysFee)+'</td></tr>'
+          : '')+
+        '</tfoot></table></div>'+
         (notes.length?'<div class="sb-meta" style="padding:12px 16px 4px;line-height:1.8">※ '+notes.join('<br>※ ')+'</div>':'')+'</div>';
     }else{
       trend=cardEmpty("集計できるデータがありません",
