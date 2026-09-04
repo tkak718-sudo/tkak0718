@@ -265,7 +265,9 @@
   tbody td{padding:12px 14px;border-bottom:1px solid var(--line-soft);text-align:right;white-space:nowrap}
   tbody tr:hover{background:var(--panel-2)}tbody tr:last-child td{border-bottom:none}
   .pname{font-weight:700;display:flex;align-items:center;gap:10px;max-width:360px}
-  .pname .pnm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+  .pnm{display:inline-block;vertical-align:bottom;max-width:clamp(220px,34vw,560px);
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+  .pname .pnm{max-width:none}
   .pav{width:26px;height:26px;border-radius:8px;display:grid;place-items:center;font-size:11px;font-weight:800;color:#fff;flex:none}
   tfoot td{padding:13px 14px;font-weight:800;border-top:2px solid var(--line);text-align:right;background:var(--panel-2)}
   tfoot td:first-child{text-align:left}
@@ -1054,7 +1056,7 @@
         if(pb.configured){
           var prRows=pb.rows.map(function(r){
             var pnm=r.p||"—";
-            return '<tr><td><span class="pnm" title="'+esc(pnm)+'" style="display:inline-block;max-width:260px;vertical-align:bottom">'+esc(pnm)+'</span></td>'+
+            return '<tr><td><span class="pnm" title="'+esc(pnm)+'">'+esc(pnm)+'</span></td>'+
               '<td>'+esc(r.s||SEAT_NONE)+'</td>'+
               '<td><span class="chip '+PHASE_CLASS[r.phase]+'">'+PHASE_LABEL[r.phase]+'</span></td>'+
               '<td class="num">'+nf(r.n)+'</td>'+
@@ -1245,7 +1247,7 @@
     if(rs.byEvent.length){
       var eTrs=rs.byEvent.map(function(e){
         var share=rs.amount?e.amt/rs.amount*100:0;
-        return '<tr><td><span class="pnm" title="'+esc(e.name)+'" style="display:inline-block;max-width:300px;vertical-align:bottom">'+esc(e.name)+'</span></td>'+
+        return '<tr><td><span class="pnm" title="'+esc(e.name)+'">'+esc(e.name)+'</span></td>'+
           '<td class="num">'+nf(e.n)+'</td><td class="num"><b>'+yen(e.amt)+'</b></td>'+
           '<td class="num">'+(rs.amount?share.toFixed(1)+'%':'—')+'</td></tr>';
       }).join("");
