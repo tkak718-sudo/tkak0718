@@ -277,6 +277,8 @@
   .bar-day{font-size:10px; color:var(--text-faint); font-family:"JetBrains Mono",monospace;}
   .an-nodata{padding:24px; text-align:center; color:var(--text-faint); font-size:13px;}
   .page-header h1{font-size:27px; margin:0 0 4px 0; font-weight:800; letter-spacing:-0.01em;}
+  /* ホームの挨拶文だけは見出しとして大きすぎるため、個別に小さくする */
+  #home-greeting{font-size:15px; font-weight:700; letter-spacing:normal;}
   .page-header p{margin:0; color:var(--text-secondary); font-size:13px;}
 
   /* ---------- Home widgets ---------- */
@@ -2726,7 +2728,7 @@ function tickSave(){
 const DOC_LIMIT = 1048576;
 
 /* どの版が動いているかを画面から確かめられるようにする */
-const BUILD_ID = '2026-09-04f';
+const BUILD_ID = '2026-09-05';
 /* 直近の保存結果と、サーバーから受け取った内容の素性。診断画面で見せる */
 let lastWriteInfo = 'まだ保存していません';
 let lastServerInfo = 'まだ受信していません';
