@@ -90,13 +90,21 @@
   .brand .sub{display:block;font-size:11px;font-weight:700;color:var(--muted);margin:7px 0 0 2px;letter-spacing:.02em}
   .nav{margin-top:14px;overflow:auto;flex:1;display:flex;flex-direction:column;gap:2px}
   .nav::-webkit-scrollbar{width:8px}.nav::-webkit-scrollbar-thumb{background:var(--line);border-radius:8px}
-  .nav-cap{font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);font-weight:800;padding:16px 10px 6px;display:flex;justify-content:space-between;align-items:center}
+  .nav-cap{font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--faint);font-weight:800;padding:18px 10px 8px;display:flex;gap:9px;align-items:center}
+  .nav-cap .cap-t{flex:none}
+  .nav-cap .cap-line{flex:1;height:1px;background:linear-gradient(90deg,var(--line),transparent);border-radius:1px}
+  .nav-cap .cap-acts{flex:none;display:flex;gap:2px}
   .nav-cap .add{cursor:pointer;color:var(--muted);font-size:15px;line-height:1;border:none;background:none;padding:2px 5px;border-radius:6px}
   .nav-cap .add:hover{background:var(--brand-soft);color:var(--brand-deep)}
   .navitem{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:var(--radius-sm);color:var(--ink);cursor:pointer;border:none;background:none;width:100%;text-align:left;font-size:13.5px;font-weight:600;position:relative}
   .navitem:hover{background:var(--panel-2)}
   .navent{display:flex;align-items:center;gap:10px;flex:1;min-width:0}
+  .navent:has(.ic.tile){gap:8px}
   .navitem .ic,.navent .ic{width:18px;flex:none;color:var(--muted);display:grid;place-items:center}
+  .navent .ic.tile{width:23px;height:23px;border-radius:7px;background:var(--brand-soft);color:var(--brand-deep);
+    box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--brand) 18%,transparent);transition:background .15s,color .15s,box-shadow .15s}
+  .navitem:hover .ic.tile{background:color-mix(in srgb,var(--brand) 16%,var(--brand-soft))}
+  .navitem.on .ic.tile{background:var(--grad);color:#fff;box-shadow:0 2px 7px color-mix(in srgb,var(--brand) 42%,transparent)}
   .navitem.on,.navitem.on:hover{background:var(--brand-soft);color:var(--brand-ink)}
   .navitem.on .ic{color:var(--brand-deep)}
   .navlabel{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -474,18 +482,19 @@
   var ST_CLS   = {"未着手":"st-todo","進行中":"st-doing","完了":"st-done"};
 
   // ---------- icons ----------
-  function ic(name){
+  function ic(name,size){
     var p={
       home:'<path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/>',
       report:'<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
-      ticket:'<path d="M3 8a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2 2 2 0 0 0 0 4 2 2 0 0 1-2 2H5a2 2 0 0 1-2-2 2 2 0 0 0 0-4Z"/><path d="M15 6v12"/>',
+      ticket:'<path d="M3.5 9.2V7.6A1.6 1.6 0 0 1 5.1 6h13.8a1.6 1.6 0 0 1 1.6 1.6v1.6a2.8 2.8 0 0 0 0 5.6v1.6a1.6 1.6 0 0 1-1.6 1.6H5.1a1.6 1.6 0 0 1-1.6-1.6v-1.6a2.8 2.8 0 0 0 0-5.6Z"/><path d="M14 8.1v1.6M14 11.2v1.6M14 14.3v1.6"/>',
       yen:'<path d="M7 4l5 7 5-7M12 11v9M8 14h8M8 17h8"/>',
       bell:'<path d="M18 9a6 6 0 1 0-12 0c0 6-2 7-2 7h16s-2-1-2-7"/><path d="M10.3 20a2 2 0 0 0 3.4 0"/>',
       chart:'<path d="M21 21H4a1 1 0 0 1-1-1V3"/><path d="M7 14l3-4 3 3 4-6"/>',
       users:'<circle cx="9" cy="8" r="3.2"/><path d="M3.5 20a5.5 5.5 0 0 1 11 0"/><path d="M16 5.2a3.2 3.2 0 0 1 0 6.1M17 20a5.5 5.5 0 0 0-3-4.9"/>',
       pipe:'<path d="M4 6h16M4 12h16M4 18h10"/>'
     };
-    return '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">'+(p[name]||'')+'</svg>';
+    var sz=size||17;
+    return '<svg width="'+sz+'" height="'+sz+'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">'+(p[name]||'')+'</svg>';
   }
 
   // ---------- seed / defaults ----------
@@ -871,13 +880,13 @@
     var nav=document.getElementById("nav");
     var evs=state.events.map(function(ev){
       var on=(route.view==="pipeline"&&route.eventId===ev.id);
-      return '<button class="navitem'+(on?' on':'')+'" data-ev="'+ev.id+'"><span class="navent"><span class="ic">'+ic("ticket")+'</span><span class="navlabel">'+esc(ev.name)+'</span></span><span class="badge num">'+nf(ticketTotal(ev))+'</span>'+(editable?'<button class="ev-del" data-del="'+ev.id+'" title="削除">×</button>':'')+'</button>';
+      return '<button class="navitem'+(on?' on':'')+'" data-ev="'+ev.id+'"><span class="navent"><span class="ic tile">'+ic("ticket",14)+'</span><span class="navlabel">'+esc(ev.name)+'</span></span><span class="badge num">'+nf(ticketTotal(ev))+'</span>'+(editable?'<button class="ev-del" data-del="'+ev.id+'" title="削除">×</button>':'')+'</button>';
     }).join("");
     nav.innerHTML=
       '<button class="navitem'+(route.view==="home"?' on':'')+'" data-go="home"><span class="ic">'+ic("home")+'</span><span class="navlabel">ホーム</span></button>'+
-      '<div class="nav-cap">Event'+(editable?'<span style="display:flex;gap:2px"><button class="add" id="reorderEvTop" title="並び替え">⇅</button><button class="add" id="addEvTop" title="イベント追加">＋</button></span>':'')+'</div>'+
+      '<div class="nav-cap"><span class="cap-t">Event</span><i class="cap-line"></i>'+(editable?'<span class="cap-acts"><button class="add" id="reorderEvTop" title="並び替え">⇅</button><button class="add" id="addEvTop" title="イベント追加">＋</button></span>':'')+'</div>'+
       (evs||'<div class="sb-meta" style="padding:2px 10px">イベント未登録</div>')+
-      '<div class="nav-cap">レポート</div>'+
+      '<div class="nav-cap"><span class="cap-t">Report</span><i class="cap-line"></i></div>'+
       '<button class="navitem'+(route.view==="report"?' on':'')+'" data-go="report"><span class="ic">'+ic("report")+'</span><span class="navlabel">データ分析</span></button>';
   }
 
