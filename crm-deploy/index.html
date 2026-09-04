@@ -125,29 +125,37 @@
   /* パイプライン欄の各項目にだけ付ける、色付きのアイコンバッジ。既存のsvgをそのまま包む */
   .nav-icon-badge{
     display:flex; align-items:center; justify-content:center;
-    width:21px; height:21px; border-radius:6px; flex-shrink:0;
+    width:19px; height:19px; border-radius:6px; flex-shrink:0;
   }
-  .nav-item .nav-icon-badge svg{width:13px; height:13px; opacity:1;}
+  .nav-item .nav-icon-badge svg{width:12px; height:12px; opacity:1;}
   .nav-icon-contacts{background:#E0E7FF; color:#6366F1;}
   .nav-icon-clients{background:#CCFBF1; color:#0D9488;}
   .nav-icon-deals{background:#FEF3C7; color:#D97706;}
   .nav-count{
     margin-left:auto; font-size:10.5px; font-weight:700;
     background:#DCEAFE; color:#1D4ED8;
-    padding:1px 7px; border-radius:20px; font-family:"JetBrains Mono",monospace;
+    padding:1px 6px; border-radius:20px; font-family:"JetBrains Mono",monospace;
   }
   .nav-item.active .nav-count{background:#BFDBFE; color:#1E3A8A;}
+  /* セクション見出し（「パイプライン」「レポート」）の右側に、参考画像のような
+     区切り線を伸ばす。テキストの後ろの余白を線で埋めるだけなのでHTMLの変更は不要 */
   .nav-section-label{
+    display:flex; align-items:center; gap:8px;
     font-size:10.5px; text-transform:uppercase; letter-spacing:0.08em;
     color:var(--text-faint); padding:14px 12px 6px 12px; font-weight:600;
   }
-  /* パイプライン欄の3項目だけ、上下の余白をゆったりさせる（横幅はサイドバーが
-     232px と狭いため、ラベルが折り返さない範囲にとどめる） */
+  .nav-section-label::after{
+    content:""; flex:1; height:1px; background:var(--border);
+  }
+  /* パイプライン欄の3項目だけ、参考画像に合わせて文字を太く・行間をゆったりさせる
+     （横幅はサイドバーが232pxと狭いため、ラベルが折り返さない範囲にとどめる） */
   .nav-item--pipeline{
-    padding:13px 10px;
-    gap:8px;
-    margin-bottom:5px;
-    line-height:1.4;
+    padding:14px 9px;
+    gap:7px;
+    margin-bottom:7px;
+    line-height:1.45;
+    font-weight:700;
+    font-size:13px;
   }
   .sidebar-footer{
     padding:12px 14px; border-top:1px solid var(--border);
@@ -2718,7 +2726,7 @@ function tickSave(){
 const DOC_LIMIT = 1048576;
 
 /* どの版が動いているかを画面から確かめられるようにする */
-const BUILD_ID = '2026-09-04c';
+const BUILD_ID = '2026-09-04d';
 /* 直近の保存結果と、サーバーから受け取った内容の素性。診断画面で見せる */
 let lastWriteInfo = 'まだ保存していません';
 let lastServerInfo = 'まだ受信していません';
