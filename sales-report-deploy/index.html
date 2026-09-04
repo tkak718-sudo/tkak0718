@@ -161,6 +161,8 @@
   .btn:hover{border-color:var(--brand);color:var(--brand-deep)}
   .btn-pri{background:var(--grad);border-color:transparent;color:#fff;box-shadow:0 2px 10px rgba(19,196,107,.28)}
   .btn-pri:hover{background:var(--brand-deep);border-color:var(--brand-deep);color:#fff}
+  .btn-soft{background:var(--brand-soft);color:var(--brand-deep);border-color:color-mix(in srgb,var(--brand) 34%,transparent);font-weight:800}
+  .btn-soft:hover{background:var(--grad);border-color:transparent;color:#fff;box-shadow:0 2px 9px rgba(19,196,107,.3)}
   .btn-danger{border:1px solid var(--line);background:var(--panel-2);color:var(--crit)}
   .btn-danger:hover{background:var(--crit);border-color:var(--crit);color:#fff}
   .btn-sm{padding:6px 10px;font-size:11.5px}
@@ -340,6 +342,14 @@
   .modal textarea{resize:vertical;min-height:70px}
   .modal input:focus,.modal textarea:focus,.modal select:focus{outline:2px solid var(--brand);outline-offset:1px;border-color:transparent}
   .modal-act{display:flex;gap:10px;justify-content:flex-end;margin-top:20px}
+  .cf-body{margin-top:12px}
+  .cf-nm{margin:0;padding:11px 14px;border-radius:10px;background:var(--panel-2);border:1px solid var(--line);
+    font-weight:800;font-size:13.5px;word-break:break-word}
+  .cf-tx{margin:12px 0 0;color:var(--muted);font-size:12.5px;line-height:1.8}
+  .cf-tx b{color:var(--ink)}
+  .cf-tx.warn{color:var(--crit);font-weight:700}
+  .modal-act .btn-danger{background:var(--crit);border-color:var(--crit);color:#fff}
+  .modal-act .btn-danger:hover{filter:brightness(.92)}
   /* 取込モードの確認（追加 / 置き換え） */
   .im-cmp{display:flex;align-items:center;gap:10px;margin:12px 0 14px}
   .im-box{flex:1;border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--panel-2)}
@@ -986,7 +996,7 @@
     return '<div class="prj"><div class="prj-h"><h4 data-editprj="'+p.id+'" title="クリックで案件名を編集">'+esc(p.name)+'</h4>'+
       '<span class="badge num">未完了 '+nf(open)+' / '+nf(ts.length)+'</span>'+
       '<span class="prj-acts">'+
-        '<button class="btn btn-sm" data-addtask="'+p.id+'">＋ タスク登録</button>'+
+        '<button class="btn btn-sm btn-soft" data-addtask="'+p.id+'">＋ タスク登録</button>'+
         '<button class="iconbtn dgr" data-delprj="'+p.id+'" title="案件を削除">'+ic("close",13)+'</button>'+
       '</span></div>'+rows+'</div>';
   }
@@ -1385,11 +1395,26 @@
       closeModal();commit();toast("保存しました");
     };
   }
+  // 消してしまうと戻せないので、案件・タスクの削除は必ずこのモーダルを一枚はさむ
+  function confirmDanger(title,bodyHTML,okLabel,onOk){
+    openModal('<h3>'+esc(title)+'</h3><div class="cf-body">'+bodyHTML+'</div>'+
+      '<div class="modal-act"><button class="btn" data-close>キャンセル</button>'+
+      '<button class="btn btn-danger" id="cf_ok">'+esc(okLabel)+'</button></div>',
+      function(){document.getElementById("cf_ok").focus();});
+    document.getElementById("cf_ok").onclick=function(){closeModal();onOk();};
+  }
   function delProject(id){
     var p=findPrj(id);if(!p)return;
-    if(!confirm("案件「"+p.name+"」を削除しますか？\n中のタスク"+p.tasks.length+"件もすべて削除されます。"))return;
-    state.projects=state.projects.filter(function(x){return x.id!==id;});
-    commit();toast("案件を削除しました");
+    var n=p.tasks.length;
+    confirmDanger("案件を削除しますか？",
+      '<p class="cf-nm">'+esc(p.name)+'</p>'+
+      '<p class="cf-tx">'+(n?'この案件と、中の<b>タスク '+nf(n)+' 件</b>がすべて削除されます。':'この案件を削除します。')+'</p>'+
+      '<p class="cf-tx warn">削除すると元に戻せません。全員の画面から消えます。</p>',
+      "削除する",
+      function(){
+        state.projects=state.projects.filter(function(x){return x.id!==id;});
+        commit();toast("案件を削除しました");
+      });
   }
   function taskModal(pid,tid){
     var p=findPrj(pid);if(!p)return;
@@ -1427,9 +1452,14 @@
   }
   function delTask(pid,tid){
     var p=findPrj(pid),t=findTask(pid,tid);if(!p||!t)return;
-    if(!confirm("タスク「"+t.title+"」を削除しますか？"))return;
-    p.tasks=p.tasks.filter(function(x){return x.id!==tid;});
-    commit();toast("タスクを削除しました");
+    confirmDanger("タスクを削除しますか？",
+      '<p class="cf-nm">'+esc(t.title)+'</p>'+
+      '<p class="cf-tx warn">削除すると元に戻せません。全員の画面から消えます。</p>',
+      "削除する",
+      function(){
+        p.tasks=p.tasks.filter(function(x){return x.id!==tid;});
+        commit();toast("タスクを削除しました");
+      });
   }
   function cycleStatus(pid,tid){
     var t=findTask(pid,tid);if(!t)return;
