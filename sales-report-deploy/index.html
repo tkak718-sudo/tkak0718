@@ -175,18 +175,29 @@
   /* ---- タスク管理（案件別・全員編集可） ---- */
   .sec-h{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:22px 0 12px}
   .sec-h h3{font-size:15px;display:flex;align-items:center;gap:8px}
-  .prj{border:1px solid var(--line);border-radius:var(--radius);background:var(--panel);box-shadow:var(--shadow);margin-bottom:14px;overflow:hidden}
-  .prj-h{display:flex;align-items:center;gap:10px;padding:13px 16px;border-bottom:1px solid var(--line-soft);background:var(--panel-2);flex-wrap:wrap}
-  .prj-h h4{font-size:14.5px;flex:1;min-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .prj{border:1px solid var(--line);border-radius:18px;background:var(--panel);box-shadow:0 3px 14px rgba(18,34,54,.07);margin-bottom:18px;overflow:hidden}
+  .prj-h{display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--line);
+    background:linear-gradient(90deg,var(--brand-soft),var(--brand-soft2));flex-wrap:wrap}
+  /* 案件名はクリックで編集（ペンのボタンは置かない） */
+  .prj-h h4{font-size:15px;font-weight:800;flex:1;min-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+    cursor:pointer;border-radius:6px;padding:2px 4px;margin:-2px -4px}
+  .prj-h h4:hover{background:color-mix(in srgb,var(--brand) 14%,transparent)}
   .prj-acts{display:flex;gap:6px;flex:none;align-items:center}
   .iconbtn{border:1px solid var(--line);background:var(--panel);color:var(--muted);width:30px;height:30px;border-radius:8px;cursor:pointer;font-size:13px;line-height:1;flex:none}
   .iconbtn:hover{border-color:var(--brand);color:var(--brand-deep)}
   .iconbtn.dgr:hover{background:var(--crit);border-color:var(--crit);color:#fff}
-  .tsk{display:flex;gap:12px;padding:13px 16px;border-bottom:1px solid var(--line-soft);align-items:flex-start}
+  .tsk{display:flex;gap:12px;padding:14px 18px;border-bottom:1px solid var(--line-soft);align-items:flex-start;cursor:pointer}
+  .tsk:hover{background:var(--brand-soft2)}
   .tsk:last-child{border-bottom:none}
-  .tsk:hover{background:var(--panel-2)}
   .tsk-main{flex:1;min-width:0}
-  .tsk-t{font-weight:700;font-size:13.5px;word-break:break-word}
+  .tsk-head{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+  .tsk-t{font-weight:700;font-size:14px;word-break:break-word}
+  /* 状態・担当は件名の隣で目立たせる */
+  .chip.big{font-size:11.5px;padding:4px 12px;font-weight:800;border-color:color-mix(in srgb,currentColor 28%,transparent);justify-content:center;flex:none}
+  .tsk-head>.chip.big:first-child{min-width:72px}
+  .tsk-head>.chip.big:nth-child(2){min-width:128px}
+  .chip.big[data-cycle]{cursor:pointer}
+  .chip.big[data-cycle]:hover{filter:brightness(.96)}
   .tsk.done .tsk-t{text-decoration:line-through;color:var(--faint)}
   .tsk-d{margin:5px 0 0;color:var(--muted);font-size:12.5px;white-space:pre-wrap;word-break:break-word}
   .tsk-meta{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px}
@@ -903,28 +914,27 @@
     var rows=ts.length
       ? ts.map(function(t){return taskHTML(p,t);}).join("")
       : '<div class="empty" style="padding:26px 16px"><b>タスクはありません</b><p>「＋ タスク登録」から追加できます。</p></div>';
-    return '<div class="prj"><div class="prj-h"><h4>'+esc(p.name)+'</h4>'+
+    return '<div class="prj"><div class="prj-h"><h4 data-editprj="'+p.id+'" title="クリックで案件名を編集">'+esc(p.name)+'</h4>'+
       '<span class="badge num">未完了 '+nf(open)+' / '+nf(ts.length)+'</span>'+
       '<span class="prj-acts">'+
         '<button class="btn btn-sm" data-addtask="'+p.id+'">＋ タスク登録</button>'+
-        '<button class="iconbtn" data-editprj="'+p.id+'" title="案件名を編集">✎</button>'+
         '<button class="iconbtn dgr" data-delprj="'+p.id+'" title="案件を削除">×</button>'+
       '</span></div>'+rows+'</div>';
   }
   function taskHTML(p,t){
     var key=p.id+":"+t.id, sch=schLabel(t);
-    return '<div class="tsk'+(t.status==="完了"?" done":"")+'">'+
+    // 行のどこを押しても編集。状態チップと削除ボタンは closest が先に拾うので誤爆しない
+    return '<div class="tsk'+(t.status==="完了"?" done":"")+'" data-edittask="'+key+'" title="クリックで編集">'+
       '<div class="tsk-main">'+
-        '<div class="tsk-t">'+esc(t.title)+'</div>'+
-        (t.detail?'<p class="tsk-d">'+esc(t.detail)+'</p>':'')+
-        '<div class="tsk-meta">'+
-          '<button class="chip '+(ST_CLS[t.status]||"st-todo")+'" data-cycle="'+key+'" title="クリックで状態を切り替え">'+esc(t.status||"未着手")+'</button>'+
-          '<span class="chip '+(OWNER_CLS[t.owner]||"st-todo")+'">'+esc(t.owner||"担当未設定")+'</span>'+
-          (sch?'<span class="sch'+(isOverdue(t)?" over":"")+'">'+esc(sch)+(isOverdue(t)?" ・ 期限超過":"")+'</span>':'')+
+        '<div class="tsk-head">'+
+          '<button class="chip big '+(ST_CLS[t.status]||"st-todo")+'" data-cycle="'+key+'" title="クリックで状態を切り替え">'+esc(t.status||"未着手")+'</button>'+
+          '<span class="chip big '+(OWNER_CLS[t.owner]||"st-todo")+'">'+esc(t.owner||"担当未設定")+'</span>'+
+          '<span class="tsk-t">'+esc(t.title)+'</span>'+
         '</div>'+
+        (t.detail?'<p class="tsk-d">'+esc(t.detail)+'</p>':'')+
+        (sch?'<div class="tsk-meta"><span class="sch'+(isOverdue(t)?" over":"")+'">'+esc(sch)+(isOverdue(t)?" ・ 期限超過":"")+'</span></div>':'')+
       '</div>'+
       '<span class="prj-acts">'+
-        '<button class="iconbtn" data-edittask="'+key+'" title="編集">✎</button>'+
         '<button class="iconbtn dgr" data-deltask="'+key+'" title="削除">×</button>'+
       '</span></div>';
   }
