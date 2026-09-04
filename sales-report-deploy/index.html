@@ -132,7 +132,7 @@
   .theme-btn{border:1px solid var(--line);background:var(--panel);color:var(--muted);width:34px;height:34px;border-radius:9px;cursor:pointer;display:grid;place-items:center}
   .theme-btn:hover{color:var(--brand-deep);border-color:var(--brand)}
   .content{padding:26px 30px 60px;max-width:1180px;width:100%}
-  .greet h2,.ev-head h2{font-size:23px;font-weight:900;letter-spacing:-.01em;display:inline-block;padding:0 5px;margin-left:-5px;
+  .greet h2,.ev-head h2{font-size:25px;font-weight:900;letter-spacing:-.01em;display:inline-block;padding:0 5px;margin-left:-5px;
     background:linear-gradient(transparent 50%,rgba(67,242,111,.45) 50%,rgba(67,242,111,.45) 88%,transparent 88%)}
   .greet p{color:var(--muted);margin:5px 0 0;font-size:13px}
   /* 暗い背景では蛍光ペンが強すぎるので、ブランドのティールで薄く敷く */
@@ -315,6 +315,10 @@
 
   .modal.wide{max-width:640px}
   .modal-scroll{max-height:56vh;overflow:auto;margin:8px -4px 0;padding:2px 4px}
+  .modal-scroll.tall{max-height:none}
+  .modal textarea.ta-lg{min-height:210px;line-height:1.7}
+  .modal .f2{display:grid;grid-template-columns:1fr 1fr;gap:0 14px}
+  @media(max-width:560px){.modal .f2{grid-template-columns:1fr}.modal textarea.ta-lg{min-height:150px}}
   .modal>.modal-scroll{flex:1 1 auto;min-height:90px}
   .led-row{display:flex;gap:8px;align-items:center;margin-bottom:8px}
   .led-i{flex:1;min-width:0;padding:9px 11px;border:1px solid var(--line);border-radius:8px;background:var(--panel-2);color:var(--ink);font-size:13.5px;font-family:inherit}
@@ -1110,7 +1114,7 @@
       var headAvg=totalTk?headAmt/totalTk:0;
 
       body=
-        '<div class="ev-head"><div><h2 style="font-size:19px">'+esc(ev.name)+'</h2><div class="meta">'+(ev.date?fmtDate(ev.date):"日付未設定")+(ev.venue?" ・ "+esc(ev.venue):"")+'</div>'+
+        '<div class="ev-head"><div><h2>'+esc(ev.name)+'</h2><div class="meta">'+(ev.date?fmtDate(ev.date):"日付未設定")+(ev.venue?" ・ "+esc(ev.venue):"")+'</div>'+
         ((ev.tkAt||ev.odAt||ev.plAt)?'<div class="meta" style="margin-top:2px;font-size:11.5px">最終取込 '+[ev.tkAt?'チケット '+fmtStamp(ev.tkAt):'',ev.odAt?'注文 '+fmtStamp(ev.odAt):'',ev.plAt?'選手 '+fmtStamp(ev.plAt):''].filter(Boolean).join(' / ')+'</div>':'')+'</div>'+
         (editable?'<div class="ev-actions"><button class="btn" data-editev="'+ev.id+'">編集</button><button class="btn btn-pri" data-import="'+ev.id+'">'+ic("chart")+' CSV・Excelを取込</button><button class="btn btn-danger" data-del="'+ev.id+'">削除</button></div>':'')+'</div>'+
         '<div class="kpis">'+kpi("純売上",yen(headAmt),"yen",headSub)+kpi("チケット枚数",nf(totalTk)+'<small>枚</small>',"ticket","販売済み")+kpi("平均単価",yen(headAvg),"chart","売上÷枚数")+kpi("決済件数",nf(cnt)+'<small>件</small>',"pipe","注文数")+'</div>'+
@@ -1333,14 +1337,18 @@
     var t=tid?findTask(pid,tid):null;
     var opts=function(list,cur){return list.map(function(v){return '<option value="'+esc(v)+'"'+(v===cur?' selected':'')+'>'+esc(v)+'</option>';}).join("");};
     openModal('<h3>'+(t?"タスクを編集":"タスクを登録")+'</h3><p class="mh">案件「'+esc(p.name)+'」のタスクです。</p>'+
-      '<label>タイトル <span style="color:var(--crit)">*</span></label><input id="t_title" value="'+esc(t?t.title:"")+'" placeholder="例）8月度の販促バナーを入稿">'+
-      '<label>詳細</label><textarea id="t_detail" placeholder="内容・補足を入力">'+esc(t?(t.detail||""):"")+'</textarea>'+
-      '<label>担当</label><select id="t_owner">'+opts(OWNERS,t?t.owner:OWNERS[0])+'</select>'+
-      '<label>ステータス</label><select id="t_status">'+opts(STATUSES,t?t.status:STATUSES[0])+'</select>'+
-      '<label>スケジュール（開始日 〜 期限）</label>'+
-      '<div class="sch-in"><input id="t_start" type="date" value="'+esc(t?(t.start||""):"")+'"><span style="color:var(--muted);font-weight:700">〜</span><input id="t_due" type="date" value="'+esc(t?(t.due||""):"")+'"></div>'+
+      '<div class="modal-scroll tall">'+
+        '<label>タイトル <span style="color:var(--crit)">*</span></label><input id="t_title" value="'+esc(t?t.title:"")+'" placeholder="例）8月度の販促バナーを入稿">'+
+        '<label>詳細</label><textarea id="t_detail" class="ta-lg" placeholder="内容・補足を入力">'+esc(t?(t.detail||""):"")+'</textarea>'+
+        '<div class="f2">'+
+          '<div><label>担当</label><select id="t_owner">'+opts(OWNERS,t?t.owner:OWNERS[0])+'</select></div>'+
+          '<div><label>ステータス</label><select id="t_status">'+opts(STATUSES,t?t.status:STATUSES[0])+'</select></div>'+
+        '</div>'+
+        '<label>スケジュール（開始日 〜 期限）</label>'+
+        '<div class="sch-in"><input id="t_start" type="date" value="'+esc(t?(t.start||""):"")+'"><span style="color:var(--muted);font-weight:700">〜</span><input id="t_due" type="date" value="'+esc(t?(t.due||""):"")+'"></div>'+
+      '</div>'+
       '<div class="modal-act"><button class="btn" data-close>キャンセル</button><button class="btn btn-pri" id="t_ok">'+(t?"保存":"登録する")+'</button></div>',
-      function(){document.getElementById("t_title").focus();});
+      function(){document.getElementById("t_title").focus();},true);
     document.getElementById("t_ok").onclick=function(){
       var title=document.getElementById("t_title").value.trim();
       if(!title){document.getElementById("t_title").focus();return;}
