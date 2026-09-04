@@ -4,9 +4,12 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>crowdbasket Database</title>
-<!-- タブのアイコン。ロゴと同じ緑グラデ＋「cb」。画像ファイル不要でHTMLに直接埋め込み -->
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%2306C755'/%3E%3Cstop offset='1' stop-color='%2304A947'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='16' fill='url(%23g)'/%3E%3Ctext x='32' y='33' font-family='Arial,sans-serif' font-size='30' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3Ecb%3C/text%3E%3C/svg%3E">
-<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%2306C755'/%3E%3Cstop offset='1' stop-color='%2304A947'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='16' fill='url(%23g)'/%3E%3Ctext x='32' y='33' font-family='Arial,sans-serif' font-size='30' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3Ecb%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;700;800&display=swap" rel="stylesheet">
+<!-- タブのアイコン。ロゴと同じ緑→ティール グラデ＋「cb」。画像ファイル不要でHTMLに直接埋め込み -->
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%2322C55E'/%3E%3Cstop offset='0.55' stop-color='%2314B8A6'/%3E%3Cstop offset='1' stop-color='%2306B6D4'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='16' fill='url(%23g)'/%3E%3Ctext x='32' y='33' font-family='Arial,sans-serif' font-size='30' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3Ecb%3C/text%3E%3C/svg%3E">
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%2322C55E'/%3E%3Cstop offset='0.55' stop-color='%2314B8A6'/%3E%3Cstop offset='1' stop-color='%2306B6D4'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='16' fill='url(%23g)'/%3E%3Ctext x='32' y='33' font-family='Arial,sans-serif' font-size='30' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3Ecb%3C/text%3E%3C/svg%3E">
 <style>
   :root{
     /* ground: white-dominant, neutrals biased green so they read chosen, not default */
@@ -32,9 +35,18 @@
     --danger-soft: #FCEBE9;
     --info: #2E86A8;
     --info-soft: #E4F2F7;
-    --radius: 6px;
-    --shadow-sm: 0 1px 2px rgba(16,40,25,0.05);
-    --shadow-md: 0 4px 14px rgba(16,40,25,0.10);
+    /* ブランドのグラデーション（実際のロゴの緑→ティール→シアン）。
+       ロゴ・favicon・小さなアクセント線にだけ使う。ボタンや業務色には使わない。 */
+    --brand-green: #22C55E;
+    --brand-teal:  #14B8A6;
+    --brand-cyan:  #06B6D4;
+    --brand-gradient:      linear-gradient(90deg,  var(--brand-green) 0%, var(--brand-teal) 55%, var(--brand-cyan) 100%);
+    --brand-gradient-diag: linear-gradient(135deg, var(--brand-green) 0%, var(--brand-teal) 55%, var(--brand-cyan) 100%);
+    --font-brand: "M PLUS Rounded 1c","Zen Maru Gothic","Hiragino Maru Gothic ProN","Zen Kaku Gothic New",sans-serif;
+    --radius: 12px;
+    --radius-md: 9px;
+    --shadow-sm: 0 1px 2px rgba(15,45,30,0.05), 0 1px 3px rgba(15,45,30,0.04);
+    --shadow-md: 0 10px 26px -10px rgba(6,110,90,0.22), 0 2px 8px rgba(15,45,30,0.06);
     --sidebar-w: 232px;
   }
   *{box-sizing:border-box;}
@@ -62,24 +74,44 @@
     position:sticky; top:0; height:100vh;
   }
   .sidebar-brand{
+    position:relative;
     display:flex; align-items:center; gap:10px;
     padding:20px 20px 16px 20px;
     border-bottom:1px solid var(--border);
   }
-  .brand-mark{
-    width:30px;height:30px;border-radius:9px;
-    background:linear-gradient(135deg,#06C755,#04A947);
-    display:flex;align-items:center;justify-content:center;
-    font-weight:700; font-size:12px; letter-spacing:-0.02em; color:#fff; flex-shrink:0;
+  .sidebar-brand::after{
+    content:""; position:absolute; left:20px; right:20px; bottom:-1px; height:2px;
+    background:var(--brand-gradient); border-radius:2px;
   }
-  .brand-text{font-weight:700; font-size:15.5px; letter-spacing:0.02em;}
+  .brand-mark{
+    width:32px;height:32px;border-radius:10px;
+    background:var(--brand-gradient-diag);
+    display:flex;align-items:center;justify-content:center;
+    font-weight:800; font-size:14px; letter-spacing:-0.03em; color:#fff; flex-shrink:0;
+    font-family:var(--font-brand);
+    box-shadow:0 2px 6px -2px rgba(6,150,110,0.45);
+  }
+  .brand-text{font-weight:700; font-size:16px; letter-spacing:0.02em;}
   .brand-sub{font-size:10.5px; color:var(--text-faint); margin-top:1px; letter-spacing:0.03em;}
+  .brand-wordmark{
+    font-family:var(--font-brand);
+    font-weight:800;
+    letter-spacing:-0.01em;
+    background:var(--brand-gradient);
+    -webkit-background-clip:text;
+    background-clip:text;
+    color:transparent;
+  }
+  /* background-clip:text 非対応環境の保険。透明で消えるより色付きで見えるほうを優先 */
+  @supports not ((background-clip:text) or (-webkit-background-clip:text)){
+    .brand-wordmark{ background:none; color:var(--primary-deep); }
+  }
 
   .nav{padding:14px 10px; flex:1;}
   .nav-item{
     display:flex; align-items:center; gap:11px;
     padding:10px 12px; margin-bottom:2px;
-    border-radius:6px; color:var(--text-secondary);
+    border-radius:var(--radius-md); color:var(--text-secondary);
     cursor:pointer; font-size:13.5px; font-weight:500;
     border-left:3px solid transparent;
     transition:background .12s ease, color .12s ease;
@@ -124,7 +156,7 @@
   .gear-btn{
     flex:none; width:30px; height:30px; display:flex; align-items:center; justify-content:center;
     border:1px solid var(--border-strong); background:var(--surface); color:var(--text-secondary);
-    border-radius:7px; cursor:pointer; padding:0;
+    border-radius:var(--radius-md); cursor:pointer; padding:0;
   }
   .gear-btn:hover{background:var(--surface-alt); color:var(--text);}
   .gear-btn svg{width:15px; height:15px;}
@@ -169,15 +201,22 @@
   }
   .btn{
     border:1px solid var(--border-strong); background:var(--surface);
-    padding:8px 14px; border-radius:6px; font-size:13px; font-weight:600;
+    padding:8px 15px; border-radius:var(--radius-md); font-size:13px; font-weight:600;
     cursor:pointer; color:var(--text); font-family:inherit;
     display:inline-flex; align-items:center; gap:6px;
-    transition:all .12s ease;
+    transition:all .14s ease;
   }
-  .btn:hover{background:var(--surface-alt); border-color:var(--text-faint);}
-  .btn-primary{background:var(--primary); border-color:var(--primary); color:#fff;}
-  .btn-primary:hover{background:var(--primary-hover); border-color:var(--primary-hover);}
-  .btn-sm{padding:5px 10px; font-size:12px;}
+  .btn:hover{background:var(--surface-alt); border-color:var(--text-faint); transform:translateY(-1px);}
+  .btn:active{transform:translateY(0);}
+  .btn-primary{
+    background:var(--primary); border-color:var(--primary); color:#fff;
+    box-shadow:0 1px 2px rgba(6,199,85,.22), 0 6px 14px -6px rgba(6,199,85,.45);
+  }
+  .btn-primary:hover{
+    background:var(--primary-hover); border-color:var(--primary-hover);
+    box-shadow:0 2px 4px rgba(6,199,85,.28), 0 10px 20px -8px rgba(6,199,85,.5);
+  }
+  .btn-sm{padding:5px 11px; font-size:12px;}
 
   .content{padding:24px 28px 60px 28px; flex:1;}
   .page{display:none;}
@@ -216,7 +255,7 @@
   .bar-fill{width:100%; background:var(--primary); border-radius:4px 4px 0 0; min-height:2px; transition:height .2s;}
   .bar-day{font-size:10px; color:var(--text-faint); font-family:"JetBrains Mono",monospace;}
   .an-nodata{padding:24px; text-align:center; color:var(--text-faint); font-size:13px;}
-  .page-header h1{font-size:21px; margin:0 0 4px 0; font-weight:700;}
+  .page-header h1{font-size:21px; margin:0 0 4px 0; font-weight:700; font-family:var(--font-brand);}
   .page-header p{margin:0; color:var(--text-secondary); font-size:13px;}
 
   /* ---------- Home widgets ---------- */
@@ -235,7 +274,7 @@
   .card-head h2{font-size:14.5px; margin:0; font-weight:700;}
   .card-body{padding:6px 8px;}
   .task-row{
-    display:flex; align-items:center; gap:12px; padding:11px 12px; border-radius:6px;
+    display:flex; align-items:center; gap:12px; padding:11px 12px; border-radius:var(--radius-md);
     cursor:pointer;
   }
   .task-row:hover{background:var(--surface-alt);}
@@ -438,12 +477,12 @@
   .tk-check input{width:15px; height:15px; margin:0; cursor:pointer;}
   .tk-due-row{display:flex; align-items:center; gap:6px; flex-wrap:wrap;}
   #tk-sub{
-    border:1px solid var(--border-strong); border-radius:6px; padding:8px 10px;
+    border:1px solid var(--border-strong); border-radius:var(--radius-md); padding:8px 10px;
     font-size:13px; line-height:1.7; background:var(--surface); color:var(--text);
     font-family:inherit; width:100%; box-sizing:border-box; resize:vertical;
   }
   .tk-due-row input[type=date]{
-    border:1px solid var(--border-strong); border-radius:6px; padding:7px 10px;
+    border:1px solid var(--border-strong); border-radius:var(--radius-md); padding:7px 10px;
     font-size:12.5px; background:var(--surface); color:var(--text); font-family:inherit;
     /* 開始と終了を1行に並べる。幅を決めないと1つで1行を占めてしまう */
     flex:1 1 140px; width:auto; min-width:130px;
@@ -484,7 +523,9 @@
   .stat-box{
     background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
     padding:14px 16px; box-shadow:var(--shadow-sm);
+    transition:box-shadow .15s ease, transform .15s ease, border-color .15s ease;
   }
+  .stat-box:hover{ box-shadow:var(--shadow-md); transform:translateY(-2px); border-color:var(--border-strong); }
   .stat-num{font-size:22px; font-weight:800; font-family:"JetBrains Mono",monospace; letter-spacing:-0.02em;}
   .stat-label{font-size:11.5px; color:var(--text-secondary); margin-top:2px; font-weight:600;}
 
@@ -501,7 +542,7 @@
 
   .filter-bar{display:flex; align-items:center; gap:10px; margin-bottom:14px; flex-wrap:wrap;}
   .filter-bar select, .filter-bar input[type=text], .filter-bar input[type=date]{
-    border:1px solid var(--border-strong); border-radius:6px; padding:7px 10px;
+    border:1px solid var(--border-strong); border-radius:var(--radius-md); padding:7px 10px;
     font-size:12.5px; background:var(--surface); color:var(--text); font-family:inherit;
     min-width:120px;
   }
@@ -667,7 +708,7 @@
   .row-actions{opacity:0; transition:opacity .1s;}
   tbody tr:hover .row-actions{opacity:1;}
   .icon-btn{
-    width:26px;height:26px; border-radius:6px; border:1px solid var(--border);
+    width:26px;height:26px; border-radius:var(--radius-md); border:1px solid var(--border);
     background:var(--surface); display:inline-flex; align-items:center; justify-content:center;
     cursor:pointer; margin-left:4px;
   }
@@ -684,7 +725,7 @@
   }
   .modal-overlay.open{display:flex;}
   .modal{
-    background:var(--surface); border-radius:10px; width:480px; max-width:100%;
+    background:var(--surface); border-radius:14px; width:480px; max-width:100%;
     box-shadow:var(--shadow-md); max-height:88vh; overflow-y:auto;
   }
   .modal-head{padding:18px 22px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center;}
@@ -694,7 +735,7 @@
   .field{margin-bottom:14px;}
   .field label{display:block; font-size:12px; font-weight:700; color:var(--text-secondary); margin-bottom:5px;}
   .field input, .field select{
-    width:100%; padding:9px 11px; border:1px solid var(--border-strong); border-radius:6px;
+    width:100%; padding:9px 11px; border:1px solid var(--border-strong); border-radius:var(--radius-md);
     font-size:13px; font-family:inherit; color:var(--text); background:var(--surface);
   }
   .field-row{display:flex; gap:12px;}
@@ -841,11 +882,16 @@
     display:flex; align-items:center; justify-content:center; padding:20px;
   }
   .gate-card{
-    background:var(--surface); border:1px solid var(--border); border-radius:12px;
+    position:relative; overflow:hidden;
+    background:var(--surface); border:1px solid var(--border); border-radius:16px;
     box-shadow:var(--shadow-md); padding:28px 30px; width:380px; max-width:100%;
   }
+  .gate-card::before{
+    content:""; position:absolute; top:0; left:0; right:0; height:4px;
+    background:var(--brand-gradient);
+  }
   .gate-brand{display:flex; align-items:center; gap:11px; margin-bottom:22px;}
-  .gate-title{font-weight:700; font-size:17px; letter-spacing:0.02em;}
+  .gate-title{font-weight:800; font-size:19px; letter-spacing:0.01em;}
   .gate-sub{font-size:10.5px; color:var(--text-faint); margin-top:1px; letter-spacing:0.03em;}
   .gate-boot{font-size:13px; color:var(--text-secondary); padding:10px 0;}
   .gate-boot.error{color:var(--danger); line-height:1.7;}
@@ -870,10 +916,10 @@
 <div class="gate" id="gate">
   <div class="gate-card">
     <div class="gate-brand">
-      <div class="brand-mark">cb</div>
+      <div class="brand-mark">c.</div>
       <div>
-        <div class="gate-title">crowdbasket CRM</div>
-        <div class="gate-sub">SALES &amp; MARKETING</div>
+        <div class="gate-title brand-wordmark">crowdbasket.</div>
+        <div class="gate-sub">CRM ・ SALES &amp; MARKETING</div>
       </div>
     </div>
     <div id="gate-boot" class="gate-boot">接続しています…</div>
@@ -894,7 +940,7 @@
 <div id="share-view" style="display:none">
   <div class="share-page">
     <div class="share-head">
-      <div class="brand-mark">cb</div>
+      <div class="brand-mark">c.</div>
       <div>
         <div class="share-client" id="sv-client">—</div>
         <div class="share-sub" id="sv-updated"></div>
@@ -915,10 +961,10 @@
   <!-- Sidebar -->
   <div class="sidebar">
     <div class="sidebar-brand">
-      <div class="brand-mark">cb</div>
+      <div class="brand-mark">c.</div>
       <div>
-        <div class="brand-text">crowdbasket CRM</div>
-        <div class="brand-sub">SALES &amp; MARKETING</div>
+        <div class="brand-text brand-wordmark">crowdbasket.</div>
+        <div class="brand-sub">CRM ・ SALES &amp; MARKETING</div>
       </div>
     </div>
     <div class="nav">
@@ -2653,7 +2699,7 @@ function tickSave(){
 const DOC_LIMIT = 1048576;
 
 /* どの版が動いているかを画面から確かめられるようにする */
-const BUILD_ID = '2026-09-01';
+const BUILD_ID = '2026-09-04';
 /* 直近の保存結果と、サーバーから受け取った内容の素性。診断画面で見せる */
 let lastWriteInfo = 'まだ保存していません';
 let lastServerInfo = 'まだ受信していません';
