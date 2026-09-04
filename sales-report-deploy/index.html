@@ -351,6 +351,8 @@
   .seg-b:hover{color:var(--brand-deep)}
   .seg-b.on{background:var(--grad);color:#fff}
   .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  .grid2>*{min-width:0}          /* 中身の最小幅でカラムが膨らまないように */
+  .tbl-wrap.nar table{min-width:340px}  /* 列の少ない表は 720px を要求しない */
   @media(max-width:900px){.grid2{grid-template-columns:1fr}}
   .tbl-wrap.folded tr.row-more{display:none}
   .fold-bar{display:flex;justify-content:center;padding:12px 16px 2px}
@@ -1334,7 +1336,7 @@
     // 席タイプ別（選択期間内）／選手別ランキング（期間対象外）
     var seatAmt=rs.bySeat.reduce(function(a,x){return a+(x.amt||0);},0);
     var seatBars=rs.bySeat.length
-      ?'<div class="tbl-wrap"><table><thead><tr><th>席タイプ</th><th>枚数</th><th>税込金額</th></tr></thead><tbody>'+
+      ?'<div class="tbl-wrap nar"><table><thead><tr><th>席タイプ</th><th>枚数</th><th>税込金額</th></tr></thead><tbody>'+
         rs.bySeat.map(function(x){
           return '<tr><td>'+esc(x.k)+'</td><td class="num">'+nf(x.v)+'</td><td class="num"><b>'+yen(x.amt||0)+'</b></td></tr>';
         }).join("")+
