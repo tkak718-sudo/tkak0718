@@ -42,6 +42,7 @@
     --brand-cyan:  #06B6D4;
     --brand-gradient:      linear-gradient(90deg,  var(--brand-green) 0%, var(--brand-teal) 55%, var(--brand-cyan) 100%);
     --brand-gradient-diag: linear-gradient(135deg, var(--brand-green) 0%, var(--brand-teal) 55%, var(--brand-cyan) 100%);
+    --brand-solid: #0F766E; /* ブランドグラデーションを凝縮した単色。白背景でコントラスト比 約5.5:1 */
     --font-brand: "M PLUS Rounded 1c","Zen Maru Gothic","Hiragino Maru Gothic ProN","Zen Kaku Gothic New",sans-serif;
     --radius: 12px;
     --radius-md: 9px;
@@ -93,18 +94,12 @@
   }
   .brand-text{font-weight:700; font-size:16px; letter-spacing:0.02em;}
   .brand-sub{font-size:10.5px; color:var(--text-faint); margin-top:1px; letter-spacing:0.03em;}
+  /* グラデーション文字は小さいサイズだとちらついて見えるため、単色にする */
   .brand-wordmark{
     font-family:var(--font-brand);
     font-weight:800;
     letter-spacing:-0.01em;
-    background:var(--brand-gradient);
-    -webkit-background-clip:text;
-    background-clip:text;
-    color:transparent;
-  }
-  /* background-clip:text 非対応環境の保険。透明で消えるより色付きで見えるほうを優先 */
-  @supports not ((background-clip:text) or (-webkit-background-clip:text)){
-    .brand-wordmark{ background:none; color:var(--primary-deep); }
+    color:var(--brand-solid);
   }
 
   .nav{padding:14px 10px; flex:1;}
@@ -126,15 +121,32 @@
     border-left-color:var(--primary);
   }
   .nav-item.active svg{opacity:1;}
+  /* パイプライン欄の各項目にだけ付ける、色付きのアイコンバッジ。既存のsvgをそのまま包む */
+  .nav-icon-badge{
+    display:flex; align-items:center; justify-content:center;
+    width:21px; height:21px; border-radius:6px; flex-shrink:0;
+  }
+  .nav-item .nav-icon-badge svg{width:13px; height:13px; opacity:1;}
+  .nav-icon-contacts{background:#E0E7FF; color:#6366F1;}
+  .nav-icon-clients{background:#CCFBF1; color:#0D9488;}
+  .nav-icon-deals{background:#FEF3C7; color:#D97706;}
   .nav-count{
-    margin-left:auto; font-size:11px; background:var(--surface-alt);
-    color:var(--text-faint);
+    margin-left:auto; font-size:10.5px; font-weight:700;
+    background:#DCEAFE; color:#1D4ED8;
     padding:1px 7px; border-radius:20px; font-family:"JetBrains Mono",monospace;
   }
-  .nav-item.active .nav-count{background:var(--primary-soft-strong); color:var(--primary-deep);}
+  .nav-item.active .nav-count{background:#BFDBFE; color:#1E3A8A;}
   .nav-section-label{
     font-size:10.5px; text-transform:uppercase; letter-spacing:0.08em;
     color:var(--text-faint); padding:14px 12px 6px 12px; font-weight:600;
+  }
+  /* パイプライン欄の3項目だけ、上下の余白をゆったりさせる（横幅はサイドバーが
+     232px と狭いため、ラベルが折り返さない範囲にとどめる） */
+  .nav-item--pipeline{
+    padding:13px 10px;
+    gap:8px;
+    margin-bottom:5px;
+    line-height:1.4;
   }
   .sidebar-footer{
     padding:12px 14px; border-top:1px solid var(--border);
@@ -255,7 +267,7 @@
   .bar-fill{width:100%; background:var(--primary); border-radius:4px 4px 0 0; min-height:2px; transition:height .2s;}
   .bar-day{font-size:10px; color:var(--text-faint); font-family:"JetBrains Mono",monospace;}
   .an-nodata{padding:24px; text-align:center; color:var(--text-faint); font-size:13px;}
-  .page-header h1{font-size:21px; margin:0 0 4px 0; font-weight:700; font-family:var(--font-brand);}
+  .page-header h1{font-size:21px; margin:0 0 4px 0; font-weight:700;}
   .page-header p{margin:0; color:var(--text-secondary); font-size:13px;}
 
   /* ---------- Home widgets ---------- */
@@ -300,23 +312,23 @@
     background:var(--surface-alt); color:var(--text-secondary);
   }
   .task-due.over{background:#fee2e2; color:#b91c1c;}
-  .task-due.today{background:#ffedd5; color:#c2410c;}
-  .task-due.soon{background:#fef9c3; color:#a16207;}
+  .task-due.today{background:#FFF1E0; color:#B45309;}
+  .task-due.soon{background:transparent; border:1px solid #EDE4B8; color:#8A6D0A;}
   .task-due.done{background:var(--surface-alt); color:var(--text-faint);}
-  /* 共有タスクの印。誰の画面にも出ていることが分かるようにする */
+  /* 共有タスクの印。誰の画面にも出ていることが分かるようにする。識別用のため控えめに */
   .task-shared{
     display:inline-block; margin-right:6px; padding:1px 6px; border-radius:5px;
     font-size:11px; font-weight:700; white-space:nowrap;
-    background:#f3e8ff; color:#6b21a8;
+    background:transparent; border:1px solid #E3D3F0; color:#6B4E8A;
   }
   /* 「全員のタスク」で、どちらの担当か一目で見分けるための印。
-     担当ID(u1/u2)ごとに色を分けているので、担当が増えた場合はここに追記する。 */
+     担当ID(u1/u2)ごとに色を分けているので、担当が増えた場合はここに追記する。識別用のため控えめに */
   .task-owner{
     display:inline-block; margin-right:6px; padding:1px 6px; border-radius:5px;
     font-size:11px; font-weight:700; white-space:nowrap;
   }
-  .task-owner.owner-u1{background:#dbeafe; color:#1e40af;}
-  .task-owner.owner-u2{background:#dcfce7; color:#166534;}
+  .task-owner.owner-u1{background:transparent; border:1px solid #C7DBF0; color:#3B6EA5;}
+  .task-owner.owner-u2{background:transparent; border:1px solid #C8E6D2; color:#3F7A56;}
   /* 種類別ビューで、行の案件がどこか分かるように付ける小さなチップ */
   .task-type-chip{
     display:inline-block; margin-right:4px; padding:0 5px; border-radius:4px;
@@ -492,9 +504,9 @@
     font-size:11px; font-weight:800; padding:3px 0; border-radius:20px; flex-shrink:0;
     width:30px; text-align:center; letter-spacing:.04em;
   }
-  .badge-high{background:var(--danger-soft); color:var(--danger);}
-  .badge-mid{background:var(--warn-soft); color:var(--warn);}
-  .badge-low{background:var(--info-soft); color:var(--info);}
+  .badge-high{background:#F5DCD3; color:#A8482F;}
+  .badge-mid{background:transparent; border:1px solid #E8D9BC; color:#9C7A34;}
+  .badge-low{background:transparent; border:1px solid #CFE3EC; color:#4C7A91;}
 
   /* 共有ページ（ログインなしで見る読み取り専用の画面） */
   .share-page{max-width:820px; margin:0 auto; padding:26px 18px 60px;}
@@ -973,18 +985,24 @@
         ホーム
       </div>
       <div class="nav-section-label">パイプライン</div>
-      <div class="nav-item" data-page="contacts">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg>
+      <div class="nav-item nav-item--pipeline" data-page="contacts">
+        <span class="nav-icon-badge nav-icon-contacts">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg>
+        </span>
         新規クライアント
         <span class="nav-count" id="cnt-contacts">0</span>
       </div>
-      <div class="nav-item" data-page="clients">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21V8l9-5 9 5v13"/><path d="M9 21v-6h6v6"/></svg>
+      <div class="nav-item nav-item--pipeline" data-page="clients">
+        <span class="nav-icon-badge nav-icon-clients">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21V8l9-5 9 5v13"/><path d="M9 21v-6h6v6"/></svg>
+        </span>
         クライアントデータ
         <span class="nav-count" id="cnt-clients">0</span>
       </div>
-      <div class="nav-item" data-page="deals">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M7 15l4-5 3 3 5-7"/></svg>
+      <div class="nav-item nav-item--pipeline" data-page="deals">
+        <span class="nav-icon-badge nav-icon-deals">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M7 15l4-5 3 3 5-7"/></svg>
+        </span>
         取引ステータス一覧表
         <span class="nav-count" id="cnt-deals">0</span>
       </div>
@@ -2699,7 +2717,7 @@ function tickSave(){
 const DOC_LIMIT = 1048576;
 
 /* どの版が動いているかを画面から確かめられるようにする */
-const BUILD_ID = '2026-09-04';
+const BUILD_ID = '2026-09-04b';
 /* 直近の保存結果と、サーバーから受け取った内容の素性。診断画面で見せる */
 let lastWriteInfo = 'まだ保存していません';
 let lastServerInfo = 'まだ受信していません';
