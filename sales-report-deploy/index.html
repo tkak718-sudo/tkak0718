@@ -939,19 +939,12 @@
     }).join("") || '<div class="empty"><div class="ei">'+ic("bell")+'</div><b>お知らせはありません</b><p>編集モードで「お知らせを追加」から投稿できます。</p></div>';
 
     // ---- タスク管理（案件別）----
-    var all=0,open=0,over=0;
-    state.projects.forEach(function(p){p.tasks.forEach(function(t){all++;if(t.status!=="完了")open++;if(isOverdue(t))over++;});});
     var board=state.projects.length
       ? state.projects.map(projectHTML).join("")
       : '<div class="panel"><div class="empty"><div class="ei">'+ic("pipe")+'</div><b>案件がまだありません</b><p>「＋ 案件を追加」で案件を作成し、その中にタスクを登録してください。</p></div></div>';
 
     elView.innerHTML=
       '<div class="greet"><h2>タスク管理</h2><p>案件別のタスク進捗 ・ '+fmtDate(todayISO())+' 時点</p></div>'+
-      '<div class="kpis">'+
-        kpi("案件数",nf(state.projects.length)+'<small>件</small>',"pipe","登録済み")+
-        kpi("未完了タスク",nf(open)+'<small>件</small>',"ticket","全"+nf(all)+"件中")+
-        kpi("期限超過",nf(over)+'<small>件</small>',"bell",over?"対応が必要です":"遅延なし")+
-      '</div>'+
       '<div class="sec-h"><h3>'+ic("pipe")+' 案件別タスク <span class="anyone">全員が編集できます</span></h3><button class="btn btn-pri btn-sm" id="addPrj">＋ 案件を追加</button></div>'+
       board+
       '<div class="panel" style="margin-top:26px"><div class="panel-h"><h3>'+ic("bell")+' お知らせ</h3>'+(editable?'<button class="btn btn-sm" id="addAnn">＋ お知らせを追加</button>':'')+'</div><div class="panel-b"><div class="ann">'+items+'</div></div></div>';
