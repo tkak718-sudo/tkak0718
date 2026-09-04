@@ -745,13 +745,13 @@
      添えたピル型のボタンにする（他の場所のicon-btnには影響させない） */
   .tool-btn{
     display:inline-flex; align-items:center; gap:5px;
-    padding:6px 12px 6px 10px; border-radius:20px; border:1px solid var(--border-strong);
-    background:var(--surface); color:var(--text-secondary);
+    padding:6px 12px 6px 10px; border-radius:20px; border:1px solid var(--primary-soft-strong);
+    background:var(--primary-soft); color:var(--primary-deep);
     font-size:12px; font-weight:700; font-family:inherit; cursor:pointer; white-space:nowrap;
     transition:background .12s ease, border-color .12s ease, transform .12s ease, box-shadow .12s ease, color .12s ease;
   }
   .tool-btn svg{width:14px; height:14px; flex-shrink:0; opacity:.85;}
-  .tool-btn:hover{background:var(--surface-alt); border-color:var(--text-faint); transform:translateY(-1px); box-shadow:var(--shadow-sm);}
+  .tool-btn:hover{background:var(--primary-soft-strong); border-color:var(--primary); transform:translateY(-1px); box-shadow:var(--shadow-sm);}
   .tool-btn.active{background:var(--primary); border-color:var(--primary); color:#fff;}
   .tool-btn.active svg{opacity:1;}
 
@@ -2747,7 +2747,7 @@ function tickSave(){
 const DOC_LIMIT = 1048576;
 
 /* どの版が動いているかを画面から確かめられるようにする */
-const BUILD_ID = '2026-09-05c';
+const BUILD_ID = '2026-09-05d';
 /* 直近の保存結果と、サーバーから受け取った内容の素性。診断画面で見せる */
 let lastWriteInfo = 'まだ保存していません';
 let lastServerInfo = 'まだ受信していません';
