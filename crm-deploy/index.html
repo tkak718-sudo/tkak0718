@@ -6,7 +6,7 @@
 <title>crowdbasket Database</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+JP:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <!-- タブのアイコン。ロゴと同じ緑→ティール グラデ＋「cb」。画像ファイル不要でHTMLに直接埋め込み -->
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%2322C55E'/%3E%3Cstop offset='0.55' stop-color='%2314B8A6'/%3E%3Cstop offset='1' stop-color='%2306B6D4'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='16' fill='url(%23g)'/%3E%3Ctext x='32' y='33' font-family='Arial,sans-serif' font-size='30' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3Ecb%3C/text%3E%3C/svg%3E">
 <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%2322C55E'/%3E%3Cstop offset='0.55' stop-color='%2314B8A6'/%3E%3Cstop offset='1' stop-color='%2306B6D4'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='16' fill='url(%23g)'/%3E%3Ctext x='32' y='33' font-family='Arial,sans-serif' font-size='30' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'%3Ecb%3C/text%3E%3C/svg%3E">
@@ -43,7 +43,8 @@
     --brand-gradient:      linear-gradient(90deg,  var(--brand-green) 0%, var(--brand-teal) 55%, var(--brand-cyan) 100%);
     --brand-gradient-diag: linear-gradient(135deg, var(--brand-green) 0%, var(--brand-teal) 55%, var(--brand-cyan) 100%);
     --brand-solid: #0F766E; /* ブランドグラデーションを凝縮した単色。白背景でコントラスト比 約5.5:1 */
-    --font-brand: "M PLUS Rounded 1c","Zen Maru Gothic","Hiragino Maru Gothic ProN","Zen Kaku Gothic New",sans-serif;
+    --font-sans: "Inter","Noto Sans JP","Hiragino Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+    --font-brand: var(--font-sans);
     --radius: 12px;
     --radius-md: 9px;
     --shadow-sm: 0 1px 2px rgba(15,45,30,0.05), 0 1px 3px rgba(15,45,30,0.04);
@@ -54,7 +55,7 @@
   html,body{height:100%;}
   body{
     margin:0;
-    font-family:"Zen Kaku Gothic New","Hiragino Sans","Noto Sans JP",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+    font-family:var(--font-sans);
     background:var(--bg);
     color:var(--text);
     font-size:14px;
@@ -92,7 +93,7 @@
     font-family:var(--font-brand);
     box-shadow:0 2px 6px -2px rgba(6,150,110,0.45);
   }
-  .brand-text{font-weight:700; font-size:16px; letter-spacing:0.02em;}
+  .brand-text{font-weight:700; font-size:19px; letter-spacing:0.02em;}
   .brand-sub{font-size:10.5px; color:var(--text-faint); margin-top:1px; letter-spacing:0.03em;}
   /* グラデーション文字は小さいサイズだとちらついて見えるため、単色にする */
   .brand-wordmark{
@@ -267,7 +268,7 @@
   .bar-fill{width:100%; background:var(--primary); border-radius:4px 4px 0 0; min-height:2px; transition:height .2s;}
   .bar-day{font-size:10px; color:var(--text-faint); font-family:"JetBrains Mono",monospace;}
   .an-nodata{padding:24px; text-align:center; color:var(--text-faint); font-size:13px;}
-  .page-header h1{font-size:21px; margin:0 0 4px 0; font-weight:700;}
+  .page-header h1{font-size:27px; margin:0 0 4px 0; font-weight:800; letter-spacing:-0.01em;}
   .page-header p{margin:0; color:var(--text-secondary); font-size:13px;}
 
   /* ---------- Home widgets ---------- */
@@ -538,7 +539,7 @@
     transition:box-shadow .15s ease, transform .15s ease, border-color .15s ease;
   }
   .stat-box:hover{ box-shadow:var(--shadow-md); transform:translateY(-2px); border-color:var(--border-strong); }
-  .stat-num{font-size:22px; font-weight:800; font-family:"JetBrains Mono",monospace; letter-spacing:-0.02em;}
+  .stat-num{font-size:33px; font-weight:800; font-family:var(--font-sans); font-variant-numeric:tabular-nums; letter-spacing:-0.02em;}
   .stat-label{font-size:11.5px; color:var(--text-secondary); margin-top:2px; font-weight:600;}
 
   /* ---------- Tabs / Filters ---------- */
@@ -903,7 +904,7 @@
     background:var(--brand-gradient);
   }
   .gate-brand{display:flex; align-items:center; gap:11px; margin-bottom:22px;}
-  .gate-title{font-weight:800; font-size:19px; letter-spacing:0.01em;}
+  .gate-title{font-weight:800; font-size:23px; letter-spacing:0.01em;}
   .gate-sub{font-size:10.5px; color:var(--text-faint); margin-top:1px; letter-spacing:0.03em;}
   .gate-boot{font-size:13px; color:var(--text-secondary); padding:10px 0;}
   .gate-boot.error{color:var(--danger); line-height:1.7;}
@@ -2717,7 +2718,7 @@ function tickSave(){
 const DOC_LIMIT = 1048576;
 
 /* どの版が動いているかを画面から確かめられるようにする */
-const BUILD_ID = '2026-09-04b';
+const BUILD_ID = '2026-09-04c';
 /* 直近の保存結果と、サーバーから受け取った内容の素性。診断画面で見せる */
 let lastWriteInfo = 'まだ保存していません';
 let lastServerInfo = 'まだ受信していません';
