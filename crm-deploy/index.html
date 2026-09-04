@@ -741,6 +741,20 @@
   /* 「全員のタスク」など、オン/オフを持つアイコンボタン */
   .icon-btn.active{background:var(--primary); border-color:var(--primary); color:#fff;}
 
+  /* タスク管理カードのツールバー用。アイコンだけの.icon-btnとは別に、文字ラベルを
+     添えたピル型のボタンにする（他の場所のicon-btnには影響させない） */
+  .tool-btn{
+    display:inline-flex; align-items:center; gap:5px;
+    padding:6px 12px 6px 10px; border-radius:20px; border:1px solid var(--border-strong);
+    background:var(--surface); color:var(--text-secondary);
+    font-size:12px; font-weight:700; font-family:inherit; cursor:pointer; white-space:nowrap;
+    transition:background .12s ease, border-color .12s ease, transform .12s ease, box-shadow .12s ease, color .12s ease;
+  }
+  .tool-btn svg{width:14px; height:14px; flex-shrink:0; opacity:.85;}
+  .tool-btn:hover{background:var(--surface-alt); border-color:var(--text-faint); transform:translateY(-1px); box-shadow:var(--shadow-sm);}
+  .tool-btn.active{background:var(--primary); border-color:var(--primary); color:#fff;}
+  .tool-btn.active svg{opacity:1;}
+
   /* ---------- Modal ---------- */
   .modal-overlay{
     position:fixed; inset:0; background:rgba(16,34,23,0.42); display:none;
@@ -1088,20 +1102,25 @@
               <h2>タスク管理</h2>
               <div style="display:flex; align-items:center; gap:10px;">
                 <span class="filter-label" id="task-progress">0 / 0 完了</span>
-                <span class="icon-btn" id="task-scope-btn" title="全員のタスクを表示" onclick="toggleTaskScope()">
+                <span class="tool-btn" id="task-scope-btn" title="全員のタスクを表示" onclick="toggleTaskScope()">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+                  <span id="task-scope-label">自分</span>
                 </span>
-                <span class="icon-btn" id="task-mode-btn" title="タスク種別でまとめて表示" onclick="toggleTaskGroupMode()">
+                <span class="tool-btn" id="task-mode-btn" title="タスク種別でまとめて表示" onclick="toggleTaskGroupMode()">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h10M4 18h7"/></svg>
+                  <span id="task-mode-label">案件別</span>
                 </span>
-                <span class="icon-btn" title="議事録から取り込む" onclick="openMeetingImportModal()">
+                <span class="tool-btn" title="議事録から取り込む" onclick="openMeetingImportModal()">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
+                  議事録
                 </span>
-                <span class="icon-btn" title="案件を管理" onclick="openProjectModal()">
+                <span class="tool-btn" title="案件を管理" onclick="openProjectModal()">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7h18M3 12h18M3 17h11"/></svg>
+                  案件管理
                 </span>
-                <span class="icon-btn" title="タスクを追加" onclick="openTaskModal()">
+                <span class="tool-btn" title="タスクを追加" onclick="openTaskModal()">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 5v14M5 12h14"/></svg>
+                  追加
                 </span>
               </div>
             </div>
@@ -2728,7 +2747,7 @@ function tickSave(){
 const DOC_LIMIT = 1048576;
 
 /* どの版が動いているかを画面から確かめられるようにする */
-const BUILD_ID = '2026-09-05';
+const BUILD_ID = '2026-09-05b';
 /* 直近の保存結果と、サーバーから受け取った内容の素性。診断画面で見せる */
 let lastWriteInfo = 'まだ保存していません';
 let lastServerInfo = 'まだ受信していません';
@@ -4381,9 +4400,11 @@ function renderHome(){
   const scopeBtn = document.getElementById('task-scope-btn');
   scopeBtn.classList.toggle('active', taskListShowAll);
   scopeBtn.title = taskListShowAll ? '自分のタスクだけ表示' : '全員のタスクを表示';
+  document.getElementById('task-scope-label').textContent = taskListShowAll ? '全員' : '自分';
   const modeBtn = document.getElementById('task-mode-btn');
   modeBtn.classList.toggle('active', taskGroupMode === 'type');
   modeBtn.title = taskGroupMode === 'type' ? '案件別に表示' : 'タスク種別でまとめて表示';
+  document.getElementById('task-mode-label').textContent = taskGroupMode === 'type' ? '種別' : '案件別';
   const cardTasks = taskListShowAll ? sortTasks(tasks) : myTasks;
   const cardUndone = cardTasks.filter(t=>!t.done);
   // 期日を過ぎた未完了タスクがあれば、進捗の横で気づけるようにする
