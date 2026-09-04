@@ -191,22 +191,33 @@
     cursor:pointer;border-radius:6px;padding:2px 4px;margin:-2px -4px}
   .prj-h h4:hover{background:color-mix(in srgb,var(--brand) 14%,transparent)}
   .prj-acts{display:flex;gap:6px;flex:none;align-items:center}
-  .iconbtn{border:1px solid var(--line);background:var(--panel);color:var(--muted);width:30px;height:30px;border-radius:8px;cursor:pointer;font-size:13px;line-height:1;flex:none}
-  .iconbtn:hover{border-color:var(--brand);color:var(--brand-deep)}
-  .iconbtn.dgr:hover{background:var(--crit);border-color:var(--crit);color:#fff}
-  .tsk{display:flex;gap:14px;padding:14px 18px;border-bottom:1px solid var(--line-soft);align-items:flex-start;cursor:pointer}
+  .iconbtn{border:none;background:transparent;color:var(--faint);width:28px;height:28px;border-radius:50%;
+    cursor:pointer;line-height:0;flex:none;display:grid;place-items:center;
+    transition:background .15s,color .15s,opacity .15s,transform .1s}
+  .iconbtn:hover{background:color-mix(in srgb,var(--brand) 13%,transparent);color:var(--brand-deep)}
+  .iconbtn.dgr:hover{background:color-mix(in srgb,var(--crit) 14%,transparent);color:var(--crit)}
+  .iconbtn:active{transform:scale(.9)}
+  .iconbtn:focus-visible{outline:2px solid var(--brand);outline-offset:1px}
+  /* 行の×は普段は伏せて、ホバーしたときだけ出す */
+  .tsk-del{opacity:0}
+  .tsk:hover .tsk-del,.tsk-del:focus-visible{opacity:1}
+  @media(hover:none){.tsk-del{opacity:.55}}
+  /* 1行目＝担当｜件名、2行目＝進捗｜詳細 */
+  .tsk{display:grid;grid-template-columns:132px minmax(0,1fr) auto;column-gap:16px;row-gap:7px;
+    padding:15px 18px;border-bottom:1px solid var(--line-soft);align-items:start;cursor:pointer}
   .tsk:hover{background:var(--brand-soft2)}
   .tsk:last-child{border-bottom:none}
-  /* 状態・担当は件名の左の固定カラムに置き、件名と本文の左端を揃える */
-  .tsk-chips{flex:none;width:180px;display:flex;flex-wrap:wrap;gap:7px;align-items:flex-start}
-  .tsk-main{flex:1;min-width:0}
-  .tsk-t{font-weight:700;font-size:14px;word-break:break-word;padding-top:3px}
+  .tsk-owner{grid-area:1/1;justify-self:start}
+  .tsk-t{grid-area:1/2;font-weight:700;font-size:14.5px;word-break:break-word;padding-top:3px}
+  .tsk-del{grid-area:1/3}
+  .tsk-st{grid-area:2/1;justify-self:start}
+  .tsk-body{grid-area:2/2/auto/4;min-width:0}
   .chip.big{font-size:11.5px;padding:4px 11px;font-weight:800;border-color:color-mix(in srgb,currentColor 28%,transparent);flex:none}
   .chip.big[data-cycle]{cursor:pointer}
   .chip.big[data-cycle]:hover{filter:brightness(.96)}
   .tsk.done .tsk-t{text-decoration:line-through;color:var(--faint)}
-  .tsk-d{margin:6px 0 0;color:var(--muted);font-size:12.5px;white-space:pre-wrap;word-break:break-word}
-  .tsk-meta{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px}
+  .tsk-d{margin:0;color:var(--muted);font-size:12.5px;white-space:pre-wrap;word-break:break-word}
+  .tsk-meta{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:7px}
   .chip{font-size:10.5px;font-weight:800;padding:3px 10px;border-radius:20px;border:1px solid transparent;letter-spacing:.02em;line-height:1.5;white-space:nowrap}
   button.chip{cursor:pointer;font-family:inherit}
   .chip.own-ly{background:#eaf1ff;color:#2554c7}
@@ -374,10 +385,12 @@
   }
   .menu-btn{display:none;border:1px solid var(--line);background:var(--panel);color:var(--ink);width:34px;height:34px;border-radius:9px;cursor:pointer;place-items:center}
   @media(max-width:720px){
-    .tsk{flex-wrap:wrap;gap:10px}
-    .tsk-chips{width:auto;order:1}
-    .tsk .prj-acts{order:2;margin-left:auto}
-    .tsk-main{order:3;flex:1 1 100%;min-width:100%}
+    .tsk{grid-template-columns:auto auto minmax(0,1fr);column-gap:8px}
+    .tsk-owner{grid-area:1/1}
+    .tsk-st{grid-area:1/2}
+    .tsk-del{grid-area:1/3;justify-self:end}
+    .tsk-t{grid-area:2/1/auto/4;padding-top:0}
+    .tsk-body{grid-area:3/1/auto/4}
   }
   @media(prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
@@ -499,7 +512,8 @@
       bell:'<path d="M18 9a6 6 0 1 0-12 0c0 6-2 7-2 7h16s-2-1-2-7"/><path d="M10.3 20a2 2 0 0 0 3.4 0"/>',
       chart:'<path d="M21 21H4a1 1 0 0 1-1-1V3"/><path d="M7 14l3-4 3 3 4-6"/>',
       users:'<circle cx="9" cy="8" r="3.2"/><path d="M3.5 20a5.5 5.5 0 0 1 11 0"/><path d="M16 5.2a3.2 3.2 0 0 1 0 6.1M17 20a5.5 5.5 0 0 0-3-4.9"/>',
-      pipe:'<path d="M4 6h16M4 12h16M4 18h10"/>'
+      pipe:'<path d="M4 6h16M4 12h16M4 18h10"/>',
+      close:'<path d="M6.8 6.8l10.4 10.4M17.2 6.8L6.8 17.2"/>'
     };
     var sz=size||17;
     return '<svg width="'+sz+'" height="'+sz+'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">'+(p[name]||'')+'</svg>';
@@ -935,25 +949,21 @@
       '<span class="badge num">未完了 '+nf(open)+' / '+nf(ts.length)+'</span>'+
       '<span class="prj-acts">'+
         '<button class="btn btn-sm" data-addtask="'+p.id+'">＋ タスク登録</button>'+
-        '<button class="iconbtn dgr" data-delprj="'+p.id+'" title="案件を削除">×</button>'+
+        '<button class="iconbtn dgr" data-delprj="'+p.id+'" title="案件を削除">'+ic("close",13)+'</button>'+
       '</span></div>'+rows+'</div>';
   }
   function taskHTML(p,t){
     var key=p.id+":"+t.id, sch=schLabel(t);
     // 行のどこを押しても編集。状態チップと削除ボタンは closest が先に拾うので誤爆しない
     return '<div class="tsk'+(t.status==="完了"?" done":"")+'" data-edittask="'+key+'" title="クリックで編集">'+
-      '<span class="tsk-chips">'+
-        '<button class="chip big '+(ST_CLS[t.status]||"st-todo")+'" data-cycle="'+key+'" title="クリックで状態を切り替え">'+esc(t.status||"未着手")+'</button>'+
-        '<span class="chip big '+(OWNER_CLS[t.owner]||"st-todo")+'">'+esc(t.owner||"担当未設定")+'</span>'+
-      '</span>'+
-      '<div class="tsk-main">'+
-        '<div class="tsk-t">'+esc(t.title)+'</div>'+
+      '<span class="chip big tsk-owner '+(OWNER_CLS[t.owner]||"st-todo")+'">'+esc(t.owner||"担当未設定")+'</span>'+
+      '<div class="tsk-t">'+esc(t.title)+'</div>'+
+      '<button class="iconbtn dgr tsk-del" data-deltask="'+key+'" title="削除">'+ic("close",13)+'</button>'+
+      '<button class="chip big tsk-st '+(ST_CLS[t.status]||"st-todo")+'" data-cycle="'+key+'" title="クリックで状態を切り替え">'+esc(t.status||"未着手")+'</button>'+
+      '<div class="tsk-body">'+
         (t.detail?'<p class="tsk-d">'+esc(t.detail)+'</p>':'')+
         (sch?'<div class="tsk-meta"><span class="sch'+(isOverdue(t)?" over":"")+'">'+esc(sch)+(isOverdue(t)?" ・ 期限超過":"")+'</span></div>':'')+
-      '</div>'+
-      '<span class="prj-acts">'+
-        '<button class="iconbtn dgr" data-deltask="'+key+'" title="削除">×</button>'+
-      '</span></div>';
+      '</div></div>';
   }
 
   function barList(items,fmt,accent){
