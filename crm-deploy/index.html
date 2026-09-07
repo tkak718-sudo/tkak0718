@@ -294,6 +294,12 @@
     padding:14px 18px; border-bottom:1px solid var(--border);
     display:flex; align-items:center; justify-content:space-between;
   }
+  /* タスク一覧が長くなっても「追加」などのボタンに毎回戻らずに済むよう、
+     タスク管理カードの見出し行だけをトップバーの下に固定表示する */
+  #task-card-head{
+    position:sticky; top:60px; z-index:5;
+    background:var(--surface);
+  }
   .card-head h2{font-size:14.5px; margin:0; font-weight:700;}
   .card-body{padding:6px 8px;}
   .task-row{
@@ -1098,7 +1104,7 @@
 
         <div class="grid-home">
           <div class="card">
-            <div class="card-head">
+            <div class="card-head" id="task-card-head">
               <h2>タスク管理</h2>
               <div style="display:flex; align-items:center; gap:10px;">
                 <span class="filter-label" id="task-progress">0 / 0 完了</span>
@@ -2747,7 +2753,7 @@ function tickSave(){
 const DOC_LIMIT = 1048576;
 
 /* どの版が動いているかを画面から確かめられるようにする */
-const BUILD_ID = '2026-09-05d';
+const BUILD_ID = '2026-09-07';
 /* 直近の保存結果と、サーバーから受け取った内容の素性。診断画面で見せる */
 let lastWriteInfo = 'まだ保存していません';
 let lastServerInfo = 'まだ受信していません';
