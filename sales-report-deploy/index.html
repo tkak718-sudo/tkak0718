@@ -318,24 +318,23 @@
   /* クライアント名の下に入るイベント見出しは、マーカー無しで一段小さく */
   .ev-head.sub{margin-top:6px}
   .ev-head.sub h2{font-size:19px;background:none;padding:0;margin-left:0}
-  /* クライアントページのタブ */
-  .tabbar{display:flex;align-items:flex-end;gap:8px;border-bottom:1px solid var(--line);margin:16px 0 20px}
-  .tabs{display:flex;gap:2px;align-items:flex-end;flex:1;min-width:0;overflow-x:auto;scrollbar-width:thin}
-  .tab-acts{display:flex;gap:2px;flex:none;align-items:flex-end}
-  @media(max-width:720px){.tab-acts .lbl{display:none}.tab-acts .tab{padding:10px 11px 11px}}
-  .tab{position:relative;display:inline-flex;align-items:center;gap:7px;border:none;background:none;padding:10px 14px 11px;
-    font-size:13px;font-weight:700;color:var(--muted);cursor:pointer;white-space:nowrap;border-radius:9px 9px 0 0;
-    font-family:inherit;max-width:240px;flex:none;transition:color .15s,background .15s}
+  /* クライアントページのタブ：ピル型。横スクロールさせず折り返して全部見せる */
+  .tabbar{display:flex;align-items:flex-start;gap:10px;margin:16px 0 20px}
+  .tabs{display:flex;flex-wrap:wrap;gap:6px;flex:1;min-width:0}
+  .tab{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line);background:var(--panel);color:var(--muted);
+    padding:8px 14px;border-radius:999px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;max-width:260px;
+    font-family:inherit;transition:background .15s,color .15s,border-color .15s,box-shadow .15s}
   .tab span{overflow:hidden;text-overflow:ellipsis}
-  .tab svg{flex:none;opacity:.75}
-  .tab:hover{color:var(--ink);background:var(--brand-soft2)}
-  .tab.on{color:var(--brand-ink)}
-  .tab.on::after{content:"";position:absolute;left:8px;right:8px;bottom:-1px;height:3px;border-radius:3px 3px 0 0;background:var(--grad)}
-  .tab.on svg{opacity:1;color:var(--brand-deep)}
-  .tab-add{color:var(--brand-deep);font-weight:800}
-  .tab-add:hover{background:var(--brand-soft)}
-  .tab-act{color:var(--muted);font-weight:700}
-  .tab-act:hover{background:var(--panel-2);color:var(--ink)}
+  .tab svg{flex:none;opacity:.7}
+  .tab:hover{border-color:var(--brand);color:var(--brand-deep);background:var(--brand-soft2)}
+  .tab.on,.tab.on:hover{background:var(--grad);border-color:transparent;color:#fff;box-shadow:0 2px 10px rgba(19,196,107,.3)}
+  .tab.on svg{opacity:1;color:#fff}
+  .tab-acts{display:flex;gap:6px;flex:none}
+  .tab-add{color:var(--brand-deep);background:var(--brand-soft);border-color:color-mix(in srgb,var(--brand) 34%,transparent);font-weight:800}
+  .tab-add:hover{background:var(--grad);border-color:transparent;color:#fff}
+  .tab-act{width:38px;padding:0;justify-content:center;font-size:15px}
+  .tab-act:hover{background:var(--panel-2);color:var(--ink);border-color:var(--line)}
+  @media(max-width:720px){.tab-acts .lbl{display:none}.tab-add{width:38px;padding:0;justify-content:center;font-size:15px}}
   .sel-pill{border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:999px;padding:7px 30px 7px 12px;
     font-size:12.5px;font-weight:700;font-family:inherit;cursor:pointer;appearance:none;-webkit-appearance:none;
     background-image:linear-gradient(45deg,transparent 50%,var(--muted) 50%),linear-gradient(135deg,var(--muted) 50%,transparent 50%);
@@ -1066,7 +1065,7 @@
     }).join("");
     nav.innerHTML=
       '<button class="navitem'+(route.view==="home"?' on':'')+'" data-go="home"><span class="ic">'+ic("home")+'</span><span class="navlabel">ホーム</span></button>'+
-      '<div class="nav-cap"><span class="cap-t">Client</span><i class="cap-line"></i><span class="cap-acts"><button class="add" id="addCl" title="クライアント追加">＋</button></span></div>'+
+      '<div class="nav-cap"><span class="cap-t">Client</span><i class="cap-line"></i>'+(editable?'<span class="cap-acts"><button class="add" id="addCl" title="クライアント追加">＋</button></span>':'')+'</div>'+
       (cls||'<div class="sb-meta" style="padding:2px 10px">クライアント未登録</div>')+
       '<div class="nav-cap"><span class="cap-t">Report</span><i class="cap-line"></i></div>'+
       '<button class="navitem'+(route.view==="tasks"?' on':'')+'" data-go="tasks"><span class="ic">'+ic("pipe")+'</span><span class="navlabel">タスク管理</span></button>';
@@ -1095,17 +1094,15 @@
     var tabs='<div class="tabbar"><div class="tabs">'+
       '<button class="tab'+(tab==="summary"?" on":"")+'" data-tab="summary">'+ic("report",14)+'<span>サマリー</span></button>'+
       evs.map(function(ev){return '<button class="tab'+(tab===ev.id?" on":"")+'" data-tab="'+ev.id+'" title="'+esc(ev.name)+'">'+ic("ticket",14)+'<span>'+esc(ev.name)+'</span></button>';}).join("")+
-      '</div><div class="tab-acts">'+
-      (evs.length>1?'<button class="tab tab-act" data-reorder="'+cl.id+'" title="タブの並び順を変更">⇅<span class="lbl"> 並び替え</span></button>':'')+
-      '<button class="tab tab-add" data-addev="'+cl.id+'" title="イベントを追加">＋<span class="lbl"> イベント追加</span></button>'+
-      '</div></div>';
+      '</div>'+
+      (editable?'<div class="tab-acts">'+
+        (evs.length>1?'<button class="tab tab-act" data-reorder="'+cl.id+'" title="タブの並び順を変更" aria-label="並び替え">⇅</button>':'')+
+        '<button class="tab tab-add" data-addev="'+cl.id+'" title="イベントを追加">＋<span class="lbl"> イベント追加</span></button>'+
+      '</div>':'')+'</div>';
     var body;
     if(tab==="summary")body=reportHTML({evs:evs,mode:"client"});
     else{route.eventId=tab;body=pipelineHTML();}
     elView.innerHTML=head+tabs+body;
-    // タブが多くて横スクロールになっても、選択中のタブは見える位置に
-    var onTab=elView.querySelector(".tab.on");
-    if(onTab&&onTab.scrollIntoView)onTab.scrollIntoView({block:"nearest",inline:"nearest"});
   }
 
   function renderTasks(){
