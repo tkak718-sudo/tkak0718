@@ -318,23 +318,27 @@
   /* クライアント名の下に入るイベント見出しは、マーカー無しで一段小さく */
   .ev-head.sub{margin-top:6px}
   .ev-head.sub h2{font-size:19px;background:none;padding:0;margin-left:0}
-  /* クライアントページのタブ：ピル型。横スクロールさせず折り返して全部見せる */
-  .tabbar{display:flex;align-items:flex-start;gap:10px;margin:16px 0 20px}
-  .tabs{display:flex;flex-wrap:wrap;gap:6px;flex:1;min-width:0}
-  .tab{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line);background:var(--panel);color:var(--muted);
-    padding:8px 14px;border-radius:999px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;max-width:260px;
-    font-family:inherit;transition:background .15s,color .15s,border-color .15s,box-shadow .15s}
+  /* クライアントページのタブ：本物のタブ（上角丸・下は基線に接する）。折り返して全部見せる */
+  .tabbar{display:flex;align-items:flex-end;gap:12px;margin:18px 0 22px;border-bottom:2px solid color-mix(in srgb,var(--brand) 55%,var(--line))}
+  .tabs{display:flex;flex-wrap:wrap;gap:3px;flex:1;min-width:0;align-items:flex-end}
+  .tab{position:relative;display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line);border-bottom:none;
+    background:var(--panel-2);color:var(--muted);padding:9px 15px;border-radius:11px 11px 0 0;font-size:13px;font-weight:700;
+    cursor:pointer;white-space:nowrap;max-width:260px;font-family:inherit;transition:background .15s,color .15s}
   .tab span{overflow:hidden;text-overflow:ellipsis}
   .tab svg{flex:none;opacity:.7}
-  .tab:hover{border-color:var(--brand);color:var(--brand-deep);background:var(--brand-soft2)}
-  .tab.on,.tab.on:hover{background:var(--grad);border-color:transparent;color:#fff;box-shadow:0 2px 10px rgba(19,196,107,.3)}
+  .tab:hover{background:var(--panel);color:var(--ink)}
+  .tab.on,.tab.on:hover{background:var(--grad);border-color:transparent;color:#fff;margin-bottom:-2px;padding-bottom:11px;
+    box-shadow:0 -2px 10px rgba(19,196,107,.22)}
   .tab.on svg{opacity:1;color:#fff}
-  .tab-acts{display:flex;gap:6px;flex:none}
-  .tab-add{color:var(--brand-deep);background:var(--brand-soft);border-color:color-mix(in srgb,var(--brand) 34%,transparent);font-weight:800}
-  .tab-add:hover{background:var(--grad);border-color:transparent;color:#fff}
-  .tab-act{width:38px;padding:0;justify-content:center;font-size:15px}
-  .tab-act:hover{background:var(--panel-2);color:var(--ink);border-color:var(--line)}
-  @media(max-width:720px){.tab-acts .lbl{display:none}.tab-add{width:38px;padding:0;justify-content:center;font-size:15px}}
+  /* 並び替え・追加はタブではなく操作ボタン。基線の少し上に丸で置く */
+  .tab-acts{display:flex;gap:6px;flex:none;padding-bottom:7px}
+  .tbtn{display:inline-flex;align-items:center;justify-content:center;gap:4px;height:34px;min-width:34px;padding:0 12px;
+    border:1px solid var(--line);border-radius:999px;background:var(--panel);color:var(--muted);font-size:14px;font-weight:800;
+    cursor:pointer;font-family:inherit;white-space:nowrap;transition:background .15s,color .15s,border-color .15s}
+  .tbtn:hover{background:var(--panel-2);color:var(--ink)}
+  .tbtn.add{color:var(--brand-deep);background:var(--brand-soft);border-color:color-mix(in srgb,var(--brand) 34%,transparent);font-size:13px}
+  .tbtn.add:hover{background:var(--grad);border-color:transparent;color:#fff}
+  @media(max-width:720px){.tab-acts .lbl{display:none}.tbtn.add{padding:0;font-size:15px}}
   .sel-pill{border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:999px;padding:7px 30px 7px 12px;
     font-size:12.5px;font-weight:700;font-family:inherit;cursor:pointer;appearance:none;-webkit-appearance:none;
     background-image:linear-gradient(45deg,transparent 50%,var(--muted) 50%),linear-gradient(135deg,var(--muted) 50%,transparent 50%);
@@ -1096,8 +1100,8 @@
       evs.map(function(ev){return '<button class="tab'+(tab===ev.id?" on":"")+'" data-tab="'+ev.id+'" title="'+esc(ev.name)+'">'+ic("ticket",14)+'<span>'+esc(ev.name)+'</span></button>';}).join("")+
       '</div>'+
       (editable?'<div class="tab-acts">'+
-        (evs.length>1?'<button class="tab tab-act" data-reorder="'+cl.id+'" title="タブの並び順を変更" aria-label="並び替え">⇅</button>':'')+
-        '<button class="tab tab-add" data-addev="'+cl.id+'" title="イベントを追加">＋<span class="lbl"> イベント追加</span></button>'+
+        (evs.length>1?'<button class="tbtn" data-reorder="'+cl.id+'" title="タブの並び順を変更" aria-label="並び替え">⇅</button>':'')+
+        '<button class="tbtn add" data-addev="'+cl.id+'" title="イベントを追加">＋<span class="lbl"> イベント追加</span></button>'+
       '</div>':'')+'</div>';
     var body;
     if(tab==="summary")body=reportHTML({evs:evs,mode:"client"});
