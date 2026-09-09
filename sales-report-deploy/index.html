@@ -110,8 +110,6 @@
   .navlabel{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .badge{font-size:11px;color:var(--muted);background:var(--panel-2);border:1px solid var(--line-soft);border-radius:20px;padding:1px 8px;font-weight:700}
   .navitem.on .badge{color:var(--brand-deep)}
-  .ev-del{opacity:0;border:none;background:none;color:var(--faint);cursor:pointer;font-size:14px;padding:2px 4px;border-radius:6px;flex:none}
-  .navitem:hover .ev-del{opacity:1}.ev-del:hover{background:var(--crit);color:#fff}
   .sb-foot{border-top:1px solid var(--line-soft);padding-top:12px;margin-top:10px}
   .sync{display:flex;align-items:center;gap:7px;font-size:12px;font-weight:700;color:var(--brand-deep);padding:2px 6px 10px}
   .sync.warn{color:var(--warn)}
@@ -124,8 +122,9 @@
 
   main{min-width:0;display:flex;flex-direction:column}
   .topbar{position:sticky;top:0;z-index:10;background:color-mix(in srgb,var(--bg) 82%,transparent);backdrop-filter:blur(8px);border-bottom:1px solid var(--line-soft);padding:15px 30px;display:flex;align-items:center;justify-content:space-between;gap:16px}
-  .topbar h1{font-size:18px}
-  .top-r{display:flex;align-items:center;gap:10px}
+  .tb-l{display:flex;align-items:center;gap:12px;flex:1;min-width:0}
+  .topbar h1{font-size:18px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .top-r{display:flex;align-items:center;gap:10px;flex:none}
   .pill{font-size:11.5px;font-weight:700;color:var(--brand-deep);background:var(--brand-soft);border:1px solid color-mix(in srgb,var(--brand) 25%,transparent);padding:4px 11px;border-radius:20px;white-space:nowrap}
   .edit-pill{cursor:pointer;border:1px solid var(--line);background:var(--panel);color:var(--muted)}
   .edit-pill.on{background:var(--brand);color:#fff;border-color:var(--brand)}
@@ -142,6 +141,8 @@
   }
   :root[data-theme="dark"] .greet h2,:root[data-theme="dark"] .ev-head h2{
     background:linear-gradient(transparent 50%,rgba(47,213,187,.26) 50%,rgba(47,213,187,.26) 88%,transparent 88%)}
+  @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .ev-head.sub h2{background:none}}
+  :root[data-theme="dark"] .ev-head.sub h2{background:none}
 
   .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin:22px 0}
   .kpi{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:18px;box-shadow:var(--shadow);position:relative;overflow:hidden}
@@ -315,6 +316,27 @@
   .anyone{font-size:11px;font-weight:700;color:var(--brand-deep);background:var(--brand-soft);border-radius:20px;padding:2px 10px;white-space:nowrap}
 
   .ev-head{display:flex;justify-content:space-between;align-items:flex-end;gap:14px;flex-wrap:wrap;margin-bottom:4px}
+  /* クライアント名の下に入るイベント見出しは、マーカー無しで一段小さく */
+  .ev-head.sub{margin-top:6px}
+  .ev-head.sub h2{font-size:19px;background:none;padding:0;margin-left:0}
+  /* クライアントページのタブ */
+  .tabs{display:flex;gap:2px;align-items:flex-end;border-bottom:1px solid var(--line);margin:16px 0 20px;overflow-x:auto;scrollbar-width:thin}
+  .tab{position:relative;display:inline-flex;align-items:center;gap:7px;border:none;background:none;padding:10px 14px 11px;
+    font-size:13px;font-weight:700;color:var(--muted);cursor:pointer;white-space:nowrap;border-radius:9px 9px 0 0;
+    font-family:inherit;max-width:240px;flex:none;transition:color .15s,background .15s}
+  .tab span{overflow:hidden;text-overflow:ellipsis}
+  .tab svg{flex:none;opacity:.75}
+  .tab:hover{color:var(--ink);background:var(--brand-soft2)}
+  .tab.on{color:var(--brand-ink)}
+  .tab.on::after{content:"";position:absolute;left:8px;right:8px;bottom:-1px;height:3px;border-radius:3px 3px 0 0;background:var(--grad)}
+  .tab.on svg{opacity:1;color:var(--brand-deep)}
+  .tab-add{margin-left:auto;color:var(--brand-deep);font-weight:800}
+  .tab-add:hover{background:var(--brand-soft)}
+  .sel-pill{border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:999px;padding:7px 30px 7px 12px;
+    font-size:12.5px;font-weight:700;font-family:inherit;cursor:pointer;appearance:none;-webkit-appearance:none;
+    background-image:linear-gradient(45deg,transparent 50%,var(--muted) 50%),linear-gradient(135deg,var(--muted) 50%,transparent 50%);
+    background-position:calc(100% - 16px) 55%,calc(100% - 11px) 55%;background-size:5px 5px;background-repeat:no-repeat;max-width:260px}
+  .sel-pill:focus{outline:2px solid var(--brand);outline-offset:1px}
   .ev-head .meta{font-size:12.5px;color:var(--muted);margin-top:4px}
   .ev-actions{display:flex;gap:8px}
 
@@ -503,7 +525,7 @@
   </aside>
   <main>
     <div class="topbar">
-      <div style="display:flex;align-items:center;gap:12px">
+      <div class="tb-l">
         <button class="menu-btn" id="menuBtn" aria-label="メニュー">☰</button>
         <h1 id="pageTitle">ホーム</h1>
       </div>
@@ -569,7 +591,9 @@
   var SYS_FEE  = 330;    // システム利用料（1枚あたり・円）。税込単価の設定の初期値に使う
 
   var state = defaults();
-  var route = {view:"home", eventId:null};
+  // view: home（全体のデータ分析）/ client（クライアント別。tab は "summary" かイベントid）/ tasks（タスク管理）
+  var route = {view:"home", eventId:null, clientId:null, tab:"summary", rclient:""};
+  var DEFAULT_CLIENT_ID="cl_rise", DEFAULT_CLIENT_NAME="RISEクリエーション株式会社様";
   // データ分析は開いたときの初期表示を当月・日別にする（「全期間」でいつでも解除できる）
   (function(){var r=monthRangeOf(new Date());route.rfrom=r.from;route.rto=r.to;route.rperiod="day";})();
   var editable = false;
@@ -592,7 +616,8 @@
       users:'<circle cx="9" cy="8" r="3.2"/><path d="M3.5 20a5.5 5.5 0 0 1 11 0"/><path d="M16 5.2a3.2 3.2 0 0 1 0 6.1M17 20a5.5 5.5 0 0 0-3-4.9"/>',
       pipe:'<path d="M4 6h16M4 12h16M4 18h10"/>',
       close:'<path d="M6.8 6.8l10.4 10.4M17.2 6.8L6.8 17.2"/>',
-      cal:'<rect x="3.5" y="5" width="17" height="15.5" rx="2.6"/><path d="M3.5 9.6h17M8 3.2v3.4M16 3.2v3.4"/>'
+      cal:'<rect x="3.5" y="5" width="17" height="15.5" rx="2.6"/><path d="M3.5 9.6h17M8 3.2v3.4M16 3.2v3.4"/>',
+      client:'<path d="M4 20.5V5.5A1.5 1.5 0 0 1 5.5 4h7A1.5 1.5 0 0 1 14 5.5v15M14 10h4.5A1.5 1.5 0 0 1 20 11.5v9M2.5 20.5h19M7.5 8h3M7.5 12h3M7.5 16h3"/>'
     };
     var sz=size||17;
     return '<svg width="'+sz+'" height="'+sz+'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">'+(p[name]||'')+'</svg>';
@@ -608,6 +633,7 @@
   function defaults(){
     return {
       v:2,
+      clients:[],   // [{id,name}]  イベントは ev.clientId でぶら下がる
       projects:[],
       announcements:[
         {id:uid(),date:"2026-08-02",type:"notice",title:"チケット枚数・売上の集計に対応しました",body:"「チケット管理」CSVで席タイプ別の枚数、「注文管理」CSVで日・週・月別の売上（決済済みのみ）を集計します。イベント画面の「CSVを取込」から読み込めます。"},
@@ -668,6 +694,27 @@
   function ensureProjects(){
     if(!Array.isArray(state.projects))state.projects=[];
     state.projects.forEach(function(p){if(!Array.isArray(p.tasks))p.tasks=[];});
+    ensureClients();
+  }
+  // クライアントを持たないイベント（＝この機能より前のデータ）は既定のクライアントにまとめる。
+  // id を固定にしておけば、複数の端末が同時に移行しても同じ結果になる。
+  function ensureClients(){
+    if(!Array.isArray(state.clients))state.clients=[];
+    var ids={}; state.clients.forEach(function(c){ids[c.id]=1;});
+    var orphan=(state.events||[]).filter(function(ev){return !ev.clientId||!ids[ev.clientId];});
+    if(orphan.length){
+      var def=findClient(DEFAULT_CLIENT_ID);
+      if(!def){def={id:DEFAULT_CLIENT_ID,name:DEFAULT_CLIENT_NAME};state.clients.unshift(def);}
+      orphan.forEach(function(ev){ev.clientId=def.id;});
+    }
+  }
+  function findClient(id){return (state.clients||[]).filter(function(c){return c.id===id;})[0]||null;}
+  function clientName(id){var c=findClient(id);return c?c.name:"";}
+  // クライアント内のイベントは開催日の新しい順。日付の無いものは末尾に登録順で。
+  function clientEvents(cid){
+    var list=state.events.filter(function(ev){return ev.clientId===cid;});
+    var dated=list.filter(function(e){return !!e.date;}).sort(function(a,b){return a.date<b.date?1:a.date>b.date?-1:0;});
+    return dated.concat(list.filter(function(e){return !e.date;}));
   }
   function findPrj(id){return state.projects.filter(function(p){return p.id===id;})[0];}
   function findTask(pid,tid){var p=findPrj(pid);if(!p)return null;return (p.tasks||[]).filter(function(t){return t.id===tid;})[0]||null;}
@@ -931,7 +978,7 @@
 
   // ================= Firestore sync =================
   var syncReady=false, applyingRemote=false, lastSaved="", fbOk=false;
-  function snapshot(){ensureProjects();return JSON.stringify({v:1,announcements:state.announcements,events:state.events,projects:state.projects});}
+  function snapshot(){ensureProjects();return JSON.stringify({v:1,announcements:state.announcements,events:state.events,projects:state.projects,clients:state.clients});}
   function setSync(text,cls){var b=document.getElementById("syncBox"),t=document.getElementById("syncTxt");if(!t)return;t.textContent=text;b.className="sync"+(cls?" "+cls:"");}
 
   function pushData(){
@@ -939,7 +986,7 @@
     var s=snapshot(); if(s===lastSaved)return;
     try{
       var d=JSON.parse(s);
-      window.FB.write(window.FB.docRef(),{announcements:d.announcements,events:d.events,projects:d.projects||[],v:1,updatedAt:new Date().toISOString()})
+      window.FB.write(window.FB.docRef(),{announcements:d.announcements,events:d.events,projects:d.projects||[],clients:d.clients||[],v:1,updatedAt:new Date().toISOString()})
         .then(function(){lastSaved=s;setSync("全員と同期済み");})
         .catch(function(e){console.error(e);setSync("保存できません（権限/通信）","warn");});
     }catch(e){console.error(e);}
@@ -956,6 +1003,7 @@
       if(Array.isArray(d.announcements)) state.announcements=d.announcements;
       if(Array.isArray(d.events)) state.events=d.events;
       if(Array.isArray(d.projects)) state.projects=d.projects;
+      if(Array.isArray(d.clients)) state.clients=d.clients;
       ensureProjects();
       lastSaved=snapshot(); save_local(); render();
     }finally{applyingRemote=false;}
@@ -968,7 +1016,7 @@
         if(!snap.exists()){
           // 初回：シードデータで作成（誰が開いても同一内容なので競合しても無害）
           setSync("初期データを作成中…");
-          window.FB.write(window.FB.docRef(),{announcements:state.announcements,events:state.events,projects:state.projects,v:1,updatedAt:new Date().toISOString()})
+          window.FB.write(window.FB.docRef(),{announcements:state.announcements,events:state.events,projects:state.projects,clients:state.clients,v:1,updatedAt:new Date().toISOString()})
             .then(function(){lastSaved=snapshot();syncReady=true;setSync("全員と同期済み");})
             .catch(function(e){console.error(e);setSync("接続できません（ルール未設定？）","warn");});
           return;
@@ -991,29 +1039,65 @@
   // ================= render =================
   var elView=document.getElementById("view"), elTitle=document.getElementById("pageTitle");
   function render(){
+    ensureProjects();
     buildNav();
-    if(route.view==="home"){elTitle.textContent="ホーム";renderHome();}
-    else if(route.view==="report"){elTitle.textContent="データ分析";renderReport();}
-    else {elTitle.textContent="Event";renderPipeline();}
+    if(route.view==="tasks"){elTitle.textContent="タスク管理";renderTasks();}
+    else if(route.view==="client"){var cl=findClient(route.clientId)||state.clients[0];elTitle.textContent=cl?cl.name:"クライアント";renderClient();}
+    else {route.view="home";elTitle.textContent="ホーム";renderHome();}
     document.getElementById("datePill").textContent=fmtDate(new Date().toISOString().slice(0,10));
     var eb=document.getElementById("editBtn");eb.textContent=editable?"編集モード ●":"閲覧モード";eb.classList.toggle("on",editable);
   }
 
   function buildNav(){
     var nav=document.getElementById("nav");
-    var evs=state.events.map(function(ev){
-      var on=(route.view==="pipeline"&&route.eventId===ev.id);
-      return '<button class="navitem'+(on?' on':'')+'" data-ev="'+ev.id+'"><span class="navent"><span class="ic tile">'+ic("ticket",14)+'</span><span class="navlabel">'+esc(ev.name)+'</span></span><span class="badge num">'+nf(ticketTotal(ev))+'</span>'+(editable?'<button class="ev-del" data-del="'+ev.id+'" title="削除">×</button>':'')+'</button>';
+    var cls=state.clients.map(function(c){
+      var on=(route.view==="client"&&route.clientId===c.id);
+      var n=state.events.filter(function(ev){return ev.clientId===c.id;}).length;
+      return '<button class="navitem'+(on?' on':'')+'" data-cl="'+c.id+'"><span class="navent"><span class="ic tile">'+ic("client",14)+'</span><span class="navlabel">'+esc(c.name)+'</span></span><span class="badge num" title="イベント数">'+nf(n)+'</span></button>';
     }).join("");
     nav.innerHTML=
       '<button class="navitem'+(route.view==="home"?' on':'')+'" data-go="home"><span class="ic">'+ic("home")+'</span><span class="navlabel">ホーム</span></button>'+
-      '<div class="nav-cap"><span class="cap-t">Event</span><i class="cap-line"></i>'+(editable?'<span class="cap-acts"><button class="add" id="reorderEvTop" title="並び替え">⇅</button><button class="add" id="addEvTop" title="イベント追加">＋</button></span>':'')+'</div>'+
-      (evs||'<div class="sb-meta" style="padding:2px 10px">イベント未登録</div>')+
+      '<div class="nav-cap"><span class="cap-t">Client</span><i class="cap-line"></i>'+(editable?'<span class="cap-acts"><button class="add" id="addCl" title="クライアント追加">＋</button></span>':'')+'</div>'+
+      (cls||'<div class="sb-meta" style="padding:2px 10px">クライアント未登録</div>')+
       '<div class="nav-cap"><span class="cap-t">Report</span><i class="cap-line"></i></div>'+
-      '<button class="navitem'+(route.view==="report"?' on':'')+'" data-go="report"><span class="ic">'+ic("report")+'</span><span class="navlabel">データ分析</span></button>';
+      '<button class="navitem'+(route.view==="tasks"?' on':'')+'" data-go="tasks"><span class="ic">'+ic("pipe")+'</span><span class="navlabel">タスク管理</span></button>';
   }
 
+  // ホーム＝全クライアント横断のデータ分析（席タイプ・選手は出さない）
   function renderHome(){
+    if(route.rclient&&!findClient(route.rclient))route.rclient="";
+    var evs=route.rclient?state.events.filter(function(ev){return ev.clientId===route.rclient;}):state.events;
+    elView.innerHTML=reportHTML({evs:evs,mode:"home"});
+  }
+
+  // クライアント別ページ：見出し＋タブ（サマリー／イベント新しい順）
+  function renderClient(){
+    var cl=findClient(route.clientId)||state.clients[0];
+    if(!cl){
+      elView.innerHTML='<div class="panel"><div class="empty"><div class="ei">'+ic("client")+'</div><b>クライアントがありません</b><p>'+(editable?'サイドバーの「＋」でクライアントを追加してください。':'編集モードでクライアントを追加できます。')+'</p></div></div>';
+      return;
+    }
+    route.clientId=cl.id;
+    var evs=clientEvents(cl.id), tab=route.tab||"summary";
+    if(tab!=="summary"&&!evs.some(function(e){return e.id===tab;}))tab="summary";
+    route.tab=tab;
+    var head='<div class="ev-head"><div><h2>'+esc(cl.name)+'</h2><div class="meta">イベント '+nf(evs.length)+' 件</div></div>'+
+      (editable?'<div class="ev-actions"><button class="btn" data-editcl="'+cl.id+'">名称を編集</button><button class="btn btn-danger" data-delcl="'+cl.id+'">削除</button></div>':'')+'</div>';
+    var tabs='<div class="tabs">'+
+      '<button class="tab'+(tab==="summary"?" on":"")+'" data-tab="summary">'+ic("report",14)+'<span>サマリー</span></button>'+
+      evs.map(function(ev){return '<button class="tab'+(tab===ev.id?" on":"")+'" data-tab="'+ev.id+'" title="'+esc(ev.name)+'">'+ic("ticket",14)+'<span>'+esc(ev.name)+'</span></button>';}).join("")+
+      (editable?'<button class="tab tab-add" data-addev="'+cl.id+'">＋ イベント追加</button>':'')+
+      '</div>';
+    var body;
+    if(tab==="summary")body=reportHTML({evs:evs,mode:"client"});
+    else{route.eventId=tab;body=pipelineHTML();}
+    elView.innerHTML=head+tabs+body;
+    // タブが多くて横スクロールになっても、選択中のタブは見える位置に
+    var onTab=elView.querySelector(".tab.on");
+    if(onTab&&onTab.scrollIntoView)onTab.scrollIntoView({block:"nearest",inline:"nearest"});
+  }
+
+  function renderTasks(){
     ensureProjects();
     var anns=state.announcements.slice().sort(function(a,b){return a.date<b.date?1:-1;});
     var tagName={notice:"お知らせ",event:"イベント",alert:"重要"};
@@ -1069,12 +1153,11 @@
         '<div class="bar-val num">'+fmt(x.v)+'</div></div>';
     }).join("")+'</div>';
   }
-  function renderPipeline(){
-    if((!route.eventId||!state.events.some(function(e){return e.id===route.eventId;}))&&state.events[0])route.eventId=state.events[0].id;
+  function pipelineHTML(){
     var ev=state.events.filter(function(e){return e.id===route.eventId;})[0];
     var body;
     if(!ev){
-      body='<div class="panel"><div class="empty"><div class="ei">'+ic("ticket")+'</div><b>イベントがありません</b><p>'+(editable?'サイドバーの「＋」でイベントを作成し、「チケット管理」「注文管理」CSVを取り込むと枚数と売上が表示されます。':'編集モードでイベントを追加できます。')+'</p></div></div>';
+      body='<div class="panel"><div class="empty"><div class="ei">'+ic("ticket")+'</div><b>イベントがありません</b><p>'+(editable?'タブの「＋ イベント追加」でイベントを作成し、「チケット管理」「注文管理」CSVを取り込むと枚数と売上が表示されます。':'編集モードでイベントを追加できます。')+'</p></div></div>';
     }else{
       var tk=ticketOf(ev), sa=salesOf(ev);
       var totalTk=tk?tk.total:0, totalAmt=sa?sa.total:0, cnt=sa?sa.count:0, avg=totalTk?totalAmt/totalTk:0;
@@ -1220,7 +1303,7 @@
       var headAvg=totalTk?headAmt/totalTk:0;
 
       body=
-        '<div class="ev-head"><div><h2>'+esc(ev.name)+'</h2><div class="meta">'+(ev.date?fmtDate(ev.date):"日付未設定")+(ev.venue?" ・ "+esc(ev.venue):"")+'</div>'+
+        '<div class="ev-head sub"><div><h2>'+esc(ev.name)+'</h2><div class="meta">'+(ev.date?fmtDate(ev.date):"日付未設定")+(ev.venue?" ・ "+esc(ev.venue):"")+'</div>'+
         ((ev.tkAt||ev.odAt||ev.plAt)?'<div class="meta" style="margin-top:2px;font-size:11.5px">最終取込 '+[ev.tkAt?'チケット '+fmtStamp(ev.tkAt):'',ev.odAt?'注文 '+fmtStamp(ev.odAt):'',ev.plAt?'選手 '+fmtStamp(ev.plAt):''].filter(Boolean).join(' / ')+'</div>':'')+'</div>'+
         (editable?'<div class="ev-actions"><button class="btn" data-editev="'+ev.id+'">編集</button><button class="btn btn-pri" data-import="'+ev.id+'">'+ic("chart")+' CSV・Excelを取込</button><button class="btn btn-danger" data-del="'+ev.id+'">削除</button></div>':'')+'</div>'+
         '<div class="kpis">'+kpi("総売上",yen(headAmt),"yen",headSub)+kpi("チケット枚数",nf(totalTk)+'<small>枚</small>',"ticket","販売済み")+kpi("平均単価",yen(headAvg),"chart","売上÷枚数")+kpi("決済件数",nf(cnt)+'<small>件</small>',"pipe","注文数")+'</div>'+
@@ -1230,7 +1313,7 @@
         playerPanel+
         '<div class="sb-meta" style="padding:14px 4px 0">※ チケット管理／注文管理のCSVは、月ごとに分かれていても続けて取り込めば合算されます（7月分→8月分の順に取込）。同じCSVを再度取り込んでも二重計上されず、同じ注文IDは新しい内容で更新されます。<br>※ 選手別CSVも月ごとに分けて取り込めば広告コード単位でまとまります。売上・枚数・件数は「累計」欄（期間開始日〜集計時点）も参照するため、片方のファイルに行が無い選手も取りこぼしません。集計期間が重なるファイルを取り込もうとすると確認が出ます。</div>';
     }
-    elView.innerHTML=body;   // イベントの切替はサイドバーから行う
+    return body;   // イベントの切替はクライアントページのタブで行う
   }
   function cardEmpty(title,desc){return '<div class="panel"><div class="empty"><div class="ei">'+ic("ticket")+'</div><b>'+esc(title)+'</b><p>'+esc(desc)+'</p></div></div>';}
   function kpi(lab,val,icon,sub){return '<div class="kpi"><div class="kic">'+ic(icon)+'</div><div class="lab">'+esc(lab)+'</div><div class="val num">'+val+'</div>'+(sub?'<div class="sub">'+esc(sub)+'</div>':'')+'</div>';}
@@ -1260,8 +1343,10 @@
   }
   function ledDelHandler(e){var d=e.target.closest(".led-del");if(d){e.preventDefault();var host=d.closest(".led-row,.led-card,.led-trow");if(host)host.remove();}}
 
-  function renderReport(){
-    var evs=state.events;
+  // o.mode: "home"（全クライアント。クライアントで絞り込める／席タイプ・選手は出さない）
+  //         "client"（1クライアント分。席タイプ・選手ランキングも出す）
+  function reportHTML(o){
+    var evs=o.evs, home=o.mode==="home";
     var period=route.rperiod||"month", from=route.rfrom||"", to=route.rto||"";
     var rs=reportSeries(evs,from,to,period);
     var avg=rs.tickets?rs.amount/rs.tickets:0;
@@ -1281,6 +1366,8 @@
         '<button class="seg-b'+(prevM.from===from&&prevM.to===to?" on":"")+'" id="rPrev">前月</button>'+
         '<button class="seg-b'+(thisM.from===from&&thisM.to===to?" on":"")+'" id="rThis">当月</button>'+
         '<button class="seg-b'+(!from&&!to?" on":"")+'" id="rAll">全期間</button></div>'+
+      (home?'<span class="lb" style="margin-left:6px">クライアント</span><select id="rClient" class="sel-pill">'+
+        '<option value="">すべて</option>'+state.clients.map(function(c){return '<option value="'+esc(c.id)+'"'+(route.rclient===c.id?' selected':'')+'>'+esc(c.name)+'</option>';}).join("")+'</select>':'')+
       '<span style="flex:1"></span>'+seg+'</div>';
 
     // 期間別の推移
@@ -1322,15 +1409,17 @@
     // イベント別（選択期間内）
     var evPanel;
     if(rs.byEvent.length){
+      var evById={};evs.forEach(function(ev){evById[ev.id]=ev;});
       var eTrs=rs.byEvent.map(function(e){
-        var share=rs.amount?e.amt/rs.amount*100:0;
+        var share=rs.amount?e.amt/rs.amount*100:0, src=evById[e.id];
         return '<tr><td><span class="pnm" title="'+esc(e.name)+'">'+esc(e.name)+'</span></td>'+
+          (home?'<td><span class="pnm" style="max-width:220px">'+esc(src?clientName(src.clientId):"")+'</span></td>':'')+
           '<td class="num">'+nf(e.n)+'</td><td class="num"><b>'+yen(e.amt)+'</b></td>'+
           '<td class="num">'+(rs.amount?share.toFixed(1)+'%':'—')+'</td></tr>';
       }).join("");
       evPanel='<div class="panel" style="margin-top:16px"><div class="panel-h"><h3>イベント別</h3><span class="sub">選択期間内 ・ 金額の多い順</span></div>'+
-        '<div class="tbl-wrap"><table><thead><tr><th>イベント名</th><th>枚数</th><th>税込金額</th><th>構成比</th></tr></thead><tbody>'+eTrs+
-        '</tbody><tfoot><tr><td>合計</td><td class="num">'+nf(rs.tickets)+'</td><td class="num">'+yen(rs.amount)+'</td><td class="num">100%</td></tr></tfoot></table></div></div>';
+        '<div class="tbl-wrap"><table><thead><tr><th>イベント名</th>'+(home?'<th>クライアント</th>':'')+'<th>枚数</th><th>税込金額</th><th>構成比</th></tr></thead><tbody>'+eTrs+
+        '</tbody><tfoot><tr><td>合計</td>'+(home?'<td></td>':'')+'<td class="num">'+nf(rs.tickets)+'</td><td class="num">'+yen(rs.amount)+'</td><td class="num">100%</td></tr></tfoot></table></div></div>';
     }else evPanel="";
 
     // 席タイプ別（選択期間内）／選手別ランキング（期間対象外）
@@ -1349,8 +1438,8 @@
       '<div class="sb-meta" style="padding:4px 16px 12px">※ 選手別データには購入日が無いため、期間の絞り込み対象外です（常に全期間の合算）。</div></div>':'';
 
     var span=(from||to)?((from?fmtDate(from):"最初")+" 〜 "+(to?fmtDate(to):"最新")):"全期間";
-    elView.innerHTML=
-      '<div class="greet"><h2>データ分析</h2><p>全イベント横断 ・ '+esc(span)+' ・ '+nf(rs.byEvent.length)+'イベント</p></div>'+
+    var scopeLb=home?(route.rclient?clientName(route.rclient):"全クライアント"):"クライアント内";
+    return (home?'<div class="greet"><h2>データ分析</h2><p>'+esc(scopeLb)+' ・ '+esc(span)+' ・ '+nf(rs.byEvent.length)+'イベント</p></div>':'')+
       filter+
       '<div class="kpis">'+
         kpi("チケット枚数",nf(rs.tickets)+'<small>枚</small>',"ticket",
@@ -1360,13 +1449,13 @@
         kpi("イベント数",nf(rs.byEvent.length)+'<small>件</small>',"pipe","販売のあったもの")+'</div>'+
       trend+
       evPanel+
-      '<div class="grid2" style="margin-top:16px"><div class="panel"><div class="panel-h"><h3>席タイプ別</h3><span class="sub">選択期間内 ・ 枚数の多い順</span></div>'+seatBars+'</div>'+
-      playerRank+'</div>';
+      (home?'':'<div class="grid2" style="margin-top:16px"><div class="panel"><div class="panel-h"><h3>席タイプ別</h3><span class="sub">選択期間内 ・ 枚数の多い順</span></div>'+seatBars+'</div>'+
+      playerRank+'</div>');
   }
 
   // ================= interactions =================
   document.addEventListener("click",function(e){
-    var t=e.target.closest("[data-go],[data-ev],[data-del],[data-import],[data-editev],[data-edittk],[data-editprice],[data-editsales],[data-editplayers],[data-period],[data-rperiod],#rAll,#rThis,#rPrev,#addEvTop,#reorderEvTop,#addAnn,[data-anndel],[data-annedit],#addPrj,[data-addtask],[data-editprj],[data-delprj],[data-edittask],[data-deltask],[data-fold]");
+    var t=e.target.closest("[data-go],[data-del],[data-import],[data-editev],[data-edittk],[data-editprice],[data-editsales],[data-editplayers],[data-period],[data-rperiod],#rAll,#rThis,#rPrev,#addAnn,[data-cl],[data-tab],[data-addev],[data-editcl],[data-delcl],#addCl,[data-anndel],[data-annedit],#addPrj,[data-addtask],[data-editprj],[data-delprj],[data-edittask],[data-deltask],[data-fold]");
     if(!t)return;
     // --- タスク管理（編集モード不要）---
     if(t.id==="addPrj"){addProjectModal();return;}
@@ -1389,9 +1478,12 @@
     if(t.hasAttribute("data-editsales")){editSalesModal(t.getAttribute("data-editsales"));return;}
     if(t.hasAttribute("data-editplayers")){editPlayersModal(t.getAttribute("data-editplayers"));return;}
     if(t.hasAttribute("data-go")){route.view=t.getAttribute("data-go");closeSidebar();render();return;}
-    if(t.hasAttribute("data-ev")){route.view="pipeline";route.eventId=t.getAttribute("data-ev");closeSidebar();render();return;}
-    if(t.id==="addEvTop"){addEventModal();return;}
-    if(t.id==="reorderEvTop"){reorderModal();return;}
+    if(t.hasAttribute("data-cl")){route.view="client";route.clientId=t.getAttribute("data-cl");route.tab="summary";closeSidebar();render();return;}
+    if(t.hasAttribute("data-tab")){route.tab=t.getAttribute("data-tab");render();return;}
+    if(t.id==="addCl"){addClientModal();return;}
+    if(t.hasAttribute("data-editcl")){editClientModal(t.getAttribute("data-editcl"));return;}
+    if(t.hasAttribute("data-delcl")){delClient(t.getAttribute("data-delcl"));return;}
+    if(t.hasAttribute("data-addev")){addEventModal(t.getAttribute("data-addev"));return;}
     if(t.hasAttribute("data-editev")){editEventModal(t.getAttribute("data-editev"));return;}
     if(t.hasAttribute("data-import")){importFor=t.getAttribute("data-import");document.getElementById("fileIn").click();return;}
     if(t.hasAttribute("data-fold")){
@@ -1407,6 +1499,7 @@
   // データ分析の期間指定。input ではなく change を使う（入力途中の再描画でフォーカスを失わないように）
   document.addEventListener("change",function(e){
     var id=e.target&&e.target.id;
+    if(id==="rClient"){route.rclient=e.target.value;render();return;}
     if(id!=="rFrom"&&id!=="rTo")return;
     var a=document.getElementById("rFrom"), b=document.getElementById("rTo");
     var fr=a?a.value:"", to=b?b.value:"";
@@ -1575,38 +1668,54 @@
         commit();toast("タスクを削除しました");
       });
   }
-  function addEventModal(){
+  function addClientModal(){
     if(!requireEdit())return;
-    openModal('<h3>イベントを追加</h3><p class="mh">EVENT名を入力してください。追加後、「チケット管理」「注文管理」CSVを取り込むと枚数と売上が表示されます。</p><label>EVENT名 <span style="color:var(--crit)">*</span></label><input id="m_name" placeholder="例）RISE201 8/29 後楽園ホール"><label>開催日</label>'+dateField("m_date","","開催日")+'<label>会場</label><input id="m_venue" placeholder="例）東京・後楽園ホール"><div class="modal-act"><button class="btn" data-close>キャンセル</button><button class="btn btn-pri" id="m_ok">追加する</button></div>',function(){document.getElementById("m_name").focus();});
-    document.getElementById("m_ok").onclick=function(){var name=document.getElementById("m_name").value.trim();if(!name){document.getElementById("m_name").focus();return;}var ev={id:uid(),name:name,date:document.getElementById("m_date").value,venue:document.getElementById("m_venue").value.trim(),ticket:null,dateMap:null,orderRaw:null,sales:null,players:null};state.events.unshift(ev);route.view="pipeline";route.eventId=ev.id;closeModal();commit();toast("イベント「"+name+"」を追加しました");};
+    openModal('<h3>クライアントを追加</h3><p class="mh">サイドバーにクライアントが並び、その中にイベントをまとめます。</p>'+
+      '<label>クライアント名 <span style="color:var(--crit)">*</span></label><input id="c_name" placeholder="例）RISEクリエーション株式会社様">'+
+      '<div class="modal-act"><button class="btn" data-close>キャンセル</button><button class="btn btn-pri" id="c_ok">追加する</button></div>',
+      function(){document.getElementById("c_name").focus();});
+    document.getElementById("c_ok").onclick=function(){
+      var name=document.getElementById("c_name").value.trim();if(!name){document.getElementById("c_name").focus();return;}
+      var c={id:uid(),name:name};state.clients.push(c);
+      route.view="client";route.clientId=c.id;route.tab="summary";closeModal();commit();toast("クライアント「"+name+"」を追加しました");
+    };
   }
-  function reorderModal(){
+  function editClientModal(id){
     if(!requireEdit())return;
-    if(state.events.length<2){toast("並び替えるにはイベントが2件以上必要です");return;}
-    var ord=state.events.slice();
-    function draw(){
-      document.getElementById("ordCont").innerHTML=ord.map(function(ev,i){
-        return '<div class="ord-row"><span class="oi num">'+(i+1)+'</span><span class="on">'+esc(ev.name)+'</span><span class="ord-btns"><button type="button" data-mv="up" data-i="'+i+'"'+(i===0?" disabled":"")+' title="上へ">↑</button><button type="button" data-mv="down" data-i="'+i+'"'+(i===ord.length-1?" disabled":"")+' title="下へ">↓</button></span></div>';
-      }).join("");
-    }
-    openModal('<h3>イベントの並び替え</h3><p class="mh">サイドバーに表示される順番を変更します。↑↓で移動し、保存すると全員に反映されます。</p><div class="modal-scroll"><div id="ordCont"></div></div><div class="modal-act"><button class="btn" data-close>キャンセル</button><button class="btn btn-pri" id="ordok">保存</button></div>');
-    var cont=document.getElementById("ordCont");
-    draw();
-    cont.addEventListener("click",function(e){
-      var btn=e.target.closest("[data-mv]");if(!btn)return;
-      var i=+btn.getAttribute("data-i"),j=btn.getAttribute("data-mv")==="up"?i-1:i+1;
-      if(j<0||j>=ord.length)return;
-      var tmp=ord[i];ord[i]=ord[j];ord[j]=tmp;draw();
-    });
-    document.getElementById("ordok").onclick=function(){state.events=ord;closeModal();commit();toast("並び順を保存しました");};
+    var c=findClient(id);if(!c)return;
+    openModal('<h3>クライアント名を編集</h3><label>クライアント名</label><input id="c_name" value="'+esc(c.name)+'">'+
+      '<div class="modal-act"><button class="btn" data-close>キャンセル</button><button class="btn btn-pri" id="c_ok">保存</button></div>',
+      function(){document.getElementById("c_name").focus();});
+    document.getElementById("c_ok").onclick=function(){c.name=document.getElementById("c_name").value.trim()||c.name;closeModal();commit();toast("保存しました");};
+  }
+  function delClient(id){
+    if(!requireEdit())return;
+    var c=findClient(id);if(!c)return;
+    var n=state.events.filter(function(ev){return ev.clientId===id;}).length;
+    if(n){toast("イベントが "+nf(n)+" 件あります。先にイベントを削除するか、編集で別のクライアントへ移してください");return;}
+    confirmDanger("クライアントを削除しますか？",
+      '<p class="cf-nm">'+esc(c.name)+'</p><p class="cf-tx warn">削除すると元に戻せません。全員の画面から消えます。</p>',
+      "削除する",
+      function(){state.clients=state.clients.filter(function(x){return x.id!==id;});route.view="home";route.clientId=null;commit();toast("クライアントを削除しました");});
+  }
+  function clientSelectHTML(id,cur){
+    return '<select id="'+id+'">'+state.clients.map(function(c){return '<option value="'+esc(c.id)+'"'+(c.id===cur?' selected':'')+'>'+esc(c.name)+'</option>';}).join("")+'</select>';
+  }
+
+  function addEventModal(cid){
+    if(!requireEdit())return;
+    if(!state.clients.length){toast("先にクライアントを追加してください");return;}
+    cid=findClient(cid)?cid:(route.clientId||state.clients[0].id);
+    openModal('<h3>イベントを追加</h3><p class="mh">EVENT名を入力してください。追加後、「チケット管理」「注文管理」CSVを取り込むと枚数と売上が表示されます。</p><label>EVENT名 <span style="color:var(--crit)">*</span></label><input id="m_name" placeholder="例）RISE201 8/29 後楽園ホール"><label>クライアント</label>'+clientSelectHTML("m_client",cid)+'<label>開催日</label>'+dateField("m_date","","開催日")+'<label>会場</label><input id="m_venue" placeholder="例）東京・後楽園ホール"><div class="modal-act"><button class="btn" data-close>キャンセル</button><button class="btn btn-pri" id="m_ok">追加する</button></div>',function(){document.getElementById("m_name").focus();});
+    document.getElementById("m_ok").onclick=function(){var name=document.getElementById("m_name").value.trim();if(!name){document.getElementById("m_name").focus();return;}var ev={id:uid(),clientId:document.getElementById("m_client").value,name:name,date:document.getElementById("m_date").value,venue:document.getElementById("m_venue").value.trim(),ticket:null,dateMap:null,orderRaw:null,sales:null,players:null};state.events.unshift(ev);route.view="client";route.clientId=ev.clientId;route.tab=ev.id;route.eventId=ev.id;closeModal();commit();toast("イベント「"+name+"」を追加しました");};
   }
   function editEventModal(id){
     if(!requireEdit())return;
     var ev=state.events.filter(function(e){return e.id===id;})[0];if(!ev)return;
-    openModal('<h3>イベントを編集</h3><p class="mh">名称・開催日・会場を変更できます。</p><label>EVENT名</label><input id="m_name" value="'+esc(ev.name)+'"><label>開催日</label>'+dateField("m_date",ev.date,"開催日")+'<label>会場</label><input id="m_venue" value="'+esc(ev.venue||"")+'"><div class="modal-act"><button class="btn" data-close>キャンセル</button><button class="btn btn-pri" id="m_ok">保存</button></div>');
-    document.getElementById("m_ok").onclick=function(){ev.name=document.getElementById("m_name").value.trim()||ev.name;ev.date=document.getElementById("m_date").value;ev.venue=document.getElementById("m_venue").value.trim();closeModal();commit();toast("保存しました");};
+    openModal('<h3>イベントを編集</h3><p class="mh">名称・開催日・会場を変更できます。</p><label>EVENT名</label><input id="m_name" value="'+esc(ev.name)+'"><label>クライアント</label>'+clientSelectHTML("m_client",ev.clientId)+'<label>開催日</label>'+dateField("m_date",ev.date,"開催日")+'<label>会場</label><input id="m_venue" value="'+esc(ev.venue||"")+'"><div class="modal-act"><button class="btn" data-close>キャンセル</button><button class="btn btn-pri" id="m_ok">保存</button></div>');
+    document.getElementById("m_ok").onclick=function(){ev.name=document.getElementById("m_name").value.trim()||ev.name;ev.clientId=document.getElementById("m_client").value||ev.clientId;ev.date=document.getElementById("m_date").value;ev.venue=document.getElementById("m_venue").value.trim();route.clientId=ev.clientId;closeModal();commit();toast("保存しました");};
   }
-  function delEvent(id){if(!requireEdit())return;var ev=state.events.filter(function(e){return e.id===id;})[0];if(!ev)return;if(!confirm("イベント「"+ev.name+"」を削除しますか？\n取り込んだ集計データも削除されます。"))return;state.events=state.events.filter(function(e){return e.id!==id;});if(route.eventId===id)route.eventId=state.events[0]?state.events[0].id:null;commit();toast("削除しました");}
+  function delEvent(id){if(!requireEdit())return;var ev=state.events.filter(function(e){return e.id===id;})[0];if(!ev)return;if(!confirm("イベント「"+ev.name+"」を削除しますか？\n取り込んだ集計データも削除されます。"))return;state.events=state.events.filter(function(e){return e.id!==id;});if(route.eventId===id){route.eventId=null;route.tab="summary";}commit();toast("削除しました");}
 
   function addAnnModal(){
     if(!requireEdit())return;
@@ -2353,9 +2462,9 @@
   function splitLine(line){var out=[],cur="",q=false;for(var i=0;i<line.length;i++){var ch=line[i];if(q){if(ch==='"'){if(line[i+1]==='"'){cur+='"';i++;}else q=false;}else cur+=ch;}else{if(ch==='"')q=true;else if(ch===","){out.push(cur);cur="";}else cur+=ch;}}out.push(cur);return out;}
 
   // ---------- backup / restore ----------
-  document.getElementById("backupBtn").onclick=function(){ensureProjects();var blob=new Blob([JSON.stringify({announcements:state.announcements,events:state.events,projects:state.projects},null,2)],{type:"application/json"});var a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="crowdbasket-sales-"+new Date().toISOString().slice(0,10)+".json";a.click();setTimeout(function(){URL.revokeObjectURL(a.href);},500);toast("バックアップを書き出しました");};
+  document.getElementById("backupBtn").onclick=function(){ensureProjects();var blob=new Blob([JSON.stringify({announcements:state.announcements,events:state.events,projects:state.projects,clients:state.clients},null,2)],{type:"application/json"});var a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="crowdbasket-sales-"+new Date().toISOString().slice(0,10)+".json";a.click();setTimeout(function(){URL.revokeObjectURL(a.href);},500);toast("バックアップを書き出しました");};
   document.getElementById("restoreBtn").onclick=function(){if(!editable){toast("復元は編集モードで行えます");return;}document.getElementById("restoreIn").click();};
-  document.getElementById("restoreIn").addEventListener("change",function(e){var f=e.target.files[0];e.target.value="";if(!f)return;var rd=new FileReader();rd.onload=function(){try{var s=JSON.parse(rd.result);if(!s.events)throw 0;if(Array.isArray(s.announcements))state.announcements=s.announcements;if(Array.isArray(s.projects))state.projects=s.projects;ensureProjects();state.events=s.events;route={view:"home",eventId:null};commit();toast("復元しました（全員に反映されます）");}catch(err){toast("ファイルを読み込めませんでした");}};rd.readAsText(f);});
+  document.getElementById("restoreIn").addEventListener("change",function(e){var f=e.target.files[0];e.target.value="";if(!f)return;var rd=new FileReader();rd.onload=function(){try{var s=JSON.parse(rd.result);if(!s.events)throw 0;if(Array.isArray(s.announcements))state.announcements=s.announcements;if(Array.isArray(s.projects))state.projects=s.projects;if(Array.isArray(s.clients))state.clients=s.clients;state.events=s.events;ensureProjects();route.view="home";route.clientId=null;route.tab="summary";commit();toast("復元しました（全員に反映されます）");}catch(err){toast("ファイルを読み込めませんでした");}};rd.readAsText(f);});
   document.getElementById("logoutBtn").onclick=function(){sessionStorage.removeItem("cb_sr_unlocked");location.reload();};
 
   // ---------- edit mode ----------
@@ -2406,7 +2515,7 @@
   if(sessionStorage.getItem("cb_sr_unlocked")==="1")unlock();else document.getElementById("pw").focus();
 
   // 起動時：キャッシュがあれば即描画（同期到着で上書き）
-  try{var c=localStorage.getItem("cb_salesreport_cache");if(c){var d=JSON.parse(c);if(d&&d.events){state.announcements=d.announcements||state.announcements;state.events=d.events||state.events;if(Array.isArray(d.projects))state.projects=d.projects;}}}catch(e){}
+  try{var c=localStorage.getItem("cb_salesreport_cache");if(c){var d=JSON.parse(c);if(d&&d.events){state.announcements=d.announcements||state.announcements;state.events=d.events||state.events;if(Array.isArray(d.projects))state.projects=d.projects;if(Array.isArray(d.clients))state.clients=d.clients;}}}catch(e){}
   ensureProjects();
 })();
 </script>
