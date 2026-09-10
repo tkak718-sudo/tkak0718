@@ -391,6 +391,31 @@
   .tx-r{display:block;font-size:10.5px;color:var(--faint);font-weight:700;margin-top:1px}
   .mxf{display:inline-block;margin-left:6px;padding:1px 7px;border-radius:999px;font-size:10.5px;font-weight:800;letter-spacing:.02em;color:#9a5b00;background:color-mix(in srgb,#f5a623 22%,transparent);border:1px solid color-mix(in srgb,#f5a623 45%,transparent);vertical-align:2px;white-space:nowrap}
   .ly-cl{display:block;font-size:11px;color:var(--faint);font-weight:700;margin-top:2px}
+  .lycalc{display:grid;gap:12px;margin:22px 0}
+  .lyc-row{display:flex;align-items:stretch;gap:12px;flex-wrap:wrap}
+  .lyc-b{flex:1;min-width:210px;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:16px 18px;box-shadow:var(--shadow)}
+  .lyc-b .l{display:flex;align-items:center;gap:5px;font-size:12px;color:var(--muted);font-weight:800}
+  .lyc-b .v{display:block;font-size:27px;font-weight:800;margin-top:7px;letter-spacing:-.02em}
+  .lyc-b .v small{font-size:14px;font-weight:700;color:var(--muted);margin-left:2px}
+  .lyc-b .n{display:block;font-size:11.5px;color:var(--faint);font-weight:600;margin-top:5px}
+  .lyc-b.res{border-color:color-mix(in srgb,var(--brand) 45%,var(--line));background:color-mix(in srgb,var(--brand) 7%,var(--panel))}
+  .lyc-b.res .v{color:var(--brand-d,var(--brand))}
+  .lyc-op{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;flex:none;padding:0 4px}
+  .lyc-op .ar{font-size:15px;color:var(--brand);line-height:1}
+  .lyc-op .mul{font-size:13px;font-weight:900;color:var(--brand);white-space:nowrap}
+  .lyc-sum{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;background:var(--grad);color:#fff;border-radius:var(--radius);padding:16px 22px;box-shadow:var(--shadow)}
+  .lyc-sum .l{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:13.5px;font-weight:800}
+  .lyc-sum .n{font-size:12px;font-weight:700;opacity:.85;margin-left:4px}
+  .lyc-sum .v{font-size:30px;font-weight:900;letter-spacing:-.02em}
+  .lyc-sum .hintb,.lyc-sum .hintb:hover{background:rgba(255,255,255,.3);color:#fff}
+  @media(max-width:720px){
+    .lyc-row{flex-direction:column}
+    .lyc-op{flex-direction:row;gap:8px;padding:0}
+    .lyc-op .ar{transform:rotate(90deg)}
+  }
+  thead th.grp{text-align:center;font-size:11px;padding-bottom:6px;color:var(--brand);border-bottom:1px solid var(--line-soft)}
+  thead th.grp:not(.gsep){color:var(--muted)}
+  .gsep{border-left:2px solid color-mix(in srgb,var(--brand) 35%,var(--line))}
   .mx-note{margin-top:2px;color:#9a5b00;font-weight:700}
   /* 見出しの「？」と、その説明の吹き出し */
   .hintb{display:inline-grid;place-items:center;width:15px;height:15px;margin-left:5px;vertical-align:-2px;
@@ -1626,31 +1651,53 @@
 
 
     // LINEヤフー社様へのレベニューシェア集計（ホームのタブ）
+    // 「この金額のうち0.6%がこれ、足すと合計がこれ」が一目で追えるように、
+    // 上に計算の流れを出し、下はデータ分析と同じ表にお支払いの列を足した形にする。
     var lyBody="";
     if(home&&htab==="ly"){
       var lyFeeTot=lyFee(rs.amountEx), lyChgTot=rs.tickets*LY_CHARGE, lyTot=lyFeeTot+lyChgTot;
-      var lyRow=function(label,sub,cnt,ex,fee,cls){
+
+      var lyFlow='<div class="lycalc">'+
+        '<div class="lyc-row">'+
+          '<div class="lyc-b"><span class="l">① 税抜売上（チケット代のみ）</span><span class="v num">'+yen(rs.amountEx)+'</span><span class="n">ユーザーチャージ・コンビニ決済手数料は含みません</span></div>'+
+          '<div class="lyc-op"><span class="ar">▶</span><span class="mul">× '+LY_RATE+'%</span></div>'+
+          '<div class="lyc-b res"><span class="l">システム利用料'+hintBtn("lyfee")+'</span><span class="v num">'+yen(lyFeeTot)+'</span><span class="n">①の '+LY_RATE+'%（円未満切り捨て）</span></div>'+
+        '</div>'+
+        '<div class="lyc-row">'+
+          '<div class="lyc-b"><span class="l">② チケット枚数</span><span class="v num">'+nf(rs.tickets)+'<small> 枚</small></span><span class="n">'+(rs.filtered?"選択期間内":"全期間")+'</span></div>'+
+          '<div class="lyc-op"><span class="ar">▶</span><span class="mul">× '+yen(LY_CHARGE)+'</span></div>'+
+          '<div class="lyc-b res"><span class="l">ユーザーチャージ'+hintBtn("lychg")+'</span><span class="v num">'+yen(lyChgTot)+'</span><span class="n">②× '+yen(LY_CHARGE)+'</span></div>'+
+        '</div>'+
+        '<div class="lyc-sum"><span class="l">お支払い合計'+hintBtn("lytotal")+'<span class="n">'+yen(lyFeeTot)+' ＋ '+yen(lyChgTot)+'</span></span><span class="v num">'+yen(lyTot)+'</span></div>'+
+      '</div>';
+
+      // 表はデータ分析と同じ「枚数・税込・税抜」に、お支払いの3列を足す
+      var lyHead='<thead><tr><th rowspan="2">%1</th><th rowspan="2">枚数</th><th class="grp" colspan="2">売上（データ分析と同じ）</th>'+
+        '<th class="grp gsep" colspan="3">LINEヤフー社様へのお支払い</th></tr>'+
+        '<tr><th>金額（税込）'+hintBtn("inc")+'</th><th class="ex">税抜'+hintBtn("ex")+'</th>'+
+        '<th class="gsep">システム利用料'+hintBtn("lyfee")+'</th><th>ユーザーチャージ'+hintBtn("lychg")+'</th><th>お支払い合計'+hintBtn("lytotal")+'</th></tr></thead>';
+      var lyRow=function(label,sub,cnt,inc,ex,fee,cls){
         return '<tr'+(cls?' class="'+cls+'"':'')+'><td>'+label+(sub?' <span style="color:var(--faint);font-weight:600">'+esc(sub)+'</span>':'')+'</td>'+
-          '<td class="num">'+nf(cnt)+'</td><td class="num ex">'+yen(ex)+'</td>'+
-          '<td class="num">'+yen(fee)+'</td><td class="num">'+yen(cnt*LY_CHARGE)+'</td>'+
+          '<td class="num">'+nf(cnt)+'</td>'+
+          '<td class="num">'+yen(inc)+'</td><td class="num ex">'+yen(ex)+'</td>'+
+          '<td class="num gsep">'+yen(fee)+'</td><td class="num">'+yen(cnt*LY_CHARGE)+'</td>'+
           '<td class="num"><b>'+yen(fee+cnt*LY_CHARGE)+'</b></td></tr>';
       };
-      var lyHead='<thead><tr><th>%1</th><th>枚数</th><th class="ex">税抜売上'+hintBtn("ex")+'</th>'+
-        '<th>システム利用料'+hintBtn("lyfee")+'</th><th>ユーザーチャージ'+hintBtn("lychg")+'</th><th>お支払い合計'+hintBtn("lytotal")+'</th></tr></thead>';
-      var lyFoot='<tfoot><tr class="ft-all"><td>合計</td><td class="num">'+nf(rs.tickets)+'</td><td class="num ex">'+yen(rs.amountEx)+'</td>'+
-        '<td class="num">'+yen(lyFeeTot)+'</td><td class="num">'+yen(lyChgTot)+'</td><td class="num">'+yen(lyTot)+'</td></tr></tfoot>';
+      var lyFoot='<tfoot><tr class="ft-all"><td>合計</td><td class="num">'+nf(rs.tickets)+'</td>'+
+        '<td class="num">'+yen(rs.amount)+'</td><td class="num ex">'+yen(rs.amountEx)+'</td>'+
+        '<td class="num gsep">'+yen(lyFeeTot)+'</td><td class="num">'+yen(lyChgTot)+'</td><td class="num">'+yen(lyTot)+'</td></tr></tfoot>';
 
       // 期間別。合計から各行へ配分するので、行を足すと必ず合計になる。
       var lyTrend;
-      var lb=rs.buckets.slice().reverse().map(function(x){return {label:esc(x.label),sub:x.sub,n:x.n,ex:x.xamt||0};});
-      if(rs.undated.n&&!rs.filtered)lb.push({label:'<span class="chip ph-unk">期間不明</span>',sub:"",n:rs.undated.n,ex:rs.undated.xamt||0});
+      var lb=rs.buckets.slice().reverse().map(function(x){return {label:esc(x.label),sub:x.sub,n:x.n,inc:x.amt,ex:x.xamt||0};});
+      if(rs.undated.n&&!rs.filtered)lb.push({label:'<span class="chip ph-unk">期間不明</span>',sub:"",n:rs.undated.n,inc:rs.undated.amt,ex:rs.undated.xamt||0});
       if(lb.length){
         var lyFees=splitYen(lyFeeTot,lb.map(function(x){return x.ex;}));
         var lfd=foldBar(lb.length);
         lyTrend='<div class="panel"><div class="panel-h"><h3>期間別のお支払い</h3>'+
           hRight('<span class="sub">'+({day:"日別",week:"週別",month:"月別"}[period])+'</span>')+'</div>'+
           '<div class="tbl-wrap'+lfd.cls+'"><table>'+lyHead.replace("%1",{day:"日",week:"週",month:"月"}[period])+'<tbody>'+
-          lb.map(function(x,i){return lyRow(x.label,x.sub,x.n,x.ex,lyFees[i],i>=FOLD_N?"row-more":"");}).join("")+
+          lb.map(function(x,i){return lyRow(x.label,x.sub,x.n,x.inc,x.ex,lyFees[i],i>=FOLD_N?"row-more":"");}).join("")+
           '</tbody>'+lyFoot+'</table></div>'+lfd.bar+'</div>';
       }else{
         lyTrend=cardEmpty("集計できるデータがありません","選択した期間にチケットのデータがありません。期間を広げるか「全期間」に戻してください。");
@@ -1665,22 +1712,16 @@
           '<div class="tbl-wrap"><table>'+lyHead.replace("%1","イベント名")+'<tbody>'+
           rs.byEvent.map(function(e,i){
             var src=evById2[e.id], cl=src?clientName(src.clientId):"";
-            return lyRow('<span class="pnm" title="'+esc(e.name)+'">'+esc(e.name)+'</span>'+(cl?'<span class="ly-cl">'+esc(cl)+'</span>':''),"",e.n,e.xamt||0,evFees[i],"");
+            return lyRow('<span class="pnm" title="'+esc(e.name)+'">'+esc(e.name)+'</span>'+(cl?'<span class="ly-cl">'+esc(cl)+'</span>':''),"",e.n,e.amt,e.xamt||0,evFees[i],"");
           }).join("")+'</tbody>'+lyFoot+'</table></div></div>';
       }
 
-      lyBody='<div class="kpis">'+
-          kpi("チケット枚数",nf(rs.tickets)+'<small>枚</small>',"ticket",rs.filtered?"選択期間内":"全期間")+
-          kpi("税抜売上",yen(rs.amountEx),"yen","レベニューシェアの対象")+
-          kpi("システム利用料",yen(lyFeeTot),"chart","税抜 × "+LY_RATE+"%")+
-          kpi("ユーザーチャージ",yen(lyChgTot),"users",nf(rs.tickets)+" 枚 × "+yen(LY_CHARGE))+
-          kpi("お支払い合計",yen(lyTot),"pipe","LINEヤフー社様へ")+'</div>'+
-        lyTrend+lyEv+
+      lyBody=lyFlow+lyTrend+lyEv+
         '<div class="panel" style="margin-top:16px"><div class="panel-h"><h3>計算方法</h3></div>'+
         '<div class="sb-meta" style="padding:12px 16px 16px;line-height:1.9">'+
         '※ <b>システム利用料</b>＝税抜のチケット代 × '+LY_RATE+'%（円未満切り捨て）。ユーザーチャージ・コンビニ決済手数料は対象外です。<br>'+
         '※ <b>ユーザーチャージ</b>＝チケット枚数 × '+yen(LY_CHARGE)+'。お客様からいただく'+yen(SYS_FEE)+'のうち'+yen(LY_CHARGE)+'をお支払いする形です。<br>'+
-        '※ <b>お支払い合計</b>＝システム利用料 ＋ ユーザーチャージ。<br>'+
+        '※ 表の「枚数・金額（税込）・税抜」は「全体サマリー」タブと同じ数字です。そこにお支払いの3列を足しています。<br>'+
         '※ 各行のシステム利用料は、合計を税抜売上の比で割り振った参考値です（行を足すと合計と一致します）。<br>'+
         '※ 上の期間・クライアントの絞り込みがそのまま反映されます。</div></div>';
     }
