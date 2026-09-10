@@ -696,7 +696,9 @@
   // 税抜＝税込÷1.1 の切り捨て。インボイス制度に合わせ、明細ごとではなく
   // 表示する合計そのものに対して1回だけ計算する。
   var TAX=1.1;
-  function exVal(n){return Math.floor((+n||0)/TAX);}
+  // 69960/1.1 が 63599.99999999999 になるなど、割り算には誤差が出る。
+  // そのまま切り捨てると 63,600 が 63,599 になってしまうので、極小の下駄をはかせる。
+  function exVal(n){return Math.floor((+n||0)/TAX+1e-6);}
   function yenEx(n){return yen(exVal(n));}
   function nf(n){return Math.round(n).toLocaleString("ja-JP");}
   function fmtDate(d){var t=new Date(d+"T00:00:00");if(isNaN(t))return d;var w=["日","月","火","水","木","金","土"][t.getDay()];return t.getFullYear()+"年"+(t.getMonth()+1)+"月"+t.getDate()+"日("+w+")";}
