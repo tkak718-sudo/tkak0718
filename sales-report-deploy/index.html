@@ -619,7 +619,7 @@
   var EDIT_PASSWORD = "crowdbasketadmin"; // ★編集モードの管理パスワード（あなただけ）
 
   // 注文管理CSVの金額は販売手数料を引いたあとの入金額なので、補正せずそのまま集計する（＝純売上）。
-  var SYS_FEE  = 330;    // システム利用料（1枚あたり・円）。税込単価の設定の初期値に使う
+  var SYS_FEE  = 330;    // ユーザーチャージ（1枚あたり・円）。単価設定の初期値に使う
 
   var state = defaults();
   // view: home（全体のデータ分析）/ client（クライアント別。tab は "summary" かイベントid）/ tasks（タスク管理）
@@ -1381,7 +1381,7 @@
         // CSVにはアクセス・クリック、Excelには登録者数があるため、値のある列だけ表示する
         var hasAC=ps.some(function(p){return (p.access||0)>0||(p.clicks||0)>0;});
         var hasReg=ps.some(function(p){return (p.reg||0)>0;});
-        // 選手別CSVの売上にはチケット1枚あたりのシステム利用料が含まれているので、引いた額も並べる
+        // 選手別CSVの売上にはチケット1枚あたりのユーザーチャージが含まれているので、引いた額も並べる
         var plFee=(pricingOf(ev)?pricingOf(ev).sysFee:SYS_FEE)||0;
         var plTk=ps.reduce(function(a,p){return a+(p.tickets||0);},0);
         var showFee=plFee>0&&plTk>0;
@@ -1645,7 +1645,7 @@
   // ---- 用語のヘルプ（見出しの「？」をクリックすると計算方法を出す） ----
   var HINTS={
     ticket:{t:"チケット代",b:"税込単価 × 枚数 の合計です。<br>単価は「単価設定」で登録した<b>税抜単価</b>に税率をかけて出しています。<br><br>ユーザーチャージ・コンビニ決済手数料は<b>含みません</b>。"},
-    charge:{t:"ユーザーチャージ",b:"<b>1枚あたり330円 × チケット枚数</b>です。<br>金額は「単価設定」の「システム利用料」で変えられます。<br><br>注文ごとにかかるコンビニ決済手数料とは別の項目です。"},
+    charge:{t:"ユーザーチャージ",b:"<b>1枚あたり330円 × チケット枚数</b>です。<br>金額は「単価設定」の「ユーザーチャージ」で変えられます。<br><br>注文ごとにかかるコンビニ決済手数料とは別の項目です。"},
     cvs:{t:"コンビニ決済手数料",b:"コンビニ払い<b>1注文につき330円</b>です。<br>枚数ではなく<b>注文の件数</b>で数えます（3枚まとめて1注文なら330円）。<br><br>注文管理CSVの「決済方法」から、決済済みのコンビニ払いだけを集計しています。"},
     inc:{t:"税込",b:"消費税を含んだ金額です。<br><br>税抜単価 ×（1＋税率）を四捨五入して<b>税込単価</b>を出し、それに枚数を掛けています。<br>税率は席タイプごとに <b>9%（軽減税率）</b>か<b>10%</b> を選べます。"},
     ex:{t:"税抜",b:"消費税を除いた金額です。<br><br>「単価設定」で入力した<b>税抜単価 × 枚数</b>をそのまま合計しています。<br>合計を1.1で割った概算ではないので、販売側の管理画面の金額と一致します。"},
@@ -1967,7 +1967,7 @@
       closeModal();commit();toast("チケット枚数を保存しました（合計 "+nf(total)+" 枚）");
     };
   }
-  // 税込単価の設定（先行販売期間・商品ごとの単価・システム利用料）
+  // 単価の設定（先行販売期間・商品ごとの税抜単価と税率・ユーザーチャージ）
   // 税込単価の設定。入力の中心は「席タイプごとの単価」で、商品（コーナー）ごとに
   // 変えたいときだけ折りたたみの中で上書きする。
   function editPriceModal(id){
@@ -2100,7 +2100,7 @@
       '<label style="margin-top:8px">二次選考期間<span style="font-weight:600">（ある場合だけ）</span></label>'+
       '<div class="sch-in">'+dateField("pr_sfrom",pr.secFrom,"開始日")+'<span class="sch-tl">〜</span>'+dateField("pr_sto",pr.secTo,"終了日")+'</div>'+
       '<p class="mh" style="margin:5px 0 0">購入日で先行／二次選考／通常に振り分けます。空欄の期間は使いません。</p>'+
-      '<label style="margin-top:8px">システム利用料（税込・1枚あたり）</label><input id="pr_fee" type="number" inputmode="numeric" value="'+esc(pr.sysFee)+'">'+
+      '<label style="margin-top:8px">ユーザーチャージ（税込・1枚あたり）</label><input id="pr_fee" type="number" inputmode="numeric" value="'+esc(pr.sysFee)+'">'+
       '<div class="modal-scroll" id="prWrap">'+seatTbl+prodBlock+'</div>'+
       '<div class="modal-act"><button class="btn" data-close>キャンセル</button><button class="btn btn-pri" id="prok">保存</button></div>',
       null, true
