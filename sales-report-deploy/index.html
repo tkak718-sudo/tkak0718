@@ -383,6 +383,11 @@
   .grid2>*{min-width:0}          /* 中身の最小幅でカラムが膨らまないように */
   .tbl-wrap.nar table{min-width:340px}  /* 列の少ない表は 720px を要求しない */
   /* 税抜は参考値なので、税込より一段控えめに見せる */
+  /* 単価設定：税抜の入力欄の下に、自動計算した税込を出す */
+  .pt .pt-inc{display:block;font-size:10.5px;color:var(--brand-deep);font-weight:700;margin-top:3px;min-height:13px;white-space:nowrap}
+  .pt th .th-x{display:block;font-size:10px;font-weight:700;color:var(--faint);letter-spacing:.02em}
+  .pt .col-tax{width:78px}
+  .tx-r{display:block;font-size:10px;color:var(--faint);font-weight:700}
   th.ex{color:var(--faint)}
   td.ex{color:var(--muted);font-weight:600}
   @media(max-width:900px){.grid2{grid-template-columns:1fr}}
@@ -828,6 +833,22 @@
   var PHASE_CLASS={adv:"ph-adv",sec:"ph-sec",reg:"ph-reg",unknown:"ph-unk"};
   // 0円も正当な単価（招待枠など）なので、空欄のみを未設定として扱う
   function uval(v){return (v==null||v==="")?null:(+v||0);}
+  // 単価は「税抜＋税率」で入力し、税込は自動計算する（四捨五入）。
+  // 税抜が入っていない古い設定は、保存済みの税込から逆算して表示・集計に使う。
+  var TAX_DEFAULT=10;
+  function taxOf(o){var t=o&&o.tax;return (t==null||t==="")?TAX_DEFAULT:(+t||0);}
+  // 税込は消費税の慣行どおり切り捨て。逆算（税抜）は切り上げにすると、
+  // 税込5,000/6,000のようなキリのいい価格でも往復して同じ値に戻る。
+  function incFromEx(ex,tax){return ex==null?null:Math.floor(ex*(1+tax/100)+1e-9);}
+  function exFromInc(inc,tax){return inc==null?null:Math.ceil(inc/(1+tax/100)-1e-9);}
+  // 1つの単価セル（先行/二次選考/通常のいずれか）について、税抜・税込・税率を揃えて返す
+  function priceCell(o,key){
+    if(!o)return null;
+    var tax=taxOf(o), ex=uval(o["x"+key]), inc=uval(o[key]);
+    if(ex!=null)return {ex:ex,inc:incFromEx(ex,tax),tax:tax};
+    if(inc!=null)return {ex:exFromInc(inc,tax),inc:inc,tax:tax};
+    return null;
+  }
   // チケット1行ごとの明細を返す。購入日が引けない行は d:null。
   // 期間別の集計（データ分析）と商品別の集計（売上内訳）で同じ解決結果を使うための共通処理。
   function priceRows(ev){
@@ -836,7 +857,7 @@
     var unitFor=function(p,seat,phase){
       var u=pr?pr.unit[p]:null;
       // 商品×席タイプの上書き → 席タイプ共通 → その商品全体、の順に単価を探す
-      var pick=function(o){return o?{adv:uval(o.adv),sec:uval(o.sec),reg:uval(o.reg)}:null;};
+      var pick=function(o){return o?{adv:priceCell(o,"adv"),sec:priceCell(o,"sec"),reg:priceCell(o,"reg")}:null;};
       var has=function(x){return !!x&&(x.adv!=null||x.sec!=null||x.reg!=null);};
       var v=pick((u&&u.seats&&typeof u.seats==="object")?u.seats[seat]:null);
       if(!has(v))v=pick(pr?pr.seats[seat]:null);
@@ -845,15 +866,17 @@
       // 期間不明の分は通常単価を当てる（不確実な枚数は画面に明示する）
       // 先行・二次選考の単価が空欄なら通常単価を流用する（「通常単価を適用」と表示して明示する）
       var own=(phase==="adv")?adv:((phase==="sec")?sec:reg);
-      var price=(phase==="adv"||phase==="sec")?(own!=null?own:reg):reg;
-      return {unit:price,fallback:((phase==="adv"||phase==="sec")&&own==null&&reg!=null)};
+      var cell=(phase==="adv"||phase==="sec")?(own!=null?own:reg):reg;
+      return {unit:cell?cell.inc:null,xunit:cell?cell.ex:null,tax:cell?cell.tax:null,
+              fallback:((phase==="adv"||phase==="sec")&&own==null&&reg!=null)};
     };
     var push=function(d,p,seat,n){
       if(!n)return;
       var phase=pr?phaseOf(pr,d):(d?"reg":"unknown");
       var u=unitFor(p,seat,phase);
-      out.push({d:d,p:p,s:seat,phase:phase,n:n,unit:u.unit,fallback:u.fallback,
-                amt:u.unit!=null?Math.round(u.unit*n):0});
+      out.push({d:d,p:p,s:seat,phase:phase,n:n,unit:u.unit,xunit:u.xunit,tax:u.tax,fallback:u.fallback,
+                amt:u.unit!=null?Math.round(u.unit*n):0,
+                xamt:u.xunit!=null?Math.round(u.xunit*n):0});
     };
     if(Array.isArray(ev.ticketRaw)&&ev.ticketRaw.length){
       var dm=(ev.dateMap&&typeof ev.dateMap==="object")?ev.dateMap:{};
@@ -875,20 +898,20 @@
   // 単価が1件でも入っているか。商品全体・席タイプのどちらでも設定済みとみなす。
   function hasAnyUnit(pr){
     if(!pr)return false;
-    var any=function(x){return !!x&&(uval(x.adv)!=null||uval(x.sec)!=null||uval(x.reg)!=null);};
+    var any=function(x){return !!x&&(priceCell(x,"adv")||priceCell(x,"sec")||priceCell(x,"reg"));};
     if(Object.keys(pr.seats).some(function(sk){return any(pr.seats[sk]);}))return true;
     return Object.keys(pr.unit).some(function(k){
       var u=pr.unit[k]; if(!u)return false;
-      if(uval(u.adv)!=null||uval(u.sec)!=null||uval(u.reg)!=null)return true;
+      if(priceCell(u,"adv")||priceCell(u,"sec")||priceCell(u,"reg"))return true;
       var sv=u.seats;
       return !!sv&&typeof sv==="object"&&Object.keys(sv).some(function(sk){
-        var x=sv[sk];return x&&(uval(x.adv)!=null||uval(x.sec)!=null||uval(x.reg)!=null);});
+        var x=sv[sk];return !!x&&!!(priceCell(x,"adv")||priceCell(x,"sec")||priceCell(x,"reg"));});
     });
   }
   // 売上内訳（税込）用。商品×席タイプ×販売区分でまとめる。
   function priceBreakdown(ev){
     var pr=pricingOf(ev), tk=ticketOf(ev);
-    var out={configured:false,hasDates:false,rows:[],tickets:0,amount:0,unpriced:0,undated:0,sysFee:0,
+    var out={configured:false,hasDates:false,rows:[],tickets:0,amount:0,amountEx:0,unpriced:0,undated:0,sysFee:0,
              advFrom:pr?pr.advFrom:"",advTo:pr?pr.advTo:"",
              secFrom:pr?pr.secFrom:"",secTo:pr?pr.secTo:"",fee:pr?pr.sysFee:SYS_FEE};
     if(!tk)return out;
@@ -897,13 +920,13 @@
     priceRows(ev).forEach(function(r){
       if(r.d)out.hasDates=true;
       var k=r.phase+"\u0001"+r.p+"\u0001"+r.s;
-      if(!agg[k]){agg[k]={p:r.p,s:r.s,phase:r.phase,n:0,unit:r.unit,fallback:r.fallback,amt:0};order.push(k);}
-      agg[k].n+=r.n; agg[k].amt+=r.amt;
+      if(!agg[k]){agg[k]={p:r.p,s:r.s,phase:r.phase,n:0,unit:r.unit,xunit:r.xunit,tax:r.tax,fallback:r.fallback,amt:0,xamt:0};order.push(k);}
+      agg[k].n+=r.n; agg[k].amt+=r.amt; agg[k].xamt+=r.xamt;
     });
     var sOrd=seatOrderOf(pr), sRank=seatRanker(sOrd);
     out.rows=order.map(function(k){
       var a=agg[k];
-      out.tickets+=a.n; out.amount+=a.amt;
+      out.tickets+=a.n; out.amount+=a.amt; out.amountEx+=a.xamt;
       if(a.unit==null)out.unpriced+=a.n;
       if(a.phase==="unknown")out.undated+=a.n;
       return a;
@@ -940,7 +963,7 @@
     // 入れてしまうと「9月」を選んでも購入日不明の分が必ず足され、選んだ期間の数字にならない。
     var filtered=!!(from||to);
     var out={buckets:[],undated:{n:0,amt:0},byEvent:[],bySeat:[],filtered:filtered,
-             tickets:0,amount:0,sysFee:0,minDate:"",maxDate:"",
+             tickets:0,amount:0,amountEx:0,sysFee:0,minDate:"",maxDate:"",
              noPriceEvents:[],noDateEvents:[],hasAny:false};
     var bk={},order=[],seat={},seatOrder=[];
     var ordAll=[],ordSeen={};                       // 席タイプの並び順は各イベントの単価設定から寄せ集める
@@ -949,7 +972,7 @@
       var pr=pricingOf(ev), fee=pr?pr.sysFee:SYS_FEE;
       seatOrderOf(pr).forEach(function(sk){if(!ordSeen[sk]){ordSeen[sk]=1;ordAll.push(sk);}});
       if(out.oneFee===undefined)out.oneFee=fee; else if(out.oneFee!==fee)out.oneFee=null;
-      var e={id:ev.id,name:ev.name,n:0,amt:0,undated:0,hasPrice:false,hasDates:false};
+      var e={id:ev.id,name:ev.name,n:0,amt:0,xamt:0,undated:0,hasPrice:false,hasDates:false};
       e.hasPrice=hasAnyUnit(pr);
       rows.forEach(function(r){
         if(r.d){
@@ -966,11 +989,11 @@
           if(filtered)return;                  // 期間指定中は合計に含めない
         }
         out.hasAny=true;
-        out.tickets+=r.n; out.amount+=r.amt; out.sysFee+=r.n*fee;
-        e.n+=r.n; e.amt+=r.amt;
+        out.tickets+=r.n; out.amount+=r.amt; out.amountEx+=(r.xamt||0); out.sysFee+=r.n*fee;
+        e.n+=r.n; e.amt+=r.amt; e.xamt+=(r.xamt||0);
         var sk=r.s||SEAT_NONE;
-        if(!seat[sk]){seat[sk]={k:sk,v:0,amt:0};seatOrder.push(sk);}
-        seat[sk].v+=r.n; seat[sk].amt+=r.amt;
+        if(!seat[sk]){seat[sk]={k:sk,v:0,amt:0,xamt:0};seatOrder.push(sk);}
+        seat[sk].v+=r.n; seat[sk].amt+=r.amt; seat[sk].xamt+=(r.xamt||0);
       });
       if(e.n){
         out.byEvent.push(e);
@@ -1254,9 +1277,10 @@
               '<td>'+esc(r.s||SEAT_NONE)+'</td>'+
               '<td><span class="chip '+PHASE_CLASS[r.phase]+'">'+PHASE_LABEL[r.phase]+'</span></td>'+
               '<td class="num">'+nf(r.n)+'</td>'+
+              '<td class="num ex">'+(r.xunit!=null?yen(r.xunit)+(r.tax!=null?'<br><span class="tx-r">税'+nf(r.tax)+'%</span>':''):'—')+'</td>'+
               '<td class="num">'+(r.unit!=null?yen(r.unit)+(r.fallback?'<br><span style="font-size:10px;color:var(--muted);font-weight:700">通常単価を適用</span>':''):'<span style="color:var(--warn)">未設定</span>')+'</td>'+
-              '<td class="num"><b>'+(r.unit!=null?yen(r.amt):'—')+'</b></td>'+
-              '<td class="num ex">'+(r.unit!=null?yenEx(r.amt):'—')+'</td></tr>';
+              '<td class="num ex">'+(r.xunit!=null?yen(r.xamt):'—')+'</td>'+
+              '<td class="num"><b>'+(r.unit!=null?yen(r.amt):'—')+'</b></td></tr>';
           }).join("");
           var notes=[];
           if(pb.advTo)notes.push('先行販売期間: '+(pb.advFrom?fmtDate(pb.advFrom):'（開始日なし）')+' 〜 '+fmtDate(pb.advTo));
@@ -1265,18 +1289,18 @@
           if(pb.unpriced)notes.push('<span style="color:var(--warn)">単価が未設定の商品・席タイプが '+nf(pb.unpriced)+' 枚あります（金額に含まれていません）。</span>');
           if(pb.undated)notes.push('<span style="color:var(--warn)">購入日が特定できないチケットが '+nf(pb.undated)+' 枚あり、通常単価で計算しています。</span>'
             +(Array.isArray(ev.ticketRaw)&&ev.ticketRaw.length?'':'（枚数を手入力したため明細がありません。「チケット管理」CSVを取り込むと購入日で振り分けられます）'));
-          pricePanel='<div class="panel" style="margin-top:16px"><div class="panel-h"><h3>売上内訳（税込）</h3>'+
-            hRight('<span class="sub">チケット代 '+yen(pb.amount)+'</span>'+prEditBtn)+'</div>'+
-            '<div class="tbl-wrap"><table><thead><tr><th>商品・コーナー名</th><th>席タイプ</th><th>販売区分</th><th>枚数</th><th>税込単価</th><th>金額（税込）</th><th class="ex">税抜</th></tr></thead><tbody>'+prRows+
-            '</tbody><tfoot><tr><td>'+(pb.sysFee>0?'チケット代':'合計')+'</td><td></td><td></td><td class="num">'+nf(pb.tickets)+'</td><td class="num">—</td><td class="num">'+yen(pb.amount)+'</td><td class="num ex">'+yenEx(pb.amount)+'</td></tr>'+
+          pricePanel='<div class="panel" style="margin-top:16px"><div class="panel-h"><h3>売上内訳</h3>'+
+            hRight('<span class="sub">チケット代 税抜 '+yen(pb.amountEx)+' ／ 税込 '+yen(pb.amount)+'</span>'+prEditBtn)+'</div>'+
+            '<div class="tbl-wrap"><table><thead><tr><th>商品・コーナー名</th><th>席タイプ</th><th>販売区分</th><th>枚数</th><th class="ex">税抜単価</th><th>税込単価</th><th class="ex">金額（税抜）</th><th>金額（税込）</th></tr></thead><tbody>'+prRows+
+            '</tbody><tfoot><tr><td>'+(pb.sysFee>0?'チケット代':'合計')+'</td><td></td><td></td><td class="num">'+nf(pb.tickets)+'</td><td class="num ex">—</td><td class="num">—</td><td class="num ex">'+yen(pb.amountEx)+'</td><td class="num">'+yen(pb.amount)+'</td></tr>'+
             (pb.sysFee>0
-              ? '<tr class="ft-fee"><td>ユーザーチャージ<span class="ft-x">'+nf(pb.tickets)+' 枚分</span></td><td></td><td></td><td class="num"></td><td class="num">'+yen(pb.fee)+'</td><td class="num">'+yen(pb.sysFee)+'</td><td class="num ex">'+yenEx(pb.sysFee)+'</td></tr>'+
-                '<tr class="ft-all"><td>合計（ユーザーチャージ込）</td><td></td><td></td><td class="num"></td><td class="num"></td><td class="num">'+yen(pb.amount+pb.sysFee)+'</td><td class="num ex">'+yenEx(pb.amount+pb.sysFee)+'</td></tr>'
+              ? '<tr class="ft-fee"><td>ユーザーチャージ<span class="ft-x">'+nf(pb.tickets)+' 枚分</span></td><td></td><td></td><td class="num"></td><td class="num ex"></td><td class="num">'+yen(pb.fee)+'</td><td class="num ex">'+yenEx(pb.sysFee)+'</td><td class="num">'+yen(pb.sysFee)+'</td></tr>'+
+                '<tr class="ft-all"><td>合計（ユーザーチャージ込）</td><td></td><td></td><td class="num"></td><td class="num ex"></td><td class="num"></td><td class="num ex">'+yen(pb.amountEx+exVal(pb.sysFee))+'</td><td class="num">'+yen(pb.amount+pb.sysFee)+'</td></tr>'
               : '')+
             '</tfoot></table></div>'+
             '<div class="sb-meta" style="padding:12px 16px 4px;line-height:1.8">※ '+notes.join('<br>※ ')+'</div></div>';
         }else if(editable){
-          pricePanel='<div class="panel" style="margin-top:16px"><div class="panel-h"><h3>売上内訳（税込）</h3><button class="btn btn-sm" data-editprice="'+ev.id+'">＋ 単価を設定</button></div>'+
+          pricePanel='<div class="panel" style="margin-top:16px"><div class="panel-h"><h3>売上内訳</h3><button class="btn btn-sm" data-editprice="'+ev.id+'">＋ 単価を設定</button></div>'+
             '<div class="empty" style="padding:34px 20px"><b>税込単価が未設定です</b><p>「＋ 単価を設定」で商品・席タイプごとの税込単価と先行販売期間を登録すると、チケット枚数から税込金額を算出します。</p></div></div>';
         }
       }
@@ -1336,7 +1360,7 @@
       // 単価が未設定のイベントだけ、注文管理CSVの入金額を出す。
       var usePb=pb.configured&&pb.amount>0;
       var headAmt=usePb?pb.amount:totalAmt;
-      var headSub=(usePb?"税込単価×枚数":"決済済み")+" ・ 税抜 "+yenEx(headAmt);
+      var headSub=(usePb?"税込単価×枚数":"決済済み")+" ・ 税抜 "+(usePb?yen(pb.amountEx):yenEx(headAmt));
       var headAvg=totalTk?headAmt/totalTk:0;
 
       body=
@@ -1416,7 +1440,7 @@
       var rows=bks.map(function(x,i){
         return '<tr'+(i>=FOLD_N?' class="row-more"':'')+'><td>'+esc(x.label)+(x.sub?' <span style="color:var(--faint);font-weight:600">'+esc(x.sub)+'</span>':'')+'</td>'+
           '<td style="width:44%"><div class="bar-track" style="height:20px"><div class="bar-fill" style="width:'+(x.amt/maxA*100)+'%"></div></div></td>'+
-          '<td class="num">'+nf(x.n)+'</td><td class="num"><b>'+yen(x.amt)+'</b></td><td class="num ex">'+yenEx(x.amt)+'</td></tr>';
+          '<td class="num">'+nf(x.n)+'</td><td class="num"><b>'+yen(x.amt)+'</b></td><td class="num ex">'+yen(x.xamt||0)+'</td></tr>';
       }).join("");
       if(rs.undated.n&&!rs.filtered)rows+='<tr><td><span class="chip ph-unk">期間不明</span></td><td></td>'+
         '<td class="num">'+nf(rs.undated.n)+'</td><td class="num"><b>'+yen(rs.undated.amt)+'</b></td><td class="num ex">'+yenEx(rs.undated.amt)+'</td></tr>';
@@ -1429,10 +1453,10 @@
       trend='<div class="panel"><div class="panel-h"><h3>期間別の推移</h3>'+
         hRight('<span class="sub">'+({day:"日別",week:"週別",month:"月別"}[period])+' ・ 税込単価×枚数</span>')+'</div>'+
         '<div class="tbl-wrap'+fld.cls+'"><table><thead><tr><th>'+({day:"日",week:"週",month:"月"}[period])+'</th><th>売上</th><th>枚数</th><th>金額（税込）</th><th class="ex">税抜</th></tr></thead><tbody>'+rows+
-        '</tbody><tfoot><tr><td>'+(rs.sysFee>0?'チケット代':'合計')+'</td><td></td><td class="num">'+nf(rs.tickets)+'</td><td class="num">'+yen(rs.amount)+'</td><td class="num ex">'+yenEx(rs.amount)+'</td></tr>'+
+        '</tbody><tfoot><tr><td>'+(rs.sysFee>0?'チケット代':'合計')+'</td><td></td><td class="num">'+nf(rs.tickets)+'</td><td class="num">'+yen(rs.amount)+'</td><td class="num ex">'+yen(rs.amountEx)+'</td></tr>'+
         (rs.sysFee>0
           ? '<tr class="ft-fee"><td>ユーザーチャージ<span class="ft-x">'+nf(rs.tickets)+' 枚'+(rs.oneFee!=null?' × '+yen(rs.oneFee):'')+'</span></td><td></td><td class="num"></td><td class="num">'+yen(rs.sysFee)+'</td><td class="num ex">'+yenEx(rs.sysFee)+'</td></tr>'+
-            '<tr class="ft-all"><td>合計（ユーザーチャージ込）</td><td></td><td class="num"></td><td class="num">'+yen(rs.amount+rs.sysFee)+'</td><td class="num ex">'+yenEx(rs.amount+rs.sysFee)+'</td></tr>'
+            '<tr class="ft-all"><td>合計（ユーザーチャージ込）</td><td></td><td class="num"></td><td class="num">'+yen(rs.amount+rs.sysFee)+'</td><td class="num ex">'+yen(rs.amountEx+exVal(rs.sysFee))+'</td></tr>'
           : '')+
         '</tfoot></table></div>'+fld.bar+
         (notes.length?'<div class="sb-meta" style="padding:12px 16px 4px;line-height:1.8">※ '+notes.join('<br>※ ')+'</div>':'')+'</div>';
@@ -1451,22 +1475,23 @@
         var share=rs.amount?e.amt/rs.amount*100:0, src=evById[e.id];
         return '<tr><td><span class="pnm" title="'+esc(e.name)+'">'+esc(e.name)+'</span></td>'+
           (home?'<td><span class="pnm" style="max-width:220px">'+esc(src?clientName(src.clientId):"")+'</span></td>':'')+
-          '<td class="num">'+nf(e.n)+'</td><td class="num"><b>'+yen(e.amt)+'</b></td><td class="num ex">'+yenEx(e.amt)+'</td>'+
+          '<td class="num">'+nf(e.n)+'</td><td class="num"><b>'+yen(e.amt)+'</b></td><td class="num ex">'+yen(e.xamt||0)+'</td>'+
           '<td class="num">'+(rs.amount?share.toFixed(1)+'%':'—')+'</td></tr>';
       }).join("");
       evPanel='<div class="panel" style="margin-top:16px"><div class="panel-h"><h3>イベント別</h3><span class="sub">選択期間内 ・ 金額の多い順</span></div>'+
         '<div class="tbl-wrap"><table><thead><tr><th>イベント名</th>'+(home?'<th>クライアント</th>':'')+'<th>枚数</th><th>税込金額</th><th class="ex">税抜</th><th>構成比</th></tr></thead><tbody>'+eTrs+
-        '</tbody><tfoot><tr><td>合計</td>'+(home?'<td></td>':'')+'<td class="num">'+nf(rs.tickets)+'</td><td class="num">'+yen(rs.amount)+'</td><td class="num ex">'+yenEx(rs.amount)+'</td><td class="num">100%</td></tr></tfoot></table></div></div>';
+        '</tbody><tfoot><tr><td>合計</td>'+(home?'<td></td>':'')+'<td class="num">'+nf(rs.tickets)+'</td><td class="num">'+yen(rs.amount)+'</td><td class="num ex">'+yen(rs.amountEx)+'</td><td class="num">100%</td></tr></tfoot></table></div></div>';
     }else evPanel="";
 
     // 席タイプ別（選択期間内）／選手別ランキング（期間対象外）
     var seatAmt=rs.bySeat.reduce(function(a,x){return a+(x.amt||0);},0);
+    var seatAmtEx=rs.bySeat.reduce(function(a,x){return a+(x.xamt||0);},0);
     var seatBars=rs.bySeat.length
       ?'<div class="tbl-wrap nar"><table><thead><tr><th>席タイプ</th><th>枚数</th><th>税込金額</th><th class="ex">税抜</th></tr></thead><tbody>'+
         rs.bySeat.map(function(x){
-          return '<tr><td>'+esc(x.k)+'</td><td class="num">'+nf(x.v)+'</td><td class="num"><b>'+yen(x.amt||0)+'</b></td><td class="num ex">'+yenEx(x.amt||0)+'</td></tr>';
+          return '<tr><td>'+esc(x.k)+'</td><td class="num">'+nf(x.v)+'</td><td class="num"><b>'+yen(x.amt||0)+'</b></td><td class="num ex">'+yen(x.xamt||0)+'</td></tr>';
         }).join("")+
-        '</tbody><tfoot><tr><td>合計</td><td class="num">'+nf(rs.tickets)+'</td><td class="num">'+yen(seatAmt)+'</td><td class="num ex">'+yenEx(seatAmt)+'</td></tr></tfoot></table></div>'
+        '</tbody><tfoot><tr><td>合計</td><td class="num">'+nf(rs.tickets)+'</td><td class="num">'+yen(seatAmt)+'</td><td class="num ex">'+yen(seatAmtEx)+'</td></tr></tfoot></table></div>'
       :'<div class="empty"><b>チケットデータがありません</b></div>';
     var pm={};evs.forEach(function(ev){(ev.players||[]).forEach(function(p){if(!pm[p.n])pm[p.n]={k:p.n,v:0};pm[p.n].v+=(p.sales||0);});});
     var pd=Object.keys(pm).map(function(k){return pm[k];}).filter(function(x){return x.v>0;}).sort(function(a,b){return b.v-a.v;}).slice(0,12);
@@ -1481,7 +1506,7 @@
       '<div class="kpis">'+
         kpi("チケット枚数",nf(rs.tickets)+'<small>枚</small>',"ticket",
           rs.filtered?("選択期間内"+(rs.undated.n?" ・ 期間不明 "+nf(rs.undated.n)+"枚を除く":"")):"全期間")+
-        kpi("税込売上",yen(rs.amount),"yen","税抜 "+yenEx(rs.amount))+
+        kpi("税込売上",yen(rs.amount),"yen","税抜 "+yen(rs.amountEx))+
         kpi("平均単価",yen(avg),"chart","売上÷枚数")+
         kpi("イベント数",nf(rs.byEvent.length)+'<small>件</small>',"pipe","販売のあったもの")+'</div>'+
       trend+
@@ -1844,9 +1869,13 @@
     var ev=state.events.filter(function(e){return e.id===id;})[0];if(!ev)return;
     var pr=pricingOf(ev)||{advFrom:"",advTo:"",secFrom:"",secTo:"",sysFee:SYS_FEE,seats:{},unit:{}};
     var uv=function(v){return (v==null||v==="")?"":v;};
-    var val=function(o){return {adv:uv(o&&o.adv),sec:uv(o&&o.sec),reg:uv(o&&o.reg)};};
-    var filled=function(o){return !!o&&(uval(o.adv)!=null||uval(o.sec)!=null||uval(o.reg)!=null);};
-    var same=function(a,b){return a.adv===b.adv&&a.sec===b.sec&&a.reg===b.reg;};
+    // 表に出すのは税抜。税抜が無い古い設定は保存済みの税込から逆算して埋める。
+    var val=function(o){
+      var c=function(k){var x=priceCell(o,k);return x?String(x.ex):"";};
+      return {adv:c("adv"),sec:c("sec"),reg:c("reg"),tax:String(taxOf(o))};
+    };
+    var filled=function(o){return !!o&&!!(priceCell(o,"adv")||priceCell(o,"sec")||priceCell(o,"reg"));};
+    var same=function(a,b){return a.adv===b.adv&&a.sec===b.sec&&a.reg===b.reg&&a.tax===b.tax;};
 
     // 席タイプの一覧（枚数の多い順）。商品×席のクロス集計は ticketRaw からしか作れない。
     var raw=(ev.ticketRaw&&ev.ticketRaw.length)?ev.ticketRaw:null;
@@ -1885,7 +1914,7 @@
           (byS[st]||(byS[st]=[])).push({k:k,s:st,v:val(u.seats[st])});
         });
       });
-      seatOrder.forEach(function(st){seatVal[st]=val(pr.seats[st]);});
+      seatOrder.forEach(function(st){seatVal[st]=val(pr.seats[st]||{});});
       Object.keys(byS).forEach(function(st){
         var list=byS[st];
         var allSame=list.every(function(x){return same(x.v,list[0].v);});
@@ -1911,41 +1940,47 @@
           return '<option value="'+esc(o.v)+'"'+(o.v===v?' selected':'')+'>'+esc(o.t)+'</option>';}).join("")+'</select></td>';
         if(c.text)return '<td'+cls+'><input class="led-i" data-k="'+c.key+'" type="text"'+(c.ro?' readonly':'')+
           ' value="'+esc(v)+'" title="'+esc(v)+'" placeholder="'+esc(c.ph||"")+'"></td>';
+        if(c.price)return '<td'+cls+'><input class="led-i pxi" data-k="'+c.key+'" type="number" inputmode="numeric" value="'+esc(v)+'">'+
+          '<span class="pt-inc" data-inc="'+c.key+'"></span></td>';
         return '<td'+cls+'><input class="led-i" data-k="'+c.key+'" type="number" inputmode="numeric" value="'+esc(v)+'"></td>';
       }).join("")+'<td class="pt-ops">'+
       (mv?'<button type="button" data-mv="up" title="上へ">↑</button><button type="button" data-mv="down" title="下へ">↓</button>':'')+
       '<button type="button" class="led-del" title="削除">×</button></td></tr>';
     };
-    var A={key:"adv"},C={key:"sec",cls:"col-sec"},R={key:"reg"};
-    var seatCols=[{key:"k",text:true,ro:true},A,C,R];
-    var seatNew =[{key:"k",text:true,ph:"席タイプ"},A,C,R];
-    var ovrCols =[{key:"k",text:true,ro:true},{key:"s",text:true,ro:true},A,C,R];
+    var A={key:"adv",price:true},C={key:"sec",cls:"col-sec",price:true},R={key:"reg",price:true};
+    var TAXO=[{v:"10",t:"10%"},{v:"8",t:"8%"},{v:"0",t:"0%"}];
+    var TX={key:"tax",opts:TAXO,cls:"col-tax"};
+    var seatCols=[{key:"k",text:true,ro:true},TX,A,C,R];
+    var seatNew =[{key:"k",text:true,ph:"席タイプ"},TX,A,C,R];
+    var ovrCols =[{key:"k",text:true,ro:true},{key:"s",text:true,ro:true},TX,A,C,R];
     var prodOpts=prods.map(function(k){return {v:k,t:k};});
     var seatOpts=[{v:"",t:"（商品全体）"}].concat(seatOrder.map(function(st){return {v:st,t:st};}));
-    var ovrNew  =[{key:"k",opts:prodOpts},{key:"s",opts:seatOpts},A,C,R];
-    var TH='<th>先行販売</th><th class="col-sec">二次選考</th><th>通常販売</th><th class="pt-ops"></th>';
+    var ovrNew  =[{key:"k",opts:prodOpts},{key:"s",opts:seatOpts},TX,A,C,R];
+    var TH='<th class="col-tax">税率</th><th>先行販売<span class="th-x">税抜</span></th>'+
+           '<th class="col-sec">二次選考<span class="th-x">税抜</span></th>'+
+           '<th>通常販売<span class="th-x">税抜</span></th><th class="pt-ops"></th>';
 
-    var seatTbl=seatOrder.length?('<label style="margin:2px 0 6px">席タイプごとの税込単価'+
+    var seatTbl=seatOrder.length?('<label style="margin:2px 0 6px">席タイプごとの単価（税抜）'+
       '<span style="font-weight:600">（商品・コーナーが違っても同じ単価で計算します。↑↓ の並び順が画面の表示順になります）</span></label>'+
       '<table class="pt"><thead><tr><th>席タイプ</th>'+TH+'</tr></thead><tbody id="prSeat">'+
       seatOrder.map(function(st){var v=seatVal[st]||{};
-        return ptRow(seatCols,{k:st,adv:v.adv,sec:v.sec,reg:v.reg},true);}).join("")+
+        return ptRow(seatCols,{k:st,tax:v.tax,adv:v.adv,sec:v.sec,reg:v.reg},true);}).join("")+
       '</tbody></table><button type="button" class="led-add" id="prSeatAdd">＋ 席タイプを追加</button>'):"";
 
     var ovrTbl='<table class="pt"><thead><tr><th>商品・コーナー名</th><th>席タイプ</th>'+TH+'</tr></thead><tbody id="prProd">'+
-      ovr.map(function(x){return ptRow(ovrCols,{k:x.k,s:x.s,adv:x.v.adv,sec:x.v.sec,reg:x.v.reg});}).join("")+
-      prodRows.map(function(x){return ptRow(ovrCols,{k:x.k,s:"",adv:x.v.adv,sec:x.v.sec,reg:x.v.reg});}).join("")+
+      ovr.map(function(x){return ptRow(ovrCols,{k:x.k,s:x.s,tax:x.v.tax,adv:x.v.adv,sec:x.v.sec,reg:x.v.reg});}).join("")+
+      prodRows.map(function(x){return ptRow(ovrCols,{k:x.k,s:"",tax:x.v.tax,adv:x.v.adv,sec:x.v.sec,reg:x.v.reg});}).join("")+
       '</tbody></table><button type="button" class="led-add" id="prProdAdd">＋ 行を追加</button>';
 
     var prodBlock=seatOrder.length
       ? ('<details class="pt-more"'+(ovr.length?' open':'')+'><summary>商品（コーナー）ごとに単価を変える</summary>'+
          '<p class="mh" style="margin:8px 0">ここに入れた行だけ、上の「席タイプごとの単価」より優先します。席タイプを空欄にすると、その商品全体の単価になります。</p>'+
          ovrTbl+'</details>')
-      : ('<label style="margin-top:14px">商品ごとの税込単価</label>'+
+      : ('<label style="margin-top:14px">商品ごとの単価（税抜）</label>'+
          '<p class="mh" style="margin:0 0 8px">このイベントは席タイプの明細が無いため、商品ごとの単価で計算します。</p>'+ovrTbl);
 
     openModal(
-      '<h3>税込単価を設定</h3><p class="mh" style="margin-bottom:8px">席タイプごとに税込単価を登録すると、チケット枚数と掛け合わせて金額を出します。</p>'+
+      '<h3>単価を設定</h3><p class="mh" style="margin-bottom:8px">税抜の単価と税率を入れると、税込単価を自動で計算します（端数は切り捨て）。チケット枚数と掛け合わせて金額を出します。</p>'+
       '<label style="margin-top:8px">先行販売期間</label>'+
       '<div class="sch-in">'+dateField("pr_from",pr.advFrom,"開始日")+'<span class="sch-tl">〜</span>'+dateField("pr_to",pr.advTo,"終了日")+'</div>'+
       '<label style="margin-top:8px">二次選考期間<span style="font-weight:600">（ある場合だけ）</span></label>'+
@@ -1957,6 +1992,21 @@
       null, true
     );
     var wrap=document.getElementById("prWrap");
+    // 税抜×税率＝税込 を入力のたびに計算して、各欄の下に出す
+    function syncInc(tr){
+      if(!tr)return;
+      var ts=tr.querySelector('[data-k="tax"]'), tax=ts?(+ts.value||0):TAX_DEFAULT;
+      ["adv","sec","reg"].forEach(function(k){
+        var el=tr.querySelector('[data-k="'+k+'"]'), out=tr.querySelector('[data-inc="'+k+'"]');
+        if(!el||!out)return;
+        var v=String(el.value||"").trim();
+        out.textContent=v===""?"":("税込 "+nf(incFromEx(pnum(v),tax)));
+      });
+    }
+    function syncAllInc(){[].forEach.call(wrap.querySelectorAll("tr.led-trow"),syncInc);}
+    wrap.addEventListener("input",function(e){if(e.target.closest(".led-trow"))syncInc(e.target.closest("tr"));});
+    wrap.addEventListener("change",function(e){if(e.target.closest(".led-trow"))syncInc(e.target.closest("tr"));});
+    syncAllInc();
     wrap.addEventListener("click",ledDelHandler);
     // 席タイプの並び順はそのまま画面の表示順になるので、行ごとに上下できるようにする
     wrap.addEventListener("click",function(e){
@@ -1967,10 +2017,10 @@
       else{var nx=tr.nextElementSibling; if(nx)tr.parentNode.insertBefore(nx,tr);}
     });
     var seatBody=document.getElementById("prSeat"), prodBody=document.getElementById("prProd");
-    if(seatBody)document.getElementById("prSeatAdd").onclick=function(){seatBody.insertAdjacentHTML("beforeend",ptRow(seatNew,{},true));};
+    if(seatBody)document.getElementById("prSeatAdd").onclick=function(){seatBody.insertAdjacentHTML("beforeend",ptRow(seatNew,{tax:String(TAX_DEFAULT)},true));syncAllInc();};
     document.getElementById("prProdAdd").onclick=function(){
       var d=document.querySelector(".pt-more"); if(d)d.open=true;
-      prodBody.insertAdjacentHTML("beforeend",ptRow(ovrNew,{}));
+      prodBody.insertAdjacentHTML("beforeend",ptRow(ovrNew,{tax:String(TAX_DEFAULT)}));syncAllInc();
     };
     // 二次選考期間が入っていないうちは、その単価欄を出さない（入力済みの値は消さない）
     var sf=document.getElementById("pr_sfrom"), st2=document.getElementById("pr_sto");
@@ -1985,28 +2035,35 @@
       if(to&&sto&&(from||"0000-00-00")<=sto&&(sfrom||"0000-00-00")<=to){toast("先行販売期間と二次選考期間が重なっています");return;}
       var fee=pnum(document.getElementById("pr_fee").value);
       var num=function(v){v=String(v==null?"":v).trim();if(v==="")return null;var x=pnum(v);return x<0?0:x;};
+      // 入力は税抜。税込は税率から計算して一緒に保存する（集計はこの税込を使う）
+      var entry=function(r){
+        var tax=(r.tax==null||r.tax==="")?TAX_DEFAULT:(+r.tax||0);
+        var xa=num(r.adv),xs=num(r.sec),xr=num(r.reg);
+        if(xa==null&&xs==null&&xr==null)return null;
+        return {tax:tax,xadv:xa,xsec:xs,xreg:xr,
+                adv:incFromEx(xa,tax),sec:incFromEx(xs,tax),reg:incFromEx(xr,tax)};
+      };
       var seats={},unit={},n=0,order2=[];
       if(seatBody)ledRead(seatBody,".led-trow",seatCols).forEach(function(r){
         var k=String(r.k||"").trim(); if(!k)return;
         if(order2.indexOf(k)<0)order2.push(k);       // 表に並べた順＝画面の表示順
-        var adv=num(r.adv),sec=num(r.sec),reg=num(r.reg);
-        if(adv==null&&sec==null&&reg==null)return;   // すべて空欄の行は登録しない（0円は有効）
-        seats[k]={adv:adv,sec:sec,reg:reg}; n++;
+        var e=entry(r); if(!e)return;                // すべて空欄の行は登録しない（0円は有効）
+        seats[k]=e; n++;
       });
       ledRead(prodBody,".led-trow",ovrCols).forEach(function(r){
         var k=String(r.k||"").trim(); if(!k)return;
-        var adv=num(r.adv),sec=num(r.sec),reg=num(r.reg);
-        if(adv==null&&sec==null&&reg==null)return;
+        var e=entry(r); if(!e)return;
         var u=unit[k]||(unit[k]={adv:null,sec:null,reg:null});
         var st=String(r.s||"").trim();
-        if(st){(u.seats||(u.seats={}))[st]={adv:adv,sec:sec,reg:reg};}   // 商品×席タイプの上書き
-        else {u.adv=adv;u.sec=sec;u.reg=reg;}                            // その商品全体の単価
+        if(st){(u.seats||(u.seats={}))[st]=e;}                            // 商品×席タイプの上書き
+        else {u.tax=e.tax;u.xadv=e.xadv;u.xsec=e.xsec;u.xreg=e.xreg;
+              u.adv=e.adv;u.sec=e.sec;u.reg=e.reg;}                       // その商品全体の単価
         n++;
       });
-      if(!n&&!from&&!to&&!sfrom&&!sto){ev.pricing=null;closeModal();commit();toast("税込単価をクリアしました");return;}
+      if(!n&&!from&&!to&&!sfrom&&!sto){ev.pricing=null;closeModal();commit();toast("単価をクリアしました");return;}
       ev.pricing={advFrom:from,advTo:to,secFrom:sfrom,secTo:sto,sysFee:fee,seats:seats,seatOrder:order2,unit:unit};
       closeModal();commit();
-      toast("税込単価を保存しました（"+nf(n)+"件"+(to?" ／ 先行販売 〜"+to:"")+(sto?" ／ 二次選考 〜"+sto:"")+"）");
+      toast("単価を保存しました（"+nf(n)+"件"+(to?" ／ 先行販売 〜"+to:"")+(sto?" ／ 二次選考 〜"+sto:"")+"）");
     };
   }
   function editSalesModal(id){
