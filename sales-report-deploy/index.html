@@ -784,13 +784,18 @@
   }
   function salesOf(ev){
     if(ev&&ev.orderRaw&&ev.orderRaw.length){
-      var dm=ev.dateMap||{},tb=ticketsByOrder(ev),total=0,count=0,tks=0,day={};
+      var dm=ev.dateMap||{},tb=ticketsByOrder(ev),total=0,count=0,tks=0,cvs=0,day={};
+      var mk=function(d){if(!day[d])day[d]={c:0,a:0,t:0,cv:0,xa:0,ia:0};return day[d];};
       ev.orderRaw.forEach(function(r){
         if(r.s!=="決済済み")return; var amt=+r.a||0, tk=tb[r.o]||0; total+=amt; count++; tks+=tk;
-        var d=dm[r.o]||null; if(d){if(!day[d])day[d]={c:0,a:0,t:0};day[d].c++;day[d].a+=amt;day[d].t+=tk;}
+        var cv=(r.m==="コンビニ")?1:0; cvs+=cv;
+        var d=dm[r.o]||null; if(d){var o=mk(d);o.c++;o.a+=amt;o.t+=tk;o.cv+=cv;}
       });
-      var daily=Object.keys(day).sort().map(function(d){return {d:d,c:day[d].c,a:day[d].a,t:day[d].t};});
-      return {total:total,count:count,tickets:tks,daily:daily};
+      // 単価設定から出した税抜・税込も日別に足しておく（売上内訳と同じ数字にするため）
+      priceRows(ev).forEach(function(r){if(!r.d)return;var o=mk(r.d);o.xa+=(r.xamt||0);o.ia+=(r.amt||0);});
+      var daily=Object.keys(day).sort().map(function(d){
+        return {d:d,c:day[d].c,a:day[d].a,t:day[d].t,cv:day[d].cv,xa:day[d].xa,ia:day[d].ia};});
+      return {total:total,count:count,tickets:tks,cvs:cvs,daily:daily};
     }
     return ev&&ev.sales?ev.sales:null;
   }
@@ -1058,13 +1063,14 @@
   // 日/週/月へ集計
   function groupSales(daily,period){
     daily=daily||[];
-    if(period==="day")return daily.map(function(x){return {label:mdLabel(x.d),sub:wdayJ(x.d),c:x.c,a:x.a,t:x.t||0};});
+    if(period==="day")return daily.map(function(x){return {label:mdLabel(x.d),sub:wdayJ(x.d),c:x.c,a:x.a,t:x.t||0,cv:x.cv||0,xa:x.xa||0,ia:x.ia||0};});
     var m={};
     daily.forEach(function(x){
       var key,label,sub;
       if(period==="month"){key=x.d.slice(0,7);var mp=key.split("-");label=(+mp[0])+"年"+(+mp[1])+"月";sub="";}
       else{key=mondayOf(x.d);label=mdLabel(key)+"〜";sub="週";}
-      if(!m[key])m[key]={key:key,label:label,sub:sub,c:0,a:0,t:0};m[key].c+=x.c;m[key].a+=x.a;m[key].t+=(x.t||0);
+      if(!m[key])m[key]={key:key,label:label,sub:sub,c:0,a:0,t:0,cv:0,xa:0,ia:0};
+      m[key].c+=x.c;m[key].a+=x.a;m[key].t+=(x.t||0);m[key].cv+=(x.cv||0);m[key].xa+=(x.xa||0);m[key].ia+=(x.ia||0);
     });
     return Object.keys(m).sort().map(function(k){return m[k];});
   }
@@ -1280,32 +1286,43 @@
       // 売上推移
       var salEditBtn=editable?'<button class="btn btn-sm" data-editsales="'+ev.id+'">編集</button>':'';
       // 注文管理CSVの金額は販売手数料を引いたあとの入金額なので、そのまま純売上として扱う
-      var salesNote='<div class="sb-meta" style="padding:12px 16px 4px;line-height:1.8">※ 注文管理CSVの入金額を集計しています。CSVの金額は「チケット税込価格 − 販売手数料（税込価格の8.25%）＋ ユーザーチャージ」です。<br>※ ユーザーチャージは チケット管理CSVの枚数 × 単価設定の金額 で切り出しています。<br>※ 税抜は 税込 ÷ 1.1 の切り捨てです。上部の「総売上」と売上内訳は税込単価×枚数のため、金額が一致しないことがあります。</div>';
+      var salesNote='<div class="sb-meta" style="padding:12px 16px 4px;line-height:1.8">'+
+        '※ 「売上」は注文管理CSVの入金額です。CSVの金額は「税抜のチケット代 ＋ ユーザーチャージ（枚数×'+yen(uc)+'） ＋ コンビニ決済手数料（コンビニ払い1注文につき'+yen(CVS_FEE)+'）」になっています。<br>'+
+        '※ 「チケット代」は、その入金額から2つの手数料を引いた額です。右の「金額（税抜）」は単価設定の税抜単価×枚数で、両者が一致すれば単価設定は正しく入っています。<br>'+
+        '※ 「金額（税込）」は税抜単価×（1＋税率）×枚数です。税率は席タイプごとに単価設定で指定します。</div>';
       var salesPanel;
       if(sa&&sa.daily&&sa.daily.length){
         var g=groupSales(sa.daily,period).slice().reverse();
         var maxA=Math.max.apply(null,g.map(function(x){return x.a;}).concat([1]));
         var fld=foldBar(g.length);
-        // 注文CSVの金額にはユーザーチャージ（1枚あたり）が含まれているので、枚数から切り出す
+        // 注文CSVの入金額には、ユーザーチャージとコンビニ決済手数料が含まれている。
+        // 「チケット代」はそこから両方を引いた額（＝CSVから見た税抜のチケット代）。
         var uc=(pricingOf(ev)?pricingOf(ev).sysFee:SYS_FEE)||0;
         var haveTk=g.some(function(x){return (x.t||0)>0;});
         var ucOf=function(x){return haveTk?uc*(x.t||0):0;};
+        var cvOf=function(x){return (x.cv||0)*CVS_FEE;};
+        var sumG=function(f){return g.reduce(function(a,x){return a+f(x);},0);};
         var rows=g.map(function(x,i){
-          var chg=ucOf(x), net=x.a-chg;
+          var chg=ucOf(x), cv=cvOf(x), net=x.a-chg-cv;
           return '<tr'+(i>=FOLD_N?' class="row-more"':'')+'><td>'+esc(x.label)+(x.sub?' <span style="color:var(--faint);font-weight:600">'+esc(x.sub)+'</span>':'')+'</td>'+
-            '<td style="width:'+(haveTk?"22%":"40%")+'"><div class="bar-track" style="height:20px"><div class="bar-fill" style="width:'+(x.a/maxA*100)+'%"></div></div></td>'+
-            '<td class="num">'+nf(x.c)+'</td>'+
-            (haveTk?'<td class="num">'+yen(net)+'</td><td class="num">'+yen(chg)+'</td>':'')+
-            '<td class="num"><b>'+yen(x.a)+'</b></td><td class="num ex">'+yenEx(x.a)+'</td></tr>';
+            '<td style="width:16%"><div class="bar-track" style="height:20px"><div class="bar-fill" style="width:'+(x.a/maxA*100)+'%"></div></div></td>'+
+            '<td class="num">'+nf(haveTk?(x.t||0):x.c)+'</td>'+
+            '<td class="num">'+yen(net)+'</td><td class="num">'+yen(chg)+'</td><td class="num">'+yen(cv)+'</td>'+
+            '<td class="num ex">'+yen(x.xa||0)+'</td><td class="num"><b>'+yen(x.ia||0)+'</b></td></tr>';
         }).join("");
-        var ucTot=haveTk?g.reduce(function(a,x){return a+ucOf(x);},0):0;
+        var ucTot=sumG(ucOf), cvTot=sumG(cvOf), xaTot=sumG(function(x){return x.xa||0;}), iaTot=sumG(function(x){return x.ia||0;});
         var seg='<div class="seg">'+["day","week","month"].map(function(p){var lb={day:"日別",week:"週別",month:"月別"}[p];return '<button class="seg-b'+(p===period?" on":"")+'" data-period="'+p+'">'+lb+'</button>';}).join("")+'</div>';
         salesPanel='<div class="panel"><div class="panel-h"><h3>売上推移（決済済み）</h3>'+hRight(seg+salEditBtn)+'</div>'+
-          '<div class="tbl-wrap'+fld.cls+'"><table><thead><tr><th>'+({day:"日",week:"週",month:"月"}[period])+'</th><th>売上'+hintBtn("paid")+'</th><th>件数</th>'+
-            (haveTk?'<th>チケット代'+hintBtn("ticket")+'</th><th>ユーザーチャージ'+hintBtn("charge")+'</th>':'')+'<th>金額（税込）'+hintBtn("inc")+'</th><th class="ex">税抜'+hintBtn("ex")+'</th></tr></thead><tbody>'+rows+
-          '</tbody><tfoot><tr><td>合計</td><td></td><td class="num">'+nf(cnt)+'</td>'+
-            (haveTk?'<td class="num">'+yen(totalAmt-ucTot)+'</td><td class="num">'+yen(ucTot)+'</td>':'')+
-            '<td class="num">'+yen(totalAmt)+'</td><td class="num ex">'+yenEx(totalAmt)+'</td></tr></tfoot></table></div>'+fld.bar+salesNote+'</div>';
+          '<div class="tbl-wrap'+fld.cls+'"><table><thead><tr><th>'+({day:"日",week:"週",month:"月"}[period])+'</th><th>売上'+hintBtn("paid")+'</th><th>'+(haveTk?'枚数':'件数')+'</th>'+
+            '<th>チケット代'+hintBtn("csvticket")+'</th><th>ユーザーチャージ'+hintBtn("charge")+'</th><th>コンビニ決済手数料'+hintBtn("cvs")+'</th>'+
+            '<th class="ex">金額（税抜）'+hintBtn("ex")+'</th><th>金額（税込）'+hintBtn("inc")+'</th></tr></thead><tbody>'+rows+
+          '</tbody><tfoot><tr><td>合計</td><td></td><td class="num">'+nf(haveTk?totalTk:cnt)+'</td>'+
+            '<td class="num">'+yen(totalAmt-ucTot-cvTot)+'</td><td class="num">'+yen(ucTot)+'</td><td class="num">'+yen(cvTot)+'</td>'+
+            '<td class="num ex">'+yen(xaTot)+'</td><td class="num">'+yen(iaTot)+'</td></tr>'+
+            ((ucTot>0||cvTot>0)
+              ? '<tr class="ft-all"><td>合計（手数料込）'+hintBtn("withfee")+'</td><td></td><td class="num"></td><td class="num"></td><td class="num"></td><td class="num"></td>'+
+                '<td class="num ex">'+yen(xaTot+exVal(ucTot)+exVal(cvTot))+'</td><td class="num">'+yen(iaTot+ucTot+cvTot)+'</td></tr>'
+              : '')+'</tfoot></table></div>'+fld.bar+salesNote+'</div>';
       } else if(sa){
         salesPanel='<div class="panel"><div class="panel-h"><h3>売上（決済済み）</h3>'+hRight('<span class="sub">合計 '+yen(totalAmt)+' / '+nf(cnt)+'件</span>'+salEditBtn)+'</div><div class="empty" style="padding:30px"><b>日別の内訳がありません</b><p>日・週・月別に分けるには「編集」で日別データを入力するか、「チケット管理」CSV（購入日を含む）も取り込んでください。</p></div>'+salesNote+'</div>';
       } else if(editable){
@@ -1325,10 +1342,10 @@
               '<td>'+esc(r.s||SEAT_NONE)+'</td>'+
               '<td><span class="chip '+PHASE_CLASS[r.phase]+'">'+PHASE_LABEL[r.phase]+'</span></td>'+
               '<td class="num">'+nf(r.n)+'</td>'+
-              '<td class="num ex">'+(r.xunit!=null?yen(r.xunit)+(r.tax!=null?'<br><span class="tx-r">税'+nf(r.tax)+'%</span>':''):'—')+'</td>'+
-              '<td class="num">'+(r.unit!=null?yen(r.unit)+(r.fallback?'<br><span style="font-size:10px;color:var(--muted);font-weight:700">通常単価を適用</span>':''):'<span style="color:var(--warn)">未設定</span>')+'</td>'+
-              '<td class="num ex">'+(r.xunit!=null?yen(r.xamt):'—')+'</td>'+
-              '<td class="num"><b>'+(r.unit!=null?yen(r.amt):'—')+'</b></td></tr>';
+              '<td class="num">'+yen(r.n*pb.fee)+'</td>'+
+              '<td class="num">—</td>'+
+              '<td class="num ex">'+(r.xunit!=null?yen(r.xamt)+(r.tax!=null?'<br><span class="tx-r">'+yen(r.xunit)+' × 税'+nf(r.tax)+'%</span>':''):'—')+'</td>'+
+              '<td class="num"><b>'+(r.unit!=null?yen(r.amt)+(r.fallback?'<br><span style="font-size:10px;color:var(--muted);font-weight:700">通常単価を適用</span>':''):'<span style="color:var(--warn)">未設定</span>')+'</b></td></tr>';
           }).join("");
           var notes=[];
           if(pb.advTo)notes.push('先行販売期間: '+(pb.advFrom?fmtDate(pb.advFrom):'（開始日なし）')+' 〜 '+fmtDate(pb.advTo));
@@ -1339,16 +1356,13 @@
             +(Array.isArray(ev.ticketRaw)&&ev.ticketRaw.length?'':'（枚数を手入力したため明細がありません。「チケット管理」CSVを取り込むと購入日で振り分けられます）'));
           pricePanel='<div class="panel" style="margin-top:16px"><div class="panel-h"><h3>売上内訳</h3>'+
             hRight('<span class="sub">チケット代 税抜 '+yen(pb.amountEx)+' ／ 税込 '+yen(pb.amount)+'</span>'+prEditBtn)+'</div>'+
-            '<div class="tbl-wrap"><table><thead><tr><th>商品・コーナー名</th><th>席タイプ</th><th>販売区分</th><th>枚数</th><th class="ex">税抜単価'+hintBtn("ex")+'</th><th>税込単価'+hintBtn("inc")+'</th><th class="ex">金額（税抜）</th><th>金額（税込）</th></tr></thead><tbody>'+prRows+
-            '</tbody><tfoot><tr><td>'+(pb.sysFee>0?'チケット代'+hintBtn("ticket"):'合計')+'</td><td></td><td></td><td class="num">'+nf(pb.tickets)+'</td><td class="num ex">—</td><td class="num">—</td><td class="num ex">'+yen(pb.amountEx)+'</td><td class="num">'+yen(pb.amount)+'</td></tr>'+
-            (pb.sysFee>0
-              ? '<tr class="ft-fee"><td>ユーザーチャージ'+hintBtn("charge")+'<span class="ft-x">'+nf(pb.tickets)+' 枚分</span></td><td></td><td></td><td class="num"></td><td class="num ex"></td><td class="num">'+yen(pb.fee)+'</td><td class="num ex">'+yenEx(pb.sysFee)+'</td><td class="num">'+yen(pb.sysFee)+'</td></tr>'
-              : '')+
-            (cvsN>0
-              ? '<tr class="ft-fee"><td>コンビニ決済手数料'+hintBtn("cvs")+'<span class="ft-x">'+nf(cvsN)+' 件分</span></td><td></td><td></td><td class="num"></td><td class="num ex"></td><td class="num">'+yen(CVS_FEE)+'</td><td class="num ex">'+yenEx(cvsAmt)+'</td><td class="num">'+yen(cvsAmt)+'</td></tr>'
-              : '')+
-            ((pb.sysFee>0||cvsN>0)
-              ? '<tr class="ft-all"><td>合計（手数料込）</td><td></td><td></td><td class="num"></td><td class="num ex"></td><td class="num"></td><td class="num ex">'+yen(pb.amountEx+exVal(pb.sysFee)+exVal(cvsAmt))+'</td><td class="num">'+yen(pb.amount+pb.sysFee+cvsAmt)+'</td></tr>'
+            '<div class="tbl-wrap"><table><thead><tr><th>商品・コーナー名</th><th>席タイプ</th><th>販売区分</th><th>枚数</th><th>ユーザーチャージ'+hintBtn("charge")+'</th><th>コンビニ決済手数料'+hintBtn("cvs")+'</th><th class="ex">金額（税抜）'+hintBtn("ex")+'</th><th>金額（税込）'+hintBtn("inc")+'</th></tr></thead><tbody>'+prRows+
+            '</tbody><tfoot><tr><td>合計</td><td></td><td></td><td class="num">'+nf(pb.tickets)+'</td>'+
+              '<td class="num">'+yen(pb.sysFee)+'</td><td class="num">'+yen(cvsAmt)+'</td>'+
+              '<td class="num ex">'+yen(pb.amountEx)+'</td><td class="num">'+yen(pb.amount)+'</td></tr>'+
+            ((pb.sysFee>0||cvsAmt>0)
+              ? '<tr class="ft-all"><td>合計（手数料込）'+hintBtn("withfee")+'</td><td></td><td></td><td class="num"></td><td class="num"></td><td class="num"></td>'+
+                '<td class="num ex">'+yen(pb.amountEx+exVal(pb.sysFee)+exVal(cvsAmt))+'</td><td class="num">'+yen(pb.amount+pb.sysFee+cvsAmt)+'</td></tr>'
               : '')+
             '</tfoot></table></div>'+
             '<div class="sb-meta" style="padding:12px 16px 4px;line-height:1.8">※ '+notes.join('<br>※ ')+'</div></div>';
@@ -1635,6 +1649,8 @@
     cvs:{t:"コンビニ決済手数料",b:"コンビニ払い<b>1注文につき330円</b>です。<br>枚数ではなく<b>注文の件数</b>で数えます（3枚まとめて1注文なら330円）。<br><br>注文管理CSVの「決済方法」から、決済済みのコンビニ払いだけを集計しています。"},
     inc:{t:"税込",b:"消費税を含んだ金額です。<br><br>税抜単価 ×（1＋税率）を四捨五入して<b>税込単価</b>を出し、それに枚数を掛けています。<br>税率は席タイプごとに <b>9%（軽減税率）</b>か<b>10%</b> を選べます。"},
     ex:{t:"税抜",b:"消費税を除いた金額です。<br><br>「単価設定」で入力した<b>税抜単価 × 枚数</b>をそのまま合計しています。<br>合計を1.1で割った概算ではないので、販売側の管理画面の金額と一致します。"},
+    csvticket:{t:"チケット代（CSVの入金額から）",b:"注文管理CSVの<b>入金額</b>から、ユーザーチャージとコンビニ決済手数料を引いた額です。<br><br>CSVの入金額は消費税を含まない<b>税抜</b>なので、右の「金額（税抜）」とほぼ同じ数字になります。<br>ずれる場合は、単価設定の税抜単価か税率が実際と違っています。"},
+    withfee:{t:"合計（手数料込）",b:"チケット代に、<b>ユーザーチャージ</b>と<b>コンビニ決済手数料</b>を足した金額です。<br><br>お客様が実際に支払った総額にあたります。<br>売上推移の「売上」列（注文管理CSVの入金額）と同じ金額になります。"},
     paid:{t:"売上（決済済み）",b:"注文管理CSVの<b>入金額の合計</b>です。<br><br>この金額には<b>ユーザーチャージが含まれています</b>。右の「チケット代」は、そこから枚数分のチャージを引いた額です。"}
   };
   function hintBtn(k){return HINTS[k]?'<button type="button" class="hintb" data-hint="'+k+'" aria-label="'+esc(HINTS[k].t)+'の計算方法">?</button>':"";}
