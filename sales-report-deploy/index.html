@@ -977,7 +977,7 @@
     // 入れてしまうと「9月」を選んでも購入日不明の分が必ず足され、選んだ期間の数字にならない。
     var filtered=!!(from||to);
     var out={buckets:[],undated:{n:0,amt:0},byEvent:[],bySeat:[],filtered:filtered,
-             tickets:0,amount:0,amountEx:0,sysFee:0,minDate:"",maxDate:"",
+             tickets:0,amount:0,amountEx:0,sysFee:0,cvsN:0,cvsAmt:0,minDate:"",maxDate:"",
              noPriceEvents:[],noDateEvents:[],hasAny:false};
     var bk={},order=[],seat={},seatOrder=[];
     var ordAll=[],ordSeen={};                       // 席タイプの並び順は各イベントの単価設定から寄せ集める
@@ -996,8 +996,8 @@
           if(from&&r.d<from)return;            // 期間で絞り込む（両端を含む）
           if(to&&r.d>to)return;
           var b=bucketOf(r.d,period);
-          if(!bk[b.key]){bk[b.key]={key:b.key,label:b.label,sub:b.sub,n:0,amt:0};order.push(b.key);}
-          bk[b.key].n+=r.n; bk[b.key].amt+=r.amt;
+          if(!bk[b.key]){bk[b.key]={key:b.key,label:b.label,sub:b.sub,n:0,amt:0,xamt:0};order.push(b.key);}
+          bk[b.key].n+=r.n; bk[b.key].amt+=r.amt; bk[b.key].xamt+=(r.xamt||0);
         }else{
           out.undated.n+=r.n; out.undated.amt+=r.amt; e.undated+=r.n;
           if(filtered)return;                  // 期間指定中は合計に含めない
@@ -1016,6 +1016,22 @@
       // 集計から外れたイベントも「購入日のデータが無い」注記には出す（黙って消えないように）
       if((e.n||e.undated)&&!e.hasDates)out.noDateEvents.push(ev.name);
     });
+    // コンビニ払いは1注文につき手数料がかかる。枚数ではなく注文の件数で数える。
+    (evs||[]).forEach(function(ev){
+      if(!Array.isArray(ev.orderRaw))return;
+      var dm=(ev.dateMap&&typeof ev.dateMap==="object")?ev.dateMap:{};
+      ev.orderRaw.forEach(function(r){
+        if(r.s!=="決済済み"||r.m!=="コンビニ")return;
+        var d=dm[r.o]||null;
+        if(filtered){                       // 期間指定中は、購入日が分かる注文だけ数える
+          if(!d)return;
+          if(from&&d<from)return;
+          if(to&&d>to)return;
+        }
+        out.cvsN++;
+      });
+    });
+    out.cvsAmt=out.cvsN*CVS_FEE;
     out.buckets=order.sort().map(function(k){return bk[k];});
     out.byEvent.sort(function(a,b){return (b.amt-a.amt)||(b.n-a.n);});
     out.bySeat=sortSeats(seatOrder.map(function(k){return seat[k];}),ordAll,"v");
@@ -1475,8 +1491,13 @@
         '<div class="tbl-wrap'+fld.cls+'"><table><thead><tr><th>'+({day:"日",week:"週",month:"月"}[period])+'</th><th>売上</th><th>枚数</th><th>金額（税込）</th><th class="ex">税抜</th></tr></thead><tbody>'+rows+
         '</tbody><tfoot><tr><td>'+(rs.sysFee>0?'チケット代':'合計')+'</td><td></td><td class="num">'+nf(rs.tickets)+'</td><td class="num">'+yen(rs.amount)+'</td><td class="num ex">'+yen(rs.amountEx)+'</td></tr>'+
         (rs.sysFee>0
-          ? '<tr class="ft-fee"><td>ユーザーチャージ<span class="ft-x">'+nf(rs.tickets)+' 枚'+(rs.oneFee!=null?' × '+yen(rs.oneFee):'')+'</span></td><td></td><td class="num"></td><td class="num">'+yen(rs.sysFee)+'</td><td class="num ex">'+yenEx(rs.sysFee)+'</td></tr>'+
-            '<tr class="ft-all"><td>合計（ユーザーチャージ込）</td><td></td><td class="num"></td><td class="num">'+yen(rs.amount+rs.sysFee)+'</td><td class="num ex">'+yen(rs.amountEx+exVal(rs.sysFee))+'</td></tr>'
+          ? '<tr class="ft-fee"><td>ユーザーチャージ<span class="ft-x">'+nf(rs.tickets)+' 枚'+(rs.oneFee!=null?' × '+yen(rs.oneFee):'')+'</span></td><td></td><td class="num"></td><td class="num">'+yen(rs.sysFee)+'</td><td class="num ex">'+yenEx(rs.sysFee)+'</td></tr>'
+          : '')+
+        (rs.cvsN>0
+          ? '<tr class="ft-fee"><td>コンビニ決済手数料<span class="ft-x">'+nf(rs.cvsN)+' 件 × '+yen(CVS_FEE)+'</span></td><td></td><td class="num"></td><td class="num">'+yen(rs.cvsAmt)+'</td><td class="num ex">'+yenEx(rs.cvsAmt)+'</td></tr>'
+          : '')+
+        ((rs.sysFee>0||rs.cvsN>0)
+          ? '<tr class="ft-all"><td>合計（手数料込）</td><td></td><td class="num"></td><td class="num">'+yen(rs.amount+rs.sysFee+rs.cvsAmt)+'</td><td class="num ex">'+yen(rs.amountEx+exVal(rs.sysFee)+exVal(rs.cvsAmt))+'</td></tr>'
           : '')+
         '</tfoot></table></div>'+fld.bar+
         (notes.length?'<div class="sb-meta" style="padding:12px 16px 4px;line-height:1.8">※ '+notes.join('<br>※ ')+'</div>':'')+'</div>';
