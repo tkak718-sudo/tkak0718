@@ -416,6 +416,7 @@
   thead th.grp{text-align:center;font-size:11px;padding-bottom:6px;color:var(--brand);border-bottom:1px solid var(--line-soft)}
   thead th.grp:not(.gsep){color:var(--muted)}
   .gsep{border-left:2px solid color-mix(in srgb,var(--brand) 35%,var(--line))}
+  tbody td.rpt{opacity:.45}
   .mx-note{margin-top:2px;color:#9a5b00;font-weight:700}
   /* 見出しの「？」と、その説明の吹き出し */
   .hintb{display:inline-grid;place-items:center;width:15px;height:15px;margin-left:5px;vertical-align:-2px;
@@ -1068,10 +1069,10 @@
     // 期間を指定している間は、購入日が無いチケットを合計に入れない。
     // 入れてしまうと「9月」を選んでも購入日不明の分が必ず足され、選んだ期間の数字にならない。
     var filtered=!!(from||to);
-    var out={buckets:[],undated:{n:0,amt:0,xamt:0},byEvent:[],bySeat:[],filtered:filtered,
+    var out={buckets:[],undated:{n:0,amt:0,xamt:0},byEvent:[],bySeat:[],byDetail:[],lastAt:"",filtered:filtered,
              tickets:0,amount:0,amountEx:0,sysFee:0,cvsN:0,cvsAmt:0,minDate:"",maxDate:"",
              noPriceEvents:[],noDateEvents:[],hasAny:false};
-    var bk={},order=[],seat={},seatOrder=[];
+    var bk={},order=[],seat={},seatOrder=[],det={},detOrder=[];
     var ordAll=[],ordSeen={};                       // 席タイプの並び順は各イベントの単価設定から寄せ集める
     (evs||[]).forEach(function(ev){
       var rows=priceRows(ev); if(!rows.length)return;
@@ -1100,6 +1101,10 @@
         var sk=r.s||SEAT_NONE;
         if(!seat[sk]){seat[sk]={k:sk,v:0,amt:0,xamt:0};seatOrder.push(sk);}
         seat[sk].v+=r.n; seat[sk].amt+=r.amt; seat[sk].xamt+=(r.xamt||0);
+        // 確認用の明細：クライアント × 商品グループ × 券種 × 販売区分
+        var dk=[ev.clientId,r.p||"",sk,r.phase].join("\u0000");
+        if(!det[dk]){det[dk]={cl:ev.clientId,evName:ev.name,p:r.p||"",s:sk,phase:r.phase,n:0,amt:0,xamt:0,unit:r.unit,uc:fee};detOrder.push(dk);}
+        det[dk].n+=r.n; det[dk].amt+=r.amt; det[dk].xamt+=(r.xamt||0);
       });
       if(e.n){
         out.byEvent.push(e);
@@ -1107,6 +1112,8 @@
       }
       // 集計から外れたイベントも「購入日のデータが無い」注記には出す（黙って消えないように）
       if((e.n||e.undated)&&!e.hasDates)out.noDateEvents.push(ev.name);
+      // 連携にラグがあるため、いつ取り込んだデータかを画面に出せるようにする
+      [ev.tkAt,ev.odAt].forEach(function(t){if(t&&t>out.lastAt)out.lastAt=t;});
     });
     // コンビニ払いは1注文につき手数料がかかる。枚数ではなく注文の件数で数える。
     (evs||[]).forEach(function(ev){
@@ -1127,6 +1134,17 @@
     out.buckets=order.sort().map(function(k){return bk[k];});
     out.byEvent.sort(function(a,b){return (b.amt-a.amt)||(b.n-a.n);});
     out.bySeat=sortSeats(seatOrder.map(function(k){return seat[k];}),ordAll,"v");
+    var phOrd={adv:0,sec:1,reg:2,unknown:3}, seatIx={};
+    ordAll.forEach(function(k,i){seatIx[k]=i;});
+    out.byDetail=detOrder.map(function(k){return det[k];}).sort(function(a,b){
+      var an=clientName(a.cl), bn=clientName(b.cl);
+      if(an!==bn)return an<bn?-1:1;
+      if(a.p!==b.p)return a.p<b.p?-1:1;
+      var ai=(seatIx[a.s]==null?999:seatIx[a.s]), bi=(seatIx[b.s]==null?999:seatIx[b.s]);
+      if(ai!==bi)return ai-bi;
+      if(a.s!==b.s)return a.s<b.s?-1:1;
+      return (phOrd[a.phase]||0)-(phOrd[b.phase]||0);
+    });
     return out;
   }
 
@@ -1716,7 +1734,41 @@
           }).join("")+'</tbody>'+lyFoot+'</table></div></div>';
       }
 
-      lyBody=lyFlow+lyTrend+lyEv+
+      // 確認項目：どのクライアントの、どの商品グループの、どの券種が、何枚、いくら（UC込み）で売れたか
+      var lyDet="";
+      if(rs.byDetail.length){
+        var ucAll=rs.amount+rs.sysFee, prevCl="", prevP="";
+        var dTrs=rs.byDetail.map(function(r,i){
+          var cln=clientName(r.cl), uc=r.uc||0;
+          var sameCl=(cln===prevCl), sameP=(sameCl&&r.p===prevP);
+          prevCl=cln; prevP=r.p;
+          return '<tr'+(i>=FOLD_N?' class="row-more"':'')+'>'+
+            '<td'+(sameCl?' class="rpt"':'')+'><span class="pnm" style="max-width:clamp(110px,11vw,170px)" title="'+esc(cln)+'">'+esc(cln)+'</span></td>'+
+            '<td'+(sameP?' class="rpt"':'')+'><span class="pnm" title="'+esc(r.p||r.evName)+'">'+esc(r.p||r.evName)+'</span></td>'+
+            '<td class="seat">'+esc(r.s)+'</td>'+
+            '<td><span class="chip '+(PHASE_CLASS[r.phase]||"ph-unk")+'">'+esc(PHASE_LABEL[r.phase]||r.phase)+'</span></td>'+
+            '<td class="num">'+nf(r.n)+'</td>'+
+            '<td class="num">'+(r.unit!=null?yen(r.unit):'<span style="color:var(--faint)">—</span>')+'</td>'+
+            '<td class="num gsep">'+(r.unit!=null?yen(r.unit+uc):'<span style="color:var(--faint)">—</span>')+
+              '<span class="tx-r">チケット＋UC '+yen(uc)+'</span></td>'+
+            '<td class="num"><b>'+yen(r.amt+r.n*uc)+'</b></td></tr>';
+        }).join("");
+        var dfd=foldBar(rs.byDetail.length);
+        lyDet='<div class="panel" style="margin-top:16px"><div class="panel-h"><h3>確認項目（クライアント × 商品グループ × 券種）</h3>'+
+          hRight('<span class="sub">選択期間内 ・ '+nf(rs.byDetail.length)+' 行</span>')+'</div>'+
+          '<div class="tbl-wrap'+dfd.cls+'"><table><thead><tr><th>クライアント</th><th>商品グループ</th><th>券種（席タイプ）</th><th>販売区分</th>'+
+            '<th>枚数</th><th>単価（税込）'+hintBtn("inc")+'</th><th class="gsep">単価（UC込み）'+hintBtn("ucprice")+'</th><th>販売額（UC込み）'+hintBtn("ucamt")+'</th></tr></thead><tbody>'+dTrs+
+          '</tbody><tfoot><tr class="ft-all"><td>合計</td><td></td><td></td><td></td><td class="num">'+nf(rs.tickets)+'</td><td class="num"></td>'+
+            '<td class="num gsep"></td><td class="num">'+yen(ucAll)+'</td></tr></tfoot></table></div>'+dfd.bar+
+          '<div class="sb-meta" style="padding:12px 16px 14px;line-height:1.8">'+
+          '※ <b>単価（UC込み）</b>＝税込単価 ＋ ユーザーチャージ'+yen(SYS_FEE)+'。お客様が1枚あたり支払う金額です（コンビニ決済手数料は注文単位のため含みません）。<br>'+
+          '※ <b>販売額（UC込み）</b>＝単価（UC込み）× 枚数。<br>'+
+          (rs.lastAt?'※ <b style="color:var(--warn)">連携にラグがあります。</b>この画面のもとになっているCSVの最終取込は <b>'+esc(fmtStamp(rs.lastAt))+'</b> です。金額を確定するときは、取込のタイミングをご確認ください。<br>':
+                     '※ <b style="color:var(--warn)">連携にラグがあります。</b>金額を確定するときは、CSVの取込タイミングをご確認ください。<br>')+
+          '</div></div>';
+      }
+
+      lyBody=lyFlow+lyTrend+lyEv+lyDet+
         '<div class="panel" style="margin-top:16px"><div class="panel-h"><h3>計算方法</h3></div>'+
         '<div class="sb-meta" style="padding:12px 16px 16px;line-height:1.9">'+
         '※ <b>システム利用料</b>＝税抜のチケット代 × '+LY_RATE+'%（円未満切り捨て）。ユーザーチャージ・コンビニ決済手数料は対象外です。<br>'+
@@ -1816,6 +1868,8 @@
     lyfee:{t:"システム利用料（0.6%）",b:"LINEヤフー社様へお支払いするレベニューシェアです。<br><br><b>税抜のチケット代 × 0.6%</b>（円未満切り捨て）。<br>ユーザーチャージとコンビニ決済手数料は<b>計算に含みません</b>。"},
     lychg:{t:"ユーザーチャージ（150円）",b:"LINEヤフー社様へお支払いする<b>1枚あたり150円 × チケット枚数</b>です。<br><br>お客様からいただく330円のユーザーチャージとは別で、そのうち150円をお支払いしている形です。"},
     lytotal:{t:"お支払い合計",b:"<b>システム利用料（税抜 × 0.6%）＋ ユーザーチャージ（枚数 × 150円）</b>です。<br><br>これがLINEヤフー社様へお振り込みする金額です。"},
+    ucprice:{t:"単価（UC込み）",b:"お客様が<b>1枚あたり支払う金額</b>です。<br><br>税込単価 ＋ ユーザーチャージ（1枚あたり）。<br>コンビニ決済手数料は注文ごとにかかるため、1枚あたりの単価には含めていません。"},
+    ucamt:{t:"販売額（UC込み）",b:"<b>単価（UC込み）× 枚数</b>です。<br><br>その券種が実際にいくらで何枚売れたかの合計にあたります。<br>コンビニ決済手数料（注文ごとに330円）は含みません。"},
     paid:{t:"売上（決済済み）",b:"注文管理CSVの<b>入金額の合計</b>です。<br><br>この金額には<b>ユーザーチャージが含まれています</b>。右の「チケット代」は、そこから枚数分のチャージを引いた額です。"}
   };
   function hintBtn(k){return HINTS[k]?'<button type="button" class="hintb" data-hint="'+k+'" aria-label="'+esc(HINTS[k].t)+'の計算方法">?</button>':"";}
