@@ -389,6 +389,8 @@
   .pt th .th-x{display:block;font-size:10px;font-weight:700;color:var(--faint);letter-spacing:.02em}
   .pt .col-tax{width:78px}
   .tx-r{display:block;font-size:10.5px;color:var(--faint);font-weight:700;margin-top:1px}
+  .mxf{display:inline-block;margin-left:6px;padding:1px 7px;border-radius:999px;font-size:10.5px;font-weight:800;letter-spacing:.02em;color:#9a5b00;background:color-mix(in srgb,#f5a623 22%,transparent);border:1px solid color-mix(in srgb,#f5a623 45%,transparent);vertical-align:2px;white-space:nowrap}
+  .mx-note{margin-top:2px;color:#9a5b00;font-weight:700}
   /* 見出しの「？」と、その説明の吹き出し */
   .hintb{display:inline-grid;place-items:center;width:15px;height:15px;margin-left:5px;vertical-align:-2px;
     border:none;border-radius:50%;background:var(--line);color:var(--muted);font-size:10px;font-weight:900;
@@ -793,20 +795,34 @@
   function ticketsByOrder(ev){
     var m={}; ((ev&&ev.ticketRaw)||[]).forEach(function(r){m[r.o]=(m[r.o]||0)+(+r.n||0);}); return m;
   }
+  // 1つの注文で複数イベントのチケットを買っている場合、注文管理CSVの「金額」は
+  // 注文まるごとの金額なので、このイベントだけの額には分けられない。
+  // そういう注文IDを集めておいて、画面で印を付ける。
+  function mixedOrders(ev){
+    var out={}; if(!ev||!Array.isArray(ev.ticketRaw))return out;
+    var mine={}; ev.ticketRaw.forEach(function(r){mine[r.o]=1;});
+    state.events.forEach(function(o){
+      if(o===ev||!Array.isArray(o.ticketRaw))return;
+      o.ticketRaw.forEach(function(r){if(mine[r.o])out[r.o]=1;});
+    });
+    return out;
+  }
   function salesOf(ev){
     if(ev&&ev.orderRaw&&ev.orderRaw.length){
-      var dm=ev.dateMap||{},tb=ticketsByOrder(ev),total=0,count=0,tks=0,cvs=0,day={};
-      var mk=function(d){if(!day[d])day[d]={c:0,a:0,t:0,cv:0,xa:0,ia:0};return day[d];};
+      var dm=ev.dateMap||{},tb=ticketsByOrder(ev),total=0,count=0,tks=0,cvs=0,mix=0,day={};
+      var mixed=mixedOrders(ev);
+      var mk=function(d){if(!day[d])day[d]={c:0,a:0,t:0,cv:0,xa:0,ia:0,mx:0};return day[d];};
       ev.orderRaw.forEach(function(r){
         if(r.s!=="決済済み")return; var amt=+r.a||0, tk=tb[r.o]||0; total+=amt; count++; tks+=tk;
         var cv=(r.m==="コンビニ")?1:0; cvs+=cv;
-        var d=dm[r.o]||null; if(d){var o=mk(d);o.c++;o.a+=amt;o.t+=tk;o.cv+=cv;}
+        var mx=mixed[r.o]?1:0; mix+=mx;
+        var d=dm[r.o]||null; if(d){var o=mk(d);o.c++;o.a+=amt;o.t+=tk;o.cv+=cv;o.mx+=mx;}
       });
       // 単価設定から出した税抜・税込も日別に足しておく（売上内訳と同じ数字にするため）
       priceRows(ev).forEach(function(r){if(!r.d)return;var o=mk(r.d);o.xa+=(r.xamt||0);o.ia+=(r.amt||0);});
       var daily=Object.keys(day).sort().map(function(d){
-        return {d:d,c:day[d].c,a:day[d].a,t:day[d].t,cv:day[d].cv,xa:day[d].xa,ia:day[d].ia};});
-      return {total:total,count:count,tickets:tks,cvs:cvs,daily:daily};
+        return {d:d,c:day[d].c,a:day[d].a,t:day[d].t,cv:day[d].cv,xa:day[d].xa,ia:day[d].ia,mx:day[d].mx};});
+      return {total:total,count:count,tickets:tks,cvs:cvs,mixed:mix,daily:daily};
     }
     return ev&&ev.sales?ev.sales:null;
   }
@@ -1074,14 +1090,14 @@
   // 日/週/月へ集計
   function groupSales(daily,period){
     daily=daily||[];
-    if(period==="day")return daily.map(function(x){return {label:mdLabel(x.d),sub:wdayJ(x.d),c:x.c,a:x.a,t:x.t||0,cv:x.cv||0,xa:x.xa||0,ia:x.ia||0};});
+    if(period==="day")return daily.map(function(x){return {label:mdLabel(x.d),sub:wdayJ(x.d),c:x.c,a:x.a,t:x.t||0,cv:x.cv||0,xa:x.xa||0,ia:x.ia||0,mx:x.mx||0};});
     var m={};
     daily.forEach(function(x){
       var key,label,sub;
       if(period==="month"){key=x.d.slice(0,7);var mp=key.split("-");label=(+mp[0])+"年"+(+mp[1])+"月";sub="";}
       else{key=mondayOf(x.d);label=mdLabel(key)+"〜";sub="週";}
-      if(!m[key])m[key]={key:key,label:label,sub:sub,c:0,a:0,t:0,cv:0,xa:0,ia:0};
-      m[key].c+=x.c;m[key].a+=x.a;m[key].t+=(x.t||0);m[key].cv+=(x.cv||0);m[key].xa+=(x.xa||0);m[key].ia+=(x.ia||0);
+      if(!m[key])m[key]={key:key,label:label,sub:sub,c:0,a:0,t:0,cv:0,xa:0,ia:0,mx:0};
+      m[key].c+=x.c;m[key].a+=x.a;m[key].t+=(x.t||0);m[key].cv+=(x.cv||0);m[key].xa+=(x.xa||0);m[key].ia+=(x.ia||0);m[key].mx+=(x.mx||0);
     });
     return Object.keys(m).sort().map(function(k){return m[k];});
   }
@@ -1300,7 +1316,8 @@
       var salesNote='<div class="sb-meta" style="padding:12px 16px 4px;line-height:1.8">'+
         '※ 「売上」は注文管理CSVの入金額です。CSVの金額は「税抜のチケット代 ＋ ユーザーチャージ（枚数×'+yen((pricingOf(ev)?pricingOf(ev).sysFee:SYS_FEE)||0)+'） ＋ コンビニ決済手数料（コンビニ払い1注文につき'+yen(CVS_FEE)+'）」になっています。<br>'+
         '※ 「チケット代」は、その入金額から2つの手数料を引いた額です。右の「金額（税抜）」は単価設定の税抜単価×枚数で、両者が一致すれば単価設定は正しく入っています。<br>'+
-        '※ 「金額（税込）」は税抜単価×（1＋税率）×枚数です。税率は席タイプごとに単価設定で指定します。</div>';
+        '※ 「金額（税込）」は税抜単価×（1＋税率）×枚数です。税率は席タイプごとに単価設定で指定します。'+
+        ((sa&&sa.mixed>0)?'<div class="mx-note">※ 他イベントとの<b>合わせ買い</b>が'+nf(sa.mixed)+'件あります。1つの注文で複数イベントのチケットを購入した場合、注文管理CSVの入金額は<b>注文まるごとの金額</b>なので、このイベントぶんだけには分けられません。該当日には「合わせ買い」の印を付けています。その日は「チケット代」が「金額（税抜）」より多く出ます（差は他イベントぶんです）。</div>':'')+'</div>';
       var salesPanel;
       if(sa&&sa.daily&&sa.daily.length){
         var g=groupSales(sa.daily,period).slice().reverse();
@@ -1315,7 +1332,8 @@
         var sumG=function(f){return g.reduce(function(a,x){return a+f(x);},0);};
         var rows=g.map(function(x,i){
           var chg=ucOf(x), cv=cvOf(x), net=x.a-chg-cv;
-          return '<tr'+(i>=FOLD_N?' class="row-more"':'')+'><td>'+esc(x.label)+(x.sub?' <span style="color:var(--faint);font-weight:600">'+esc(x.sub)+'</span>':'')+'</td>'+
+          return '<tr'+(i>=FOLD_N?' class="row-more"':'')+'><td>'+esc(x.label)+(x.sub?' <span style="color:var(--faint);font-weight:600">'+esc(x.sub)+'</span>':'')+
+            ((x.mx||0)>0?'<span class="mxf" title="他イベントとの合わせ買いが'+nf(x.mx)+'件あります。CSVの入金額に他イベントぶんが含まれるため、チケット代が金額（税抜）より多く出ます。">合わせ買い '+nf(x.mx)+'件</span>':'')+'</td>'+
             '<td style="width:16%"><div class="bar-track" style="height:20px"><div class="bar-fill" style="width:'+(x.a/maxA*100)+'%"></div></div></td>'+
             '<td class="num">'+nf(haveTk?(x.t||0):x.c)+'</td>'+
             '<td class="num">'+yen(net)+'</td>'+
