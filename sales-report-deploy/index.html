@@ -778,6 +778,12 @@
     return ev&&ev.sales?ev.sales:null;
   }
   function salesTotal(ev){var s=salesOf(ev);return s?(s.total||0):0;}
+  // コンビニ払いは1注文につき決済手数料が別途かかる（管理画面の金額にも上乗せされている）
+  var CVS_FEE=330;
+  function cvsOrders(ev){
+    if(!ev||!Array.isArray(ev.orderRaw))return 0;
+    return ev.orderRaw.filter(function(r){return r.s==="決済済み"&&r.m==="コンビニ";}).length;
+  }
   // ---------- 税込単価による金額算出 ----------
   // 単価は ev.pricing に商品名をキーにして持つ。ev.ticket は取込・手入力のたびに
   // 作り直されるため、その中には置かない（設定が消えてしまう）。
@@ -837,10 +843,18 @@
   // 税抜が入っていない古い設定は、保存済みの税込から逆算して表示・集計に使う。
   var TAX_DEFAULT=10;
   function taxOf(o){var t=o&&o.tax;return (t==null||t==="")?TAX_DEFAULT:(+t||0);}
-  // 税込は消費税の慣行どおり切り捨て。逆算（税抜）は切り上げにすると、
-  // 税込5,000/6,000のようなキリのいい価格でも往復して同じ値に戻る。
-  function incFromEx(ex,tax){return ex==null?null:Math.floor(ex*(1+tax/100)+1e-9);}
-  function exFromInc(inc,tax){return inc==null?null:Math.ceil(inc/(1+tax/100)-1e-9);}
+  // 税込＝税抜×税率 の四捨五入。販売側の管理画面もこの計算になっている
+  // （例：軽減税率9%で税抜4,587円 → 税込5,000円）。
+  function incFromEx(ex,tax){return ex==null?null:Math.round(ex*(1+tax/100));}
+  // 税抜の逆算は、四捨五入・切り捨て・切り上げのうち「元の税込に戻せるもの」を選ぶ。
+  // これで、税抜を入れていない古い設定を開いて保存し直しても金額が動かない。
+  function exFromInc(inc,tax){
+    if(inc==null)return null;
+    var r=inc/(1+tax/100), cands=[Math.round(r),Math.floor(r),Math.ceil(r)];
+    for(var i=0;i<cands.length;i++)if(incFromEx(cands[i],tax)===inc)return cands[i];
+    // どの整数でも元の税込に戻せない場合（10%の6,000円など）は、いちばん近いものを使う
+    return cands.slice().sort(function(a,b){return Math.abs(incFromEx(a,tax)-inc)-Math.abs(incFromEx(b,tax)-inc);})[0];
+  }
   // 1つの単価セル（先行/二次選考/通常のいずれか）について、税抜・税込・税率を揃えて返す
   function priceCell(o,key){
     if(!o)return null;
@@ -1271,6 +1285,7 @@
       var pb=priceBreakdown(ev), pricePanel="";
       if(tk&&totalTk){
         if(pb.configured){
+          var cvsN=cvsOrders(ev), cvsAmt=cvsN*CVS_FEE;
           var prRows=pb.rows.map(function(r){
             var pnm=r.p||"—";
             return '<tr><td><span class="pnm" title="'+esc(pnm)+'">'+esc(pnm)+'</span></td>'+
@@ -1294,8 +1309,13 @@
             '<div class="tbl-wrap"><table><thead><tr><th>商品・コーナー名</th><th>席タイプ</th><th>販売区分</th><th>枚数</th><th class="ex">税抜単価</th><th>税込単価</th><th class="ex">金額（税抜）</th><th>金額（税込）</th></tr></thead><tbody>'+prRows+
             '</tbody><tfoot><tr><td>'+(pb.sysFee>0?'チケット代':'合計')+'</td><td></td><td></td><td class="num">'+nf(pb.tickets)+'</td><td class="num ex">—</td><td class="num">—</td><td class="num ex">'+yen(pb.amountEx)+'</td><td class="num">'+yen(pb.amount)+'</td></tr>'+
             (pb.sysFee>0
-              ? '<tr class="ft-fee"><td>ユーザーチャージ<span class="ft-x">'+nf(pb.tickets)+' 枚分</span></td><td></td><td></td><td class="num"></td><td class="num ex"></td><td class="num">'+yen(pb.fee)+'</td><td class="num ex">'+yenEx(pb.sysFee)+'</td><td class="num">'+yen(pb.sysFee)+'</td></tr>'+
-                '<tr class="ft-all"><td>合計（ユーザーチャージ込）</td><td></td><td></td><td class="num"></td><td class="num ex"></td><td class="num"></td><td class="num ex">'+yen(pb.amountEx+exVal(pb.sysFee))+'</td><td class="num">'+yen(pb.amount+pb.sysFee)+'</td></tr>'
+              ? '<tr class="ft-fee"><td>ユーザーチャージ<span class="ft-x">'+nf(pb.tickets)+' 枚分</span></td><td></td><td></td><td class="num"></td><td class="num ex"></td><td class="num">'+yen(pb.fee)+'</td><td class="num ex">'+yenEx(pb.sysFee)+'</td><td class="num">'+yen(pb.sysFee)+'</td></tr>'
+              : '')+
+            (cvsN>0
+              ? '<tr class="ft-fee"><td>コンビニ決済手数料<span class="ft-x">'+nf(cvsN)+' 件分</span></td><td></td><td></td><td class="num"></td><td class="num ex"></td><td class="num">'+yen(CVS_FEE)+'</td><td class="num ex">'+yenEx(cvsAmt)+'</td><td class="num">'+yen(cvsAmt)+'</td></tr>'
+              : '')+
+            ((pb.sysFee>0||cvsN>0)
+              ? '<tr class="ft-all"><td>合計（手数料込）</td><td></td><td></td><td class="num"></td><td class="num ex"></td><td class="num"></td><td class="num ex">'+yen(pb.amountEx+exVal(pb.sysFee)+exVal(cvsAmt))+'</td><td class="num">'+yen(pb.amount+pb.sysFee+cvsAmt)+'</td></tr>'
               : '')+
             '</tfoot></table></div>'+
             '<div class="sb-meta" style="padding:12px 16px 4px;line-height:1.8">※ '+notes.join('<br>※ ')+'</div></div>';
@@ -1871,8 +1891,12 @@
     var uv=function(v){return (v==null||v==="")?"":v;};
     // 表に出すのは税抜。税抜が無い古い設定は保存済みの税込から逆算して埋める。
     var val=function(o){
-      var c=function(k){var x=priceCell(o,k);return x?String(x.ex):"";};
-      return {adv:c("adv"),sec:c("sec"),reg:c("reg"),tax:String(taxOf(o))};
+      var r={tax:String(taxOf(o))};
+      ["adv","sec","reg"].forEach(function(k){
+        var x=priceCell(o,k);
+        r[k]=x?String(x.ex):""; r[k+"Inc"]=x?String(x.inc):"";
+      });
+      return r;
     };
     var filled=function(o){return !!o&&!!(priceCell(o,"adv")||priceCell(o,"sec")||priceCell(o,"reg"));};
     var same=function(a,b){return a.adv===b.adv&&a.sec===b.sec&&a.reg===b.reg&&a.tax===b.tax;};
@@ -1940,7 +1964,8 @@
           return '<option value="'+esc(o.v)+'"'+(o.v===v?' selected':'')+'>'+esc(o.t)+'</option>';}).join("")+'</select></td>';
         if(c.text)return '<td'+cls+'><input class="led-i" data-k="'+c.key+'" type="text"'+(c.ro?' readonly':'')+
           ' value="'+esc(v)+'" title="'+esc(v)+'" placeholder="'+esc(c.ph||"")+'"></td>';
-        if(c.price)return '<td'+cls+'><input class="led-i pxi" data-k="'+c.key+'" type="number" inputmode="numeric" value="'+esc(v)+'">'+
+        if(c.price)return '<td'+cls+'><input class="led-i pxi" data-k="'+c.key+'" type="number" inputmode="numeric" value="'+esc(v)+'"'+
+          ' data-inc-v="'+esc(r[c.key+"Inc"]==null?"":r[c.key+"Inc"])+'">'+
           '<span class="pt-inc" data-inc="'+c.key+'"></span></td>';
         return '<td'+cls+'><input class="led-i" data-k="'+c.key+'" type="number" inputmode="numeric" value="'+esc(v)+'"></td>';
       }).join("")+'<td class="pt-ops">'+
@@ -1948,7 +1973,7 @@
       '<button type="button" class="led-del" title="削除">×</button></td></tr>';
     };
     var A={key:"adv",price:true},C={key:"sec",cls:"col-sec",price:true},R={key:"reg",price:true};
-    var TAXO=[{v:"10",t:"10%"},{v:"8",t:"8%"},{v:"0",t:"0%"}];
+    var TAXO=[{v:"10",t:"10%"},{v:"9",t:"9%"}];
     var TX={key:"tax",opts:TAXO,cls:"col-tax"};
     var seatCols=[{key:"k",text:true,ro:true},TX,A,C,R];
     var seatNew =[{key:"k",text:true,ph:"席タイプ"},TX,A,C,R];
@@ -1964,12 +1989,15 @@
       '<span style="font-weight:600">（商品・コーナーが違っても同じ単価で計算します。↑↓ の並び順が画面の表示順になります）</span></label>'+
       '<table class="pt"><thead><tr><th>席タイプ</th>'+TH+'</tr></thead><tbody id="prSeat">'+
       seatOrder.map(function(st){var v=seatVal[st]||{};
-        return ptRow(seatCols,{k:st,tax:v.tax,adv:v.adv,sec:v.sec,reg:v.reg},true);}).join("")+
+        return ptRow(seatCols,{k:st,tax:v.tax,adv:v.adv,sec:v.sec,reg:v.reg,
+          advInc:v.advInc,secInc:v.secInc,regInc:v.regInc},true);}).join("")+
       '</tbody></table><button type="button" class="led-add" id="prSeatAdd">＋ 席タイプを追加</button>'):"";
 
     var ovrTbl='<table class="pt"><thead><tr><th>商品・コーナー名</th><th>席タイプ</th>'+TH+'</tr></thead><tbody id="prProd">'+
-      ovr.map(function(x){return ptRow(ovrCols,{k:x.k,s:x.s,tax:x.v.tax,adv:x.v.adv,sec:x.v.sec,reg:x.v.reg});}).join("")+
-      prodRows.map(function(x){return ptRow(ovrCols,{k:x.k,s:"",tax:x.v.tax,adv:x.v.adv,sec:x.v.sec,reg:x.v.reg});}).join("")+
+      ovr.map(function(x){return ptRow(ovrCols,{k:x.k,s:x.s,tax:x.v.tax,adv:x.v.adv,sec:x.v.sec,reg:x.v.reg,
+        advInc:x.v.advInc,secInc:x.v.secInc,regInc:x.v.regInc});}).join("")+
+      prodRows.map(function(x){return ptRow(ovrCols,{k:x.k,s:"",tax:x.v.tax,adv:x.v.adv,sec:x.v.sec,reg:x.v.reg,
+        advInc:x.v.advInc,secInc:x.v.secInc,regInc:x.v.regInc});}).join("")+
       '</tbody></table><button type="button" class="led-add" id="prProdAdd">＋ 行を追加</button>';
 
     var prodBlock=seatOrder.length
@@ -1980,7 +2008,7 @@
          '<p class="mh" style="margin:0 0 8px">このイベントは席タイプの明細が無いため、商品ごとの単価で計算します。</p>'+ovrTbl);
 
     openModal(
-      '<h3>単価を設定</h3><p class="mh" style="margin-bottom:8px">税抜の単価と税率を入れると、税込単価を自動で計算します（端数は切り捨て）。チケット枚数と掛け合わせて金額を出します。</p>'+
+      '<h3>単価を設定</h3><p class="mh" style="margin-bottom:8px">税抜の単価と税率を入れると、税込単価を自動で計算します（端数は四捨五入）。チケット枚数と掛け合わせて金額を出します。</p>'+
       '<label style="margin-top:8px">先行販売期間</label>'+
       '<div class="sch-in">'+dateField("pr_from",pr.advFrom,"開始日")+'<span class="sch-tl">〜</span>'+dateField("pr_to",pr.advTo,"終了日")+'</div>'+
       '<label style="margin-top:8px">二次選考期間<span style="font-weight:600">（ある場合だけ）</span></label>'+
@@ -1993,19 +2021,41 @@
     );
     var wrap=document.getElementById("prWrap");
     // 税抜×税率＝税込 を入力のたびに計算して、各欄の下に出す
-    function syncInc(tr){
+    // rebaseKey に指定したセルだけ、税率切替の基準になる税込を更新する（打ち直した欄だけ）
+    function syncInc(tr,rebaseKey){
       if(!tr)return;
       var ts=tr.querySelector('[data-k="tax"]'), tax=ts?(+ts.value||0):TAX_DEFAULT;
       ["adv","sec","reg"].forEach(function(k){
         var el=tr.querySelector('[data-k="'+k+'"]'), out=tr.querySelector('[data-inc="'+k+'"]');
         if(!el||!out)return;
         var v=String(el.value||"").trim();
-        out.textContent=v===""?"":("税込 "+nf(incFromEx(pnum(v),tax)));
+        var inc=v===""?null:incFromEx(pnum(v),tax);
+        if(rebaseKey===k)el.setAttribute("data-inc-v",inc==null?"":inc);
+        out.textContent=inc==null?"":("税込 "+nf(inc));
       });
     }
-    function syncAllInc(){[].forEach.call(wrap.querySelectorAll("tr.led-trow"),syncInc);}
-    wrap.addEventListener("input",function(e){if(e.target.closest(".led-trow"))syncInc(e.target.closest("tr"));});
-    wrap.addEventListener("change",function(e){if(e.target.closest(".led-trow"))syncInc(e.target.closest("tr"));});
+    // 税率だけを変えた場合、値札（税込）は変わらないはずなので税抜を計算し直す
+    function retax(tr){
+      if(!tr)return;
+      var ts=tr.querySelector('[data-k="tax"]'), tax=ts?(+ts.value||0):TAX_DEFAULT;
+      ["adv","sec","reg"].forEach(function(k){
+        var el=tr.querySelector('[data-k="'+k+'"]'); if(!el)return;
+        var prev=el.getAttribute("data-inc-v");
+        if(prev==null||prev==="")return;
+        el.value=String(exFromInc(+prev,tax));
+      });
+      syncInc(tr,null);
+    }
+    function syncAllInc(){[].forEach.call(wrap.querySelectorAll("tr.led-trow"),function(tr){syncInc(tr,null);});}
+    wrap.addEventListener("input",function(e){
+      if(e.target.getAttribute("data-k")==="tax")return;   // 税率は change で税抜を計算し直す
+      if(e.target.closest(".led-trow"))syncInc(e.target.closest("tr"),e.target.getAttribute("data-k"));
+    });
+    wrap.addEventListener("change",function(e){
+      var tr=e.target.closest(".led-trow"); if(!tr)return;
+      var dk=e.target.getAttribute("data-k");
+      if(dk==="tax")retax(tr); else syncInc(tr,dk);
+    });
     syncAllInc();
     wrap.addEventListener("click",ledDelHandler);
     // 席タイプの並び順はそのまま画面の表示順になるので、行ごとに上下できるようにする
@@ -2552,14 +2602,15 @@
   // チケットと同じく、読むだけの odParse と、反映する odApply に分ける
   function odParse(tbl){
     var ix=idxer(tbl.head);
-    var iO=ix(["注文ID"]),iA=ix(["金額"]),iS=ix(["決済状況"]);
+    var iO=ix(["注文ID"]),iA=ix(["金額"]),iS=ix(["決済状況"]),iM=ix(["決済方法"]);
     if(iO<0||iA<0||iS<0)return {error:"注文管理の列（注文ID/金額/決済状況）が見つかりません"};
     var rows=[],paid=0,total=0;
     tbl.rows.forEach(function(c){
       var o=(c[iO]||"").trim(); if(!o)return;
       var a=parseFloat(String(c[iA]||"").replace(/[^0-9.\-]/g,""))||0;
       var s=(c[iS]||"").trim();
-      rows.push({o:o,a:a,s:s});
+      var m=(iM>=0?(c[iM]||"").trim():"");
+      rows.push({o:o,a:a,s:s,m:m});
       if(s==="決済済み"){paid++; total+=a;}
     });
     if(!rows.length)return {error:"注文のデータ行がありません"};
