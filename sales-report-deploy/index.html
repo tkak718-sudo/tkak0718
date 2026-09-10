@@ -390,6 +390,7 @@
   .pt .col-tax{width:78px}
   .tx-r{display:block;font-size:10.5px;color:var(--faint);font-weight:700;margin-top:1px}
   .mxf{display:inline-block;margin-left:6px;padding:1px 7px;border-radius:999px;font-size:10.5px;font-weight:800;letter-spacing:.02em;color:#9a5b00;background:color-mix(in srgb,#f5a623 22%,transparent);border:1px solid color-mix(in srgb,#f5a623 45%,transparent);vertical-align:2px;white-space:nowrap}
+  .ly-cl{display:block;font-size:11px;color:var(--faint);font-weight:700;margin-top:2px}
   .mx-note{margin-top:2px;color:#9a5b00;font-weight:700}
   /* 見出しの「？」と、その説明の吹き出し */
   .hintb{display:inline-grid;place-items:center;width:15px;height:15px;margin-left:5px;vertical-align:-2px;
@@ -634,7 +635,7 @@
 
   var state = defaults();
   // view: home（全体のデータ分析）/ client（クライアント別。tab は "summary" かイベントid）/ tasks（タスク管理）
-  var route = {view:"home", eventId:null, clientId:null, tab:"summary", rclient:""};
+  var route = {view:"home", eventId:null, clientId:null, tab:"summary", rclient:"", htab:"all"};
   var DEFAULT_CLIENT_ID="cl_rise", DEFAULT_CLIENT_NAME="RISEクリエーション株式会社様";
   // データ分析は開いたときの初期表示を当月・日別にする（「全期間」でいつでも解除できる）
   (function(){var r=monthRangeOf(new Date());route.rfrom=r.from;route.rto=r.to;route.rperiod="day";})();
@@ -829,6 +830,23 @@
   function salesTotal(ev){var s=salesOf(ev);return s?(s.total||0):0;}
   // コンビニ払いは1注文につき決済手数料が別途かかる（管理画面の金額にも上乗せされている）
   var CVS_FEE=330;
+  // LINEヤフー社様へのレベニューシェア。税抜のチケット代（ユーザーチャージ・
+  // コンビニ決済手数料は含まない）に対して 0.6%、これに1枚あたり150円を足した額。
+  var LY_RATE=0.6, LY_CHARGE=150;
+  function lyFee(ex){return Math.floor((+ex||0)*LY_RATE/100);}
+  // 先に合計を出してから各行へ配分する。行を足した数が必ず合計と一致するように、
+  // 端数は小数部の大きい行から1円ずつ配る。
+  function splitYen(total,parts){
+    var out=parts.map(function(){return 0;});
+    var sum=parts.reduce(function(a,x){return a+(+x||0);},0);
+    if(!sum||!total)return out;
+    var frac=[];
+    parts.forEach(function(x,i){var v=(+x||0)/sum*total;out[i]=Math.floor(v);frac.push({i:i,f:v-out[i]});});
+    var rest=total-out.reduce(function(a,x){return a+x;},0);
+    frac.sort(function(a,b){return b.f-a.f;});
+    for(var k=0;k<rest&&frac.length;k++)out[frac[k%frac.length].i]++;
+    return out;
+  }
   function cvsOrders(ev){
     if(!ev||!Array.isArray(ev.orderRaw))return 0;
     return ev.orderRaw.filter(function(r){return r.s==="決済済み"&&r.m==="コンビニ";}).length;
@@ -1025,7 +1043,7 @@
     // 期間を指定している間は、購入日が無いチケットを合計に入れない。
     // 入れてしまうと「9月」を選んでも購入日不明の分が必ず足され、選んだ期間の数字にならない。
     var filtered=!!(from||to);
-    var out={buckets:[],undated:{n:0,amt:0},byEvent:[],bySeat:[],filtered:filtered,
+    var out={buckets:[],undated:{n:0,amt:0,xamt:0},byEvent:[],bySeat:[],filtered:filtered,
              tickets:0,amount:0,amountEx:0,sysFee:0,cvsN:0,cvsAmt:0,minDate:"",maxDate:"",
              noPriceEvents:[],noDateEvents:[],hasAny:false};
     var bk={},order=[],seat={},seatOrder=[];
@@ -1048,7 +1066,7 @@
           if(!bk[b.key]){bk[b.key]={key:b.key,label:b.label,sub:b.sub,n:0,amt:0,xamt:0};order.push(b.key);}
           bk[b.key].n+=r.n; bk[b.key].amt+=r.amt; bk[b.key].xamt+=(r.xamt||0);
         }else{
-          out.undated.n+=r.n; out.undated.amt+=r.amt; e.undated+=r.n;
+          out.undated.n+=r.n; out.undated.amt+=r.amt; out.undated.xamt+=(r.xamt||0); e.undated+=r.n;
           if(filtered)return;                  // 期間指定中は合計に含めない
         }
         out.hasAny=true;
@@ -1509,6 +1527,7 @@
   //         "client"（1クライアント分。席タイプ・選手ランキングも出す）
   function reportHTML(o){
     var evs=o.evs, home=o.mode==="home";
+    var htab=home?(route.htab||"all"):"all";
     var period=route.rperiod||"month", from=route.rfrom||"", to=route.rto||"";
     var rs=reportSeries(evs,from,to,period);
     var avg=rs.tickets?rs.amount/rs.tickets:0;
@@ -1544,7 +1563,7 @@
           '<td class="num">'+nf(x.n)+'</td><td class="num"><b>'+yen(x.amt)+'</b></td><td class="num ex">'+yen(x.xamt||0)+'</td></tr>';
       }).join("");
       if(rs.undated.n&&!rs.filtered)rows+='<tr><td><span class="chip ph-unk">期間不明</span></td><td></td>'+
-        '<td class="num">'+nf(rs.undated.n)+'</td><td class="num"><b>'+yen(rs.undated.amt)+'</b></td><td class="num ex">'+yenEx(rs.undated.amt)+'</td></tr>';
+        '<td class="num">'+nf(rs.undated.n)+'</td><td class="num"><b>'+yen(rs.undated.amt)+'</b></td><td class="num ex">'+yen(rs.undated.xamt||0)+'</td></tr>';
       var notes=[];
       if(rs.minDate)notes.push('購入日のあるデータの範囲: '+fmtDate(rs.minDate)+' 〜 '+fmtDate(rs.maxDate));
       if(rs.undated.n)notes.push('<span style="color:var(--warn)">購入日が不明なチケットが '+nf(rs.undated.n)+' 枚あります'
@@ -1605,9 +1624,76 @@
       barList(pd,function(v){return yen(v);})+
       '<div class="sb-meta" style="padding:4px 16px 12px">※ 選手別データには購入日が無いため、期間の絞り込み対象外です（常に全期間の合算）。</div></div>':'';
 
+
+    // LINEヤフー社様へのレベニューシェア集計（ホームのタブ）
+    var lyBody="";
+    if(home&&htab==="ly"){
+      var lyFeeTot=lyFee(rs.amountEx), lyChgTot=rs.tickets*LY_CHARGE, lyTot=lyFeeTot+lyChgTot;
+      var lyRow=function(label,sub,cnt,ex,fee,cls){
+        return '<tr'+(cls?' class="'+cls+'"':'')+'><td>'+label+(sub?' <span style="color:var(--faint);font-weight:600">'+esc(sub)+'</span>':'')+'</td>'+
+          '<td class="num">'+nf(cnt)+'</td><td class="num ex">'+yen(ex)+'</td>'+
+          '<td class="num">'+yen(fee)+'</td><td class="num">'+yen(cnt*LY_CHARGE)+'</td>'+
+          '<td class="num"><b>'+yen(fee+cnt*LY_CHARGE)+'</b></td></tr>';
+      };
+      var lyHead='<thead><tr><th>%1</th><th>枚数</th><th class="ex">税抜売上'+hintBtn("ex")+'</th>'+
+        '<th>システム利用料'+hintBtn("lyfee")+'</th><th>ユーザーチャージ'+hintBtn("lychg")+'</th><th>お支払い合計'+hintBtn("lytotal")+'</th></tr></thead>';
+      var lyFoot='<tfoot><tr class="ft-all"><td>合計</td><td class="num">'+nf(rs.tickets)+'</td><td class="num ex">'+yen(rs.amountEx)+'</td>'+
+        '<td class="num">'+yen(lyFeeTot)+'</td><td class="num">'+yen(lyChgTot)+'</td><td class="num">'+yen(lyTot)+'</td></tr></tfoot>';
+
+      // 期間別。合計から各行へ配分するので、行を足すと必ず合計になる。
+      var lyTrend;
+      var lb=rs.buckets.slice().reverse().map(function(x){return {label:esc(x.label),sub:x.sub,n:x.n,ex:x.xamt||0};});
+      if(rs.undated.n&&!rs.filtered)lb.push({label:'<span class="chip ph-unk">期間不明</span>',sub:"",n:rs.undated.n,ex:rs.undated.xamt||0});
+      if(lb.length){
+        var lyFees=splitYen(lyFeeTot,lb.map(function(x){return x.ex;}));
+        var lfd=foldBar(lb.length);
+        lyTrend='<div class="panel"><div class="panel-h"><h3>期間別のお支払い</h3>'+
+          hRight('<span class="sub">'+({day:"日別",week:"週別",month:"月別"}[period])+'</span>')+'</div>'+
+          '<div class="tbl-wrap'+lfd.cls+'"><table>'+lyHead.replace("%1",{day:"日",week:"週",month:"月"}[period])+'<tbody>'+
+          lb.map(function(x,i){return lyRow(x.label,x.sub,x.n,x.ex,lyFees[i],i>=FOLD_N?"row-more":"");}).join("")+
+          '</tbody>'+lyFoot+'</table></div>'+lfd.bar+'</div>';
+      }else{
+        lyTrend=cardEmpty("集計できるデータがありません","選択した期間にチケットのデータがありません。期間を広げるか「全期間」に戻してください。");
+      }
+
+      // イベント別
+      var lyEv="";
+      if(rs.byEvent.length){
+        var evById2={};evs.forEach(function(ev){evById2[ev.id]=ev;});
+        var evFees=splitYen(lyFeeTot,rs.byEvent.map(function(e){return e.xamt||0;}));
+        lyEv='<div class="panel" style="margin-top:16px"><div class="panel-h"><h3>イベント別のお支払い</h3><span class="sub">選択期間内 ・ 金額の多い順</span></div>'+
+          '<div class="tbl-wrap"><table>'+lyHead.replace("%1","イベント名")+'<tbody>'+
+          rs.byEvent.map(function(e,i){
+            var src=evById2[e.id], cl=src?clientName(src.clientId):"";
+            return lyRow('<span class="pnm" title="'+esc(e.name)+'">'+esc(e.name)+'</span>'+(cl?'<span class="ly-cl">'+esc(cl)+'</span>':''),"",e.n,e.xamt||0,evFees[i],"");
+          }).join("")+'</tbody>'+lyFoot+'</table></div></div>';
+      }
+
+      lyBody='<div class="kpis">'+
+          kpi("チケット枚数",nf(rs.tickets)+'<small>枚</small>',"ticket",rs.filtered?"選択期間内":"全期間")+
+          kpi("税抜売上",yen(rs.amountEx),"yen","レベニューシェアの対象")+
+          kpi("システム利用料",yen(lyFeeTot),"chart","税抜 × "+LY_RATE+"%")+
+          kpi("ユーザーチャージ",yen(lyChgTot),"users",nf(rs.tickets)+" 枚 × "+yen(LY_CHARGE))+
+          kpi("お支払い合計",yen(lyTot),"pipe","LINEヤフー社様へ")+'</div>'+
+        lyTrend+lyEv+
+        '<div class="panel" style="margin-top:16px"><div class="panel-h"><h3>計算方法</h3></div>'+
+        '<div class="sb-meta" style="padding:12px 16px 16px;line-height:1.9">'+
+        '※ <b>システム利用料</b>＝税抜のチケット代 × '+LY_RATE+'%（円未満切り捨て）。ユーザーチャージ・コンビニ決済手数料は対象外です。<br>'+
+        '※ <b>ユーザーチャージ</b>＝チケット枚数 × '+yen(LY_CHARGE)+'。お客様からいただく'+yen(SYS_FEE)+'のうち'+yen(LY_CHARGE)+'をお支払いする形です。<br>'+
+        '※ <b>お支払い合計</b>＝システム利用料 ＋ ユーザーチャージ。<br>'+
+        '※ 各行のシステム利用料は、合計を税抜売上の比で割り振った参考値です（行を足すと合計と一致します）。<br>'+
+        '※ 上の期間・クライアントの絞り込みがそのまま反映されます。</div></div>';
+    }
+
     var span=(from||to)?((from?fmtDate(from):"最初")+" 〜 "+(to?fmtDate(to):"最新")):"全期間";
     var scopeLb=home?(route.rclient?clientName(route.rclient):"全クライアント"):"クライアント内";
-    return (home?'<div class="greet"><h2>データ分析</h2><p>'+esc(scopeLb)+' ・ '+esc(span)+' ・ '+nf(rs.byEvent.length)+'イベント</p></div>':'')+
+    var htabs=home?'<div class="tabbar"><div class="tabs">'+
+      '<button class="tab'+(htab==="all"?" on":"")+'" data-htab="all">'+ic("chart",14)+'<span>全体サマリー</span></button>'+
+      '<button class="tab'+(htab==="ly"?" on":"")+'" data-htab="ly">'+ic("yen",14)+'<span>LINEヤフー社様</span></button>'+
+      '</div></div>':'';
+    var greet=home?'<div class="greet"><h2>'+(htab==="ly"?'LINEヤフー社様 レベニューシェア':'データ分析')+'</h2><p>'+esc(scopeLb)+' ・ '+esc(span)+' ・ '+nf(rs.byEvent.length)+'イベント</p></div>':'';
+    if(home&&htab==="ly")return greet+htabs+filter+lyBody;
+    return greet+htabs+
       filter+
       '<div class="kpis">'+
         kpi("チケット枚数",nf(rs.tickets)+'<small>枚</small>',"ticket",
@@ -1623,7 +1709,7 @@
 
   // ================= interactions =================
   document.addEventListener("click",function(e){
-    var t=e.target.closest("[data-go],[data-del],[data-import],[data-editev],[data-edittk],[data-editprice],[data-editsales],[data-editplayers],[data-period],[data-rperiod],#rAll,#rThis,#rPrev,#addAnn,[data-cl],[data-tab],[data-addev],[data-reorder],[data-editcl],[data-delcl],#addCl,[data-anndel],[data-annedit],#addPrj,[data-addtask],[data-editprj],[data-delprj],[data-edittask],[data-deltask],[data-fold]");
+    var t=e.target.closest("[data-go],[data-del],[data-import],[data-editev],[data-edittk],[data-editprice],[data-editsales],[data-editplayers],[data-period],[data-rperiod],#rAll,#rThis,#rPrev,#addAnn,[data-cl],[data-tab],[data-addev],[data-reorder],[data-editcl],[data-delcl],#addCl,[data-anndel],[data-annedit],#addPrj,[data-addtask],[data-editprj],[data-delprj],[data-edittask],[data-deltask],[data-fold],[data-htab]");
     if(!t)return;
     // --- タスク管理（編集モード不要）---
     if(t.id==="addPrj"){addProjectModal();return;}
@@ -1648,6 +1734,7 @@
     if(t.hasAttribute("data-go")){route.view=t.getAttribute("data-go");closeSidebar();render();return;}
     if(t.hasAttribute("data-cl")){route.view="client";route.clientId=t.getAttribute("data-cl");route.tab="summary";closeSidebar();render();return;}
     if(t.hasAttribute("data-tab")){route.tab=t.getAttribute("data-tab");render();return;}
+    if(t.hasAttribute("data-htab")){route.htab=t.getAttribute("data-htab");render();return;}
     if(t.id==="addCl"){if(requireEdit(addClientModal))addClientModal();return;}
     if(t.hasAttribute("data-editcl")){editClientModal(t.getAttribute("data-editcl"));return;}
     if(t.hasAttribute("data-delcl")){delClient(t.getAttribute("data-delcl"));return;}
@@ -1685,6 +1772,9 @@
     ex:{t:"税抜",b:"消費税を除いた金額です。<br><br>「単価設定」で入力した<b>税抜単価 × 枚数</b>をそのまま合計しています。<br>合計を1.1で割った概算ではないので、販売側の管理画面の金額と一致します。"},
     csvticket:{t:"チケット代（CSVの入金額から）",b:"注文管理CSVの<b>入金額</b>から、ユーザーチャージとコンビニ決済手数料を引いた額です。<br><br>CSVの入金額は消費税を含まない<b>税抜</b>なので、右の「金額（税抜）」とほぼ同じ数字になります。<br>ずれる場合は、単価設定の税抜単価か税率が実際と違っています。"},
     withfee:{t:"合計（手数料込）",b:"チケット代に、<b>ユーザーチャージ</b>と<b>コンビニ決済手数料</b>を足した金額です。<br><br>お客様が実際に支払った総額にあたります。<br>売上推移の「売上」列（注文管理CSVの入金額）と同じ金額になります。"},
+    lyfee:{t:"システム利用料（0.6%）",b:"LINEヤフー社様へお支払いするレベニューシェアです。<br><br><b>税抜のチケット代 × 0.6%</b>（円未満切り捨て）。<br>ユーザーチャージとコンビニ決済手数料は<b>計算に含みません</b>。"},
+    lychg:{t:"ユーザーチャージ（150円）",b:"LINEヤフー社様へお支払いする<b>1枚あたり150円 × チケット枚数</b>です。<br><br>お客様からいただく330円のユーザーチャージとは別で、そのうち150円をお支払いしている形です。"},
+    lytotal:{t:"お支払い合計",b:"<b>システム利用料（税抜 × 0.6%）＋ ユーザーチャージ（枚数 × 150円）</b>です。<br><br>これがLINEヤフー社様へお振り込みする金額です。"},
     paid:{t:"売上（決済済み）",b:"注文管理CSVの<b>入金額の合計</b>です。<br><br>この金額には<b>ユーザーチャージが含まれています</b>。右の「チケット代」は、そこから枚数分のチャージを引いた額です。"}
   };
   function hintBtn(k){return HINTS[k]?'<button type="button" class="hintb" data-hint="'+k+'" aria-label="'+esc(HINTS[k].t)+'の計算方法">?</button>':"";}
